@@ -423,13 +423,13 @@ function populateIncCatDropdown(selId,currentVal,typeFilter){
     row.style.cssText='display:flex;gap:6px;margin-top:6px;align-items:center';
     var inp=document.createElement('input');
     inp.type='text';inp.placeholder='e.g. Ticket Sales, Workshop Fees…';
-    inp.style.cssText='flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:\'DM Sans\',sans-serif;background:var(--surface);color:var(--text)';
+    inp.style.cssText="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--text)";
     var btn=document.createElement('button');
     btn.textContent='Add';
-    btn.style.cssText='padding:7px 14px;background:var(--np);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;white-space:nowrap';
+    btn.style.cssText="padding:7px 14px;background:var(--np);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;white-space:nowrap";
     var cancel=document.createElement('button');
     cancel.textContent='Cancel';
-    cancel.style.cssText='padding:7px 10px;background:none;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--muted)';
+    cancel.style.cssText="padding:7px 10px;background:none;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--muted)";
     function doAdd(){
       var name=inp.value.trim();if(!name){inp.focus();return;}
       var prefix='4';
@@ -509,8 +509,8 @@ function impSwitchFormat(fmt){
   var pdfSection=g('imp-pdf-section');
   var csvTab=g('imp-tab-csv');
   var pdfTab=g('imp-tab-pdf');
-  var csvStyle='padding:5px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:500';
-  var inactiveStyle='padding:5px 14px;border:1px solid var(--border);border-radius:7px;background:none;font-size:12px;cursor:pointer;font-family:\'DM Sans\',sans-serif;color:var(--text)';
+  var csvStyle="padding:5px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500";
+  var inactiveStyle="padding:5px 14px;border:1px solid var(--border);border-radius:7px;background:none;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text)";
   var goBtn=g('imp-go-btn');
   var previewBtn=g('imp-confirm-btn');
   var previewSection=g('imp-preview-actions');
@@ -563,7 +563,7 @@ function impSavePDFToVault(input){
     if(typeof renderDocumentVault==='function')renderDocumentVault(c);
     // Show toast
     var t=document.createElement('div');
-    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:10px 18px;border-radius:8px;font-size:13px;z-index:99999;font-family:\'DM Sans\',sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.2)';
+    t.style.cssText="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:10px 18px;border-radius:8px;font-size:13px;z-index:99999;font-family:'DM Sans',sans-serif;box-shadow:0 2px 12px rgba(0,0,0,.2)";
     t.textContent='Saved to document vault.';
     document.body.appendChild(t);
     setTimeout(function(){t.style.transition='opacity .4s';t.style.opacity='0';},2500);

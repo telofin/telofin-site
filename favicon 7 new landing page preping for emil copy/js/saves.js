@@ -180,7 +180,7 @@ function editItem(type,i){
   // Guard: warn before editing a reconciled item — it may affect a closed period
   if(r&&r.reconciled){if(!confirm('⚠ This transaction has been reconciled.\n\nEditing it may affect a closed period. Continue?'))return;}
   if(type==='income'){if(c.type==='np'){g('i-n').value=r.name||'';var _ic=g('i-c');if(_ic)_ic.setAttribute('data-pending-val',r.cat||'');var _is=g('i-s');if(_is)_is.value=r.status||'';g('i-p').value=r.proj||'';g('i-r').value=r.recv||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('i-fund'))g('i-fund').value=r.fund||'';if(g('i-dt'))g('i-dt').value=r.date||'';openM('m-inc');var ibank=g('i-bank');if(ibank){if(r.bankId)ibank.value='bank:'+r.bankId;else if(r.bsAssetId)ibank.value='bsasset:'+r.bsAssetId;else ibank.value='';};}else{g('pi-n').value=r.name||'';var _pic=g('pi-c');if(_pic)_pic.setAttribute('data-pending-val',r.cat||'');g('pi-a').value=r.amt||'';g('pi-f').value=r.freq||'Monthly';g('pi-d').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');openM('m-peinc');}}
-  else if(type==='revenue'){g('r-n').value=r.name||'';var _rc=g('r-c');if(_rc)_rc.setAttribute('data-pending-val',r.cat||'');g('r-cf').value=r.conf||'Confirmed';g('r-p').value=r.proj||'';g('r-a').value=r.act||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('r-dt'))g('r-dt').value=r.date||'';if(g('r-taxrate'))g('r-taxrate').value=r.taxRate||0;if(g('r-taxamt'))g('r-taxamt').value=r.taxAmt||'';if(g('r-taxjur'))g('r-taxjur').value=r.taxJurisdiction||'';openM('m-rev');var rbank=g('r-bank');if(rbank){if(r.bankId)rbank.value='bank:'+r.bankId;else if(r.bsAssetId)rbank.value='bsasset:'+r.bsAssetId;else rbank.value='';}}  else if(type==='expenses'){if(c.type==='np'){g('e-d').value=r.desc||'';var _ec1=g('e-c');if(_ec1)_ec1.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-dt').value=r.date||'';g('e-f').value=r.fund||'';g('e-gid').value=r.grantId||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-func'))g('e-func').value=r.functional||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';openM('m-exp');var ebank=g('e-bank');if(ebank){if(r.bankId)ebank.value='bank:'+r.bankId;else if(r.ccId)ebank.value='cc:'+r.ccId;else if(r.bsAssetId)ebank.value='bsasset:'+r.bsAssetId;else ebank.value='';};}else if(c.type==='sb'){g('e-d').value=r.desc||'';var _ec2=g('e-c');if(_ec2)_ec2.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-fr').value=r.freq||'Monthly';g('e-fx').value=r.fixed||'Fixed';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';openM('m-exp');var ebankSb=g('e-bank');if(ebankSb){if(r.bankId)ebankSb.value='bank:'+r.bankId;else if(r.ccId)ebankSb.value='cc:'+r.ccId;else if(r.bsAssetId)ebankSb.value='bsasset:'+r.bsAssetId;else ebankSb.value='';};}else{g('e-d').value=r.desc||'';var _ec3=g('e-c');if(_ec3)_ec3.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-fr').value=r.freq||'Monthly';g('e-dt').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';openM('m-exp');var ebankPe=g('e-bank');if(ebankPe){if(r.bankId)ebankPe.value='bank:'+r.bankId;else if(r.bsAssetId)ebankPe.value='bsasset:'+r.bsAssetId;else ebankPe.value='';}}}
+  else if(type==='revenue'){g('r-n').value=r.name||'';if(g('r-cust'))g('r-cust').value=r.customerName||'';var _rc=g('r-c');if(_rc)_rc.setAttribute('data-pending-val',r.cat||'');g('r-cf').value=r.conf||'Confirmed';g('r-p').value=r.proj||'';g('r-a').value=r.act||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('r-dt'))g('r-dt').value=r.date||'';if(g('r-taxrate'))g('r-taxrate').value=r.taxRate||0;if(g('r-taxamt'))g('r-taxamt').value=r.taxAmt||'';if(g('r-taxjur'))g('r-taxjur').value=r.taxJurisdiction||'';openM('m-rev');var rbank=g('r-bank');if(rbank){if(r.bankId)rbank.value='bank:'+r.bankId;else if(r.bsAssetId)rbank.value='bsasset:'+r.bsAssetId;else rbank.value='';}}  else if(type==='expenses'){if(c.type==='np'){g('e-d').value=r.desc||'';var _ec1=g('e-c');if(_ec1)_ec1.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-dt').value=r.date||'';g('e-f').value=r.fund||'';g('e-gid').value=r.grantId||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-func'))g('e-func').value=r.functional||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';if(g('e-vendor'))g('e-vendor').value=r.vendor1099||r.desc||'';if(g('e-1099'))g('e-1099').value=r.is1099?'yes':'';openM('m-exp');var _expTitle=g('m-exp')&&g('m-exp').querySelector('.m-title');if(_expTitle)_expTitle.textContent='Edit expense';var ebank=g('e-bank');if(ebank){if(r.bankId)ebank.value='bank:'+r.bankId;else if(r.ccId)ebank.value='cc:'+r.ccId;else if(r.bsAssetId)ebank.value='bsasset:'+r.bsAssetId;else ebank.value='';};}else if(c.type==='sb'){g('e-d').value=r.desc||'';var _ec2=g('e-c');if(_ec2)_ec2.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-fr').value=r.freq||'Monthly';g('e-fx').value=r.fixed||'Fixed';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';if(g('e-vendor'))g('e-vendor').value=r.vendor1099||r.desc||'';if(g('e-1099'))g('e-1099').value=r.is1099?'yes':'';openM('m-exp');var _expTitleSb=g('m-exp')&&g('m-exp').querySelector('.m-title');if(_expTitleSb)_expTitleSb.textContent='Edit expense';var ebankSb=g('e-bank');if(ebankSb){if(r.bankId)ebankSb.value='bank:'+r.bankId;else if(r.ccId)ebankSb.value='cc:'+r.ccId;else if(r.bsAssetId)ebankSb.value='bsasset:'+r.bsAssetId;else ebankSb.value='';};}else{g('e-d').value=r.desc||'';var _ec3=g('e-c');if(_ec3)_ec3.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-fr').value=r.freq||'Monthly';g('e-dt').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';if(g('e-vendor'))g('e-vendor').value=r.vendor1099||r.desc||'';if(g('e-1099'))g('e-1099').value=r.is1099?'yes':'';openM('m-exp');var _expTitlePe=g('m-exp')&&g('m-exp').querySelector('.m-title');if(_expTitlePe)_expTitlePe.textContent='Edit expense';var ebankPe=g('e-bank');if(ebankPe){if(r.bankId)ebankPe.value='bank:'+r.bankId;else if(r.bsAssetId)ebankPe.value='bsasset:'+r.bsAssetId;else ebankPe.value='';}}}
   else if(type==='actions'){g('a-t').value=r.text||'';g('a-d').value=r.due||'';g('a-w').value=r.who||'';g('a-p').value=r.pri||'High';openM('m-act');}
   else if(type==='journal'){g('j-t').value=r.text||'';openM('m-jrn');}
 }
@@ -1473,6 +1473,10 @@ function delBSItem(sec,i){
 // ══════════════════════════════════════════
 // #18 — RECONCILIATION (SB)
 // ══════════════════════════════════════════
+var RECON_STATUS_FILTER='all'; // 'all' | 'cleared' | 'uncleared'
+
+function setReconFilter(val){RECON_STATUS_FILTER=val;renderReconciliation(gc());}
+
 function renderReconciliation(c){
   var p=g('p-recon');if(!p)return;if(!c)return;
   var exp=c.expenses||[];var rev=c.revenue||[];
@@ -1561,18 +1565,46 @@ function renderReconciliation(c){
   var bookBal=_earlyLedgerBal!==null?_earlyLedgerBal:rawBookBal;
   var diff=closeBal-bookBal;
 
-  function expRow(e,label){var oi=exp.indexOf(e);var bankBadge=e.fromBank?'<span class="badge" style="font-size:9px;background:var(--blue-bg);color:var(--blue);margin-left:3px">🏦 imported</span>':'';return'<tr><td>'+escHtml(e.desc||'—')+bankBadge+'</td><td>'+escHtml(e.cat||'—')+'</td><td class="vr">'+fmt(e.amt)+'</td><td style="color:var(--muted)">'+(e.date||'—')+'</td><td><span class="badge b-amber" style="font-size:9px">'+label+'</span></td><td><input type="checkbox" class="rcb" onchange="sbRC('+oi+');renderReconciliation(gc())" title="Clear"></td></tr>';}
-  function incRow(r){var src=c.type==='sb'?rev:c.income||[];var oi=src.indexOf(r);var bankBadge=r.fromBank?'<span class="badge" style="font-size:9px;background:var(--blue-bg);color:var(--blue);margin-left:3px">🏦 imported</span>':'';return'<tr><td>'+escHtml(r.name||r.desc||'—')+bankBadge+'</td><td>'+escHtml(r.cat||'—')+'</td><td class="vg">'+fmt(r.act||r.amt||r.recv||0)+'</td><td style="color:var(--muted)">—</td><td><span class="badge b-blue" style="font-size:9px">Deposit</span></td><td><input type="checkbox" class="rcb" onchange="reconIncRC('+oi+');renderReconciliation(gc())" title="Clear"></td></tr>';}
+  function expRow(e,label){var oi=exp.indexOf(e);var bankBadge=e.fromBank?'<span class="badge" style="font-size:9px;background:var(--blue-bg);color:var(--blue);margin-left:3px">🏦 imported</span>':'';return'<tr><td>'+escHtml(e.desc||'—')+bankBadge+'</td><td>'+escHtml(e.cat||'—')+'</td><td class="vr">'+fmt(e.amt)+'</td><td style="color:var(--muted)">'+(e.date||'—')+'</td><td><span class="badge b-amber" style="font-size:9px">'+label+'</span></td><td style="white-space:nowrap"><input type="checkbox" class="rcb" onchange="sbRC('+oi+');renderReconciliation(gc())" title="Clear"> <button class="add-btn" style="font-size:10px;padding:2px 8px" onclick="editItem(\'expenses\','+oi+')">✏️ Edit</button></td></tr>';}
+  function incRow(r){var src=c.type==='sb'?rev:c.income||[];var oi=src.indexOf(r);var incType=c.type==='sb'?'revenue':'income';var bankBadge=r.fromBank?'<span class="badge" style="font-size:9px;background:var(--blue-bg);color:var(--blue);margin-left:3px">🏦 imported</span>':'';return'<tr><td>'+escHtml(r.name||r.desc||'—')+bankBadge+'</td><td>'+escHtml(r.cat||'—')+'</td><td class="vg">'+fmt(r.act||r.amt||r.recv||0)+'</td><td style="color:var(--muted)">—</td><td><span class="badge b-blue" style="font-size:9px">Deposit</span></td><td style="white-space:nowrap"><input type="checkbox" class="rcb" onchange="reconIncRC('+oi+');renderReconciliation(gc())" title="Clear"> <button class="add-btn" style="font-size:10px;padding:2px 8px" onclick="editItem(\''+incType+'\','+oi+')">✏️ Edit</button></td></tr>';}
+  function clearedExpRow(e){var oi=exp.indexOf(e);return'<tr style="opacity:.85"><td>'+escHtml(e.desc||'—')+'</td><td>'+escHtml(e.cat||'—')+'</td><td class="vr">'+fmt(e.amt)+'</td><td style="color:var(--muted)">'+(e.date||'—')+'</td><td><span class="badge" style="font-size:9px;background:var(--green-bg);color:var(--green)">✓ Cleared</span></td><td style="white-space:nowrap"><button class="add-btn" style="font-size:10px;padding:2px 8px" onclick="editItem(\'expenses\','+oi+')">✏️ Edit</button> <button class="add-btn" style="font-size:10px;padding:2px 8px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="unreconcileExp('+oi+')">Undo</button></td></tr>';}
+  function clearedIncRow(r){var src=c.type==='sb'?rev:c.income||[];var oi=src.indexOf(r);var incType=c.type==='sb'?'revenue':'income';return'<tr style="opacity:.85"><td>'+escHtml(r.name||r.desc||'—')+'</td><td>'+escHtml(r.cat||'—')+'</td><td class="vg">'+fmt(r.act||r.amt||r.recv||0)+'</td><td style="color:var(--muted)">'+(r.date||'—')+'</td><td><span class="badge" style="font-size:9px;background:var(--green-bg);color:var(--green)">✓ Cleared</span></td><td style="white-space:nowrap"><button class="add-btn" style="font-size:10px;padding:2px 8px" onclick="editItem(\''+incType+'\','+oi+')">✏️ Edit</button> <button class="add-btn" style="font-size:10px;padding:2px 8px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="unreconcileInc('+oi+')">Undo</button></td></tr>';}
 
-  var allRows=outstandingChecks.map(function(e){return expRow(e,'Outstanding check');}).join('')
-    +otherUnrecon.map(function(e){return expRow(e,'Uncleared');}).join('')
-    +unreconInc.map(function(r){return incRow(r);}).join('');
+  // Split items to clear: bank-imported vs CC-imported vs manual
+  var bankImportedRows = otherUnrecon.filter(function(e){return e.fromBank&&!e.ccId;}).map(function(e){return expRow(e,'Bank import');}).join('');
+  var ccImportedRows   = otherUnrecon.filter(function(e){return e.ccId;}).map(function(e){return expRow(e,'CC charge');}).join('');
+  var manualRows       = outstandingChecks.map(function(e){return expRow(e,'Outstanding check');}).join('')
+    + otherUnrecon.filter(function(e){return !e.fromBank&&!e.ccId;}).map(function(e){return expRow(e,'Uncleared');}).join('')
+    + unreconInc.map(function(r){return incRow(r);}).join('');
+  // Apply status filter
+  if(RECON_STATUS_FILTER==='uncleared'){
+    // Already only showing uncleared — keep as-is
+  } else if(RECON_STATUS_FILTER==='cleared'){
+    bankImportedRows=''; ccImportedRows=''; manualRows='';
+  }
+  var allRows=bankImportedRows+ccImportedRows+manualRows;
+  // Cleared items (reconciled=true) — show with Undo button
+  var clearedExpItems = periExp.filter(function(e){return e.reconciled;});
+  var clearedIncItems = periRev.filter(function(r){return r.reconciled!==false;});
+  var _showCleared = RECON_STATUS_FILTER !== 'uncleared';
+  var clearedBankRows = _showCleared?(clearedExpItems.filter(function(e){return !e.ccId;}).map(function(e){return clearedExpRow(e);}).join('')+clearedIncItems.map(function(r){return clearedIncRow(r);}).join('')):'' ;
+  var clearedCCRows = _showCleared?clearedExpItems.filter(function(e){return !!e.ccId;}).map(function(e){return clearedExpRow(e);}).join(''):'' ;
+  var clearedRows = clearedBankRows + clearedCCRows;
 
   // Ledger balance already computed above as _earlyLedgerBal; reuse it
   var _ledgerBal=_earlyLedgerBal;
   var stateUpdFn='gc()[\''+stateKey+'\']';
+  var filterBar='<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap">'
+    +'<span style="font-size:12px;font-weight:500">Show:</span>'
+    +'<button onclick="setReconFilter(\'all\')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid '+(RECON_STATUS_FILTER==='all'?'var(--text)':'var(--border)')+';background:'+(RECON_STATUS_FILTER==='all'?'var(--text)':'none')+';color:'+(RECON_STATUS_FILTER==='all'?'#fff':'var(--muted)')+';cursor:pointer;font-family:DM Sans,sans-serif">All</button>'
+    +'<button onclick="setReconFilter(\'uncleared\')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid '+(RECON_STATUS_FILTER==='uncleared'?'var(--amber)':'var(--border)')+';background:'+(RECON_STATUS_FILTER==='uncleared'?'var(--amber-bg)':'none')+';color:'+(RECON_STATUS_FILTER==='uncleared'?'var(--amber)':'var(--muted)')+';cursor:pointer;font-family:DM Sans,sans-serif">Uncleared</button>'
+    +'<button onclick="setReconFilter(\'cleared\')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid '+(RECON_STATUS_FILTER==='cleared'?'var(--green)':'var(--border)')+';background:'+(RECON_STATUS_FILTER==='cleared'?'var(--green-bg)':'none')+';color:'+(RECON_STATUS_FILTER==='cleared'?'var(--green)':'var(--muted)')+';cursor:pointer;font-family:DM Sans,sans-serif">Cleared</button>'
+    
+    +'</div>';
+
   p.innerHTML=FB()+XB('recon')
   +onboardHtml
+  +filterBar
   +acctPicker
   +'<div class="card" style="margin-bottom:1rem">'
   +'<div class="c-title" style="margin-bottom:.75rem">Reconciliation — <span style="font-size:11px;color:var(--muted)">'+selAcct.name+'</span>'+(isCCRecon?' <span class="badge b-blue">Credit card</span>':'')+'</div>'
@@ -1591,9 +1623,14 @@ function renderReconciliation(c){
   +(Math.abs(diff)<1
     ?'<div class="insight" style="border-left-color:var(--green)"><div class="ins-lbl">✓ Reconciled</div>Statement and book balances match.'+((!isCCRecon)?'<button class="add-btn" style="margin-left:1rem" onclick="postReconToBS()">Post to balance sheet</button>':'')+'</div>'
     :'<div class="insight" style="border-left-color:var(--amber)"><div class="ins-lbl">Difference: '+fmt(Math.abs(diff))+'</div>Clear transactions below to reconcile.</div>')
-  +'<div style="margin-bottom:.75rem;display:flex;gap:8px;flex-wrap:wrap"><button class="add-btn" onclick="markAllRecon()">✓ Mark all reconciled</button><button class="add-btn" onclick="reconPullMissing()">⬇ Pull in missing transactions</button><button class="add-btn" onclick="printReconStatement()" title="Export PDF for auditors">🖨 Print statement</button></div>'
-  +(allRows?'<div class="card"><div class="c-head"><span class="c-title">Items to clear ('+(unreconExp.length+unreconInc.length)+')</span></div><table><thead><tr><th style="width:24%">Description</th><th style="width:13%">Category</th><th style="width:10%">Amount</th><th style="width:11%">Date</th><th style="width:12%">Type</th><th style="width:30%">Clear</th></tr></thead><tbody>'+allRows+'</tbody></table></div>'
-  :'<div class="card"><div style="text-align:center;padding:1.5rem;color:var(--green);font-size:13px">✓ All transactions cleared</div></div>');
+  +'<div style="margin-bottom:.75rem;display:flex;gap:8px;flex-wrap:wrap"><button class="add-btn" onclick="markSelectedRecon()">✓ Mark selected</button><button class="add-btn" onclick="markAllRecon()">✓ Mark all</button><button class="add-btn" style="background:none;border:1px solid var(--border);color:var(--muted)" onclick="unmarkAllRecon()">↩ Undo all</button><button class="add-btn" onclick="reconPullMissing()">⬇ Pull in missing</button><button class="add-btn" onclick="printReconStatement()" title="Export PDF for auditors">🖨 Print statement</button></div>'
+  +(allRows
+    ?( (bankImportedRows?'<div class="card" style="margin-bottom:1rem;border-left:3px solid var(--blue)"><div class="c-head"><span class="c-title">🏦 Bank transactions ('+otherUnrecon.filter(function(e){return e.fromBank&&!e.ccId;}).length+')</span></div><table><thead><tr><th style="width:24%">Description</th><th style="width:13%">Category</th><th style="width:10%">Amount</th><th style="width:11%">Date</th><th style="width:12%">Type</th><th style="width:30%">Clear</th></tr></thead><tbody>'+bankImportedRows+'</tbody></table></div>':'')
+    +(ccImportedRows?'<div class="card" style="margin-bottom:1rem;border-left:3px solid var(--np)"><div class="c-head"><span class="c-title">💳 Credit card charges ('+otherUnrecon.filter(function(e){return e.ccId;}).length+')</span></div><table><thead><tr><th style="width:24%">Description</th><th style="width:13%">Category</th><th style="width:10%">Amount</th><th style="width:11%">Date</th><th style="width:12%">Type</th><th style="width:30%">Clear</th></tr></thead><tbody>'+ccImportedRows+'</tbody></table></div>':'')
+    +(manualRows?'<div class="card" style="margin-bottom:1rem"><div class="c-head"><span class="c-title">📋 Manual &amp; other ('+(outstandingChecks.length+otherUnrecon.filter(function(e){return !e.fromBank&&!e.ccId;}).length+unreconInc.length)+')</span></div><table><thead><tr><th style="width:24%">Description</th><th style="width:13%">Category</th><th style="width:10%">Amount</th><th style="width:11%">Date</th><th style="width:12%">Type</th><th style="width:30%">Clear</th></tr></thead><tbody>'+manualRows+'</tbody></table></div>':'') )
+    :'<div class="card"><div style="text-align:center;padding:1.5rem;color:var(--green);font-size:13px">✓ All transactions cleared</div></div>')
+  +(clearedBankRows?'<div class="card" style="margin-top:1rem;border-left:3px solid var(--blue)"><div class="c-head"><span class="c-title" style="color:var(--blue)">🏦 Cleared — Bank &amp; Income ('+(clearedExpItems.filter(function(e){return !e.ccId;}).length+clearedIncItems.length)+')</span><button class="add-btn" style="font-size:10px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="unmarkAllRecon()">↩ Undo all</button></div><table><thead><tr><th style="width:26%">Description</th><th style="width:14%">Category</th><th style="width:10%">Amount</th><th style="width:11%">Date</th><th style="width:12%">Status</th><th style="width:27%">Action</th></tr></thead><tbody>'+clearedBankRows+'</tbody></table></div>':'')
+  +(clearedCCRows?'<div class="card" style="margin-top:1rem;border-left:3px solid var(--np)"><div class="c-head"><span class="c-title" style="color:var(--np)">💳 Cleared — Credit Cards ('+clearedExpItems.filter(function(e){return !!e.ccId;}).length+')</span></div><table><thead><tr><th style="width:26%">Description</th><th style="width:14%">Category</th><th style="width:10%">Amount</th><th style="width:11%">Date</th><th style="width:12%">Status</th><th style="width:27%">Action</th></tr></thead><tbody>'+clearedCCRows+'</tbody></table></div>':'');
 }
 
 function printReconStatement(){
@@ -1691,6 +1728,38 @@ function reconIncRC(i){
   var src=c.type==='sb'?c.revenue:c.income;
   if(!src||!src[i])return;
   src[i].reconciled=src[i].reconciled===false?true:false;
+  sv();renderReconciliation(c);
+}
+
+function unreconcileExp(oi){
+  var c=gc();if(!c||!c.expenses[oi])return;
+  c.expenses[oi].reconciled=false;
+  sv();renderReconciliation(c);
+}
+
+function unreconcileInc(oi){
+  var c=gc();
+  var src=c.type==='sb'?c.revenue:c.income;
+  if(!src||!src[oi])return;
+  src[oi].reconciled=false;
+  sv();renderReconciliation(c);
+}
+
+function unmarkAllRecon(){
+  var c=gc();if(!c)return;
+  if(!confirm('Undo all cleared transactions for this period? This will unmark all items as reconciled.'))return;
+  // Only unmark items in the current account/period scope
+  var isCCRecon=RECON_ACCT.indexOf('cc:')===0;
+  var ccId=isCCRecon?RECON_ACCT.slice(3):null;
+  var bankId=!isCCRecon?RECON_ACCT.slice(5):null;
+  var isDefault=!bankId||bankId==='default';
+  if(isCCRecon){
+    (c.expenses||[]).forEach(function(e){if(e.ccId===ccId)e.reconciled=false;});
+  }else{
+    (c.expenses||[]).forEach(function(e){if(!e.bankId||isDefault||(e.bankId===bankId))e.reconciled=false;});
+    var src=c.type==='sb'?c.revenue:c.income||[];
+    src.forEach(function(r){if(!r.bankId||isDefault||(r.bankId===bankId))r.reconciled=false;});
+  }
   sv();renderReconciliation(c);
 }
 
@@ -1895,6 +1964,21 @@ function postReconToBS(){
 }
 function setBankBal(v){var c=gc();if(!c)return;c.bankBalance=Number(v||0);sv();}
 function sbRevRC(i){var c=gc();if(!c||!c.revenue[i])return;c.revenue[i].reconciled=!c.revenue[i].reconciled;sv();renderReconciliation(c);}
+function markSelectedRecon(){
+  var c=gc();if(!c)return;
+  var checked=[];
+  document.querySelectorAll('.rcb:checked').forEach(function(cb){
+    // rcb onchange calls sbRC(oi) — data index is in the onchange attr
+    var match=cb.getAttribute('onchange');
+    var m=match&&match.match(/sbRC\((\d+)\)/);
+    if(m)checked.push(Number(m[1]));
+  });
+  if(!checked.length){alert('Check at least one transaction to mark reconciled.');return;}
+  var exp=c.expenses||[];
+  checked.forEach(function(oi){if(exp[oi])exp[oi].reconciled=true;});
+  sv();renderReconciliation(c);
+  _bankToast(checked.length+' transaction'+(checked.length!==1?'s':'')+' marked reconciled.');
+}
 function markAllRecon(){var c=gc();if(!c)return;(c.expenses||[]).forEach(function(e){e.reconciled=true;});(c.revenue||[]).forEach(function(r){r.reconciled=true;});(c.income||[]).forEach(function(r){r.reconciled=true;});sv();renderReconciliation(c);}
 
 // ── BANK ACCOUNTS ────────────────────────

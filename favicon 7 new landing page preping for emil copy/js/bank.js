@@ -48,8 +48,8 @@ function renderBank(c) {
   if (!c.bankTransactions) c.bankTransactions = [];
   if (!c.bankTemplates)    c.bankTemplates    = [];
 
-  var pending   = c.bankTransactions.filter(function(t){ return !t.approved && !t.deleted; });
-  var approved  = c.bankTransactions.filter(function(t){ return t.approved; });
+  var pending   = c.bankTransactions.filter(function(t){ return !t.approved && !t.deleted && !t._ccId; });
+  var approved  = c.bankTransactions.filter(function(t){ return t.approved && !t._ccId; });
   var templates = c.bankTemplates;
 
   // ── Category options ──────────────────────────────────────
@@ -634,7 +634,7 @@ async function _bankExtractLines(file) {
     tc.items.forEach(function(item) {
       var y = Math.round(item.transform[5] / 3) * 3;
       if (!byY[y]) byY[y] = [];
-      byY[y].push({ str: item.str, x: item.transform[4], y: item.transform[5], page: p });
+      byY[y].push({ str: item.str, x: item.transform[4], x1: item.transform[4] + (item.width||0), y: item.transform[5], page: p });
     });
     Object.keys(byY).sort(function(a,b){ return b - a; }).forEach(function(y) {
       var items = byY[y].sort(function(a,b){ return a.x - b.x; });
@@ -1308,3 +1308,706 @@ function _bankToast(msg) {
     };
   });
 })();
+
+
+// ══════════════════════════════════════════════════════════════
+// CREDIT CARD TAB
+// renderCCTab(c) — called by afterSwitch('cc') in nav.js
+//
+// Shows all credit cards with balances, import wizard, review queue.
+// Charges post to c.expenses with ccId set.
+// Payments post to c.journalEntries (debit bank, credit CC liability).
+// ══════════════════════════════════════════════════════════════
+
+function renderCCTab(c) {
+  var p = g('p-cc'); if (!p || !c) return;
+  // Ensure dynamic modals are built (m-cc lives in buildDynMods)
+  if (!g('m-cc') && typeof buildDynMods === 'function') buildDynMods(c.type);
+
+  if (!(c.creditCards || []).length) {
+    p.innerHTML = '<div style="max-width:520px;margin:3rem auto;text-align:center">'
+      + '<div style="font-size:2rem;margin-bottom:1rem">💳</div>'
+      + '<div style="font-size:16px;font-weight:600;margin-bottom:.5rem">No credit cards set up yet</div>'
+      + '<div style="font-size:13px;color:var(--muted);margin-bottom:1.5rem">Add a card to track charges, import statements, and reconcile your balance.</div>'
+      + '<button class="sv-btn" onclick="openAddCC()" style="max-width:200px;margin:0 auto">+ Add credit card</button>'
+      + '</div>';
+    return;
+  }
+
+  var html = '';
+
+  // ── Per-card section ──────────────────────────────────────
+  (c.creditCards || []).forEach(function(cc, ci) {
+    var allCharges = (c.expenses || []).filter(function(e){ return e.ccId === cc.id && !e.deleted && !e.voided; });
+    var unpaid = allCharges.filter(function(e){ return !e.ccPaid; });
+    var paid   = allCharges.filter(function(e){ return e.ccPaid; });
+    var balance = unpaid.reduce(function(s,e){ return s + Number(e.amt||0); }, 0);
+    var limit = Number(cc.limit || 0);
+    var util = limit > 0 ? Math.min(100, Math.round((balance/limit)*100)) : null;
+
+    // Pending import queue for this card
+    var pending = (c.bankTransactions || []).filter(function(t){ return t._ccId === cc.id && !t.approved; });
+
+    var chargeRows = unpaid.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); }).map(function(e) {
+      var oi = (c.expenses||[]).indexOf(e);
+      return '<tr>'
+        + '<td style="color:var(--muted);font-size:11px">' + (e.date||'—') + '</td>'
+        + '<td>' + escHtml(e.desc||'—') + '</td>'
+        + '<td style="color:var(--muted);font-size:11px">' + escHtml(e.cat||'—') + '</td>'
+        + '<td style="color:var(--muted);font-size:11px">' + escHtml(e.vendor1099||'—') + '</td>'
+        + '<td class="vr">' + fmt(e.amt) + '</td>'
+        + '<td><div class="row-acts">'
+        + '<button class="e-btn" style="color:var(--green)" onclick="markCCPaid(' + oi + ')" title="Mark cleared">&#10003;</button>'
+        + rb('expenses', oi)
+        + '</div></td></tr>';
+    }).join('');
+
+    html += '<div class="card" style="border-left:3px solid var(--blue);margin-bottom:1.25rem">'
+      // Card header
+      + '<div class="c-head">'
+      + '<span class="c-title">' + escHtml(cc.name) + (cc.last4 ? ' \u00b7\u00b7\u00b7' + cc.last4 : '') + '</span>'
+      + '<div style="display:flex;gap:6px;align-items:center">'
+      + (limit ? '<span style="font-size:11px;color:var(--muted)">' + fmt(balance) + ' / ' + fmt(limit) + '</span>' : '<span style="font-size:11px;color:var(--muted)">Balance: ' + fmt(balance) + '</span>')
+      + '<button class="add-btn" onclick="openCCCharge(\'' + cc.id + '\')">+ Charge</button>'
+      + '<button class="add-btn" style="font-size:11px;background:var(--blue)" onclick="ccImportOpenUpload(\'' + cc.id + '\')">&#8679; Import Statement</button>'
+      + '<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:4px 9px;font-size:12px" onclick="editCC(' + ci + ')">&#9998;</button>'
+      + '<button class="d-btn" style="border:1px solid var(--red-bg);border-radius:7px;padding:4px 9px;font-size:12px" onclick="deleteCC(\'' + cc.id + '\')">&#215;</button>'
+      + '</div></div>'
+
+      // Utilization bar
+      + (util !== null ? '<div style="margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px"><span>Utilization</span><span>' + util + '%</span></div><div class="pbar" style="height:6px"><div class="pfill" style="width:' + util + '%;background:' + (util>80?'var(--red)':util>50?'var(--amber)':'var(--blue)') + '"></div></div></div>' : '')
+
+      // Pending import queue
+      + (pending.length ? _ccRenderPendingQueue(c, cc.id, pending) : '')
+
+      // Unpaid charges
+      + '<div style="margin-top:.75rem">'
+      + '<div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:.4rem">Unpaid charges</div>'
+      + (unpaid.length
+          ? '<table><thead><tr><th style="width:10%">Date</th><th style="width:30%">Description</th><th style="width:14%">Category</th><th style="width:14%">Vendor</th><th style="width:10%">Amount</th><th></th></tr></thead><tbody>' + chargeRows + '</tbody></table>'
+          : '<div style="font-size:12px;color:var(--green);padding:.25rem 0">&#10003; No unpaid charges</div>')
+      + '</div>'
+      + '</div>';
+  });
+
+  // Add card button — clean bottom row
+  html += '<div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border);padding-bottom:3rem">'
+    + '<button class="add-btn" style="font-size:12px;padding:7px 16px" onclick="openAddCC()">+ Add credit card</button>'
+    + '</div>';
+
+  p.innerHTML = html;
+}
+
+// ── PENDING IMPORT QUEUE ──────────────────────────────────────
+function _ccRenderPendingQueue(c, ccId, pending) {
+  var safeId = ccId.replace(/[^a-zA-Z0-9]/g,'_');
+  var rows = pending.map(function(t) {
+    var ti = (c.bankTransactions||[]).indexOf(t);
+    var typeLabel = t.type === 'cc_payment' ? '<span class="badge b-blue" style="font-size:10px">Payment</span>' : '<span class="badge b-amber" style="font-size:10px">Charge</span>';
+    return '<tr>'
+      + '<td style="width:26px"><input type="checkbox" class="cc-chk-' + safeId + '" data-ti="' + ti + '" style="width:13px;height:13px;cursor:pointer"></td>'
+      + '<td style="color:var(--muted);font-size:11px">' + (t.date||'—') + '</td>'
+      + '<td>' + escHtml(t.description||t.desc||'—') + '</td>'
+      + '<td>' + typeLabel + '</td>'
+      + '<td class="vr">' + fmt(t.amount||t.amt) + '</td>'
+      + '<td><div class="row-acts">'
+      + '<button class="sv-btn" style="font-size:11px;padding:3px 10px" onclick="ccApproveOne(' + ti + ')">Post</button>'
+      + '<button class="d-btn" onclick="ccRejectOne(' + ti + ')" title="Remove">&#215;</button>'
+      + '</div></td></tr>';
+  }).join('');
+
+  return '<div style="background:var(--np-bg);border:1px solid rgba(15,110,86,.15);border-radius:8px;padding:.75rem;margin:.5rem 0">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">'
+    + '<div style="font-size:12px;font-weight:500;color:var(--np)">' + pending.length + ' imported transaction' + (pending.length!==1?'s':'') + ' pending review</div>'
+    + '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">'
+    + '<label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="cc-chk-all-' + safeId + '" onchange="ccToggleAll(\'' + safeId + '\',this.checked)" style="width:13px;height:13px"> Select all</label>'
+    + '<button class="sv-btn" style="font-size:11px;padding:3px 12px" onclick="ccApproveSelected(\'' + ccId + '\',\'' + safeId + '\')">Post selected</button>'
+    + '<button class="sv-btn" style="font-size:11px;padding:3px 12px" onclick="ccApproveAll(\'' + ccId + '\')">Post all</button>'
+    + '</div></div>'
+    + '<table><thead><tr><th style="width:26px"></th><th style="width:10%">Date</th><th style="width:36%">Description</th><th style="width:12%">Type</th><th style="width:12%">Amount</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
+    + '</div>';
+}
+
+// ── POST ACTIONS ──────────────────────────────────────────────
+function ccApproveOne(ti) {
+  var c = gc(); if (!c) return;
+  var t = c.bankTransactions && c.bankTransactions[ti]; if (!t) return;
+  _ccPostOne(c, t);
+  c.bankTransactions.splice(ti, 1);
+  sv(); renderCCTab(c);
+}
+
+function ccApproveAll(ccId) {
+  var c = gc(); if (!c) return;
+  var pending = (c.bankTransactions||[]).filter(function(t){ return t._ccId===ccId && !t.approved; });
+  pending.forEach(function(t){ _ccPostOne(c, t); });
+  c.bankTransactions = (c.bankTransactions||[]).filter(function(t){ return !(t._ccId===ccId && !t.approved); });
+  sv(); renderCCTab(c);
+}
+
+function ccToggleAll(safeId, checked) {
+  document.querySelectorAll('.cc-chk-' + safeId).forEach(function(cb){ cb.checked = checked; });
+}
+
+function ccApproveSelected(ccId, safeId) {
+  var c = gc(); if (!c) return;
+  var checked = [];
+  document.querySelectorAll('.cc-chk-' + safeId + ':checked').forEach(function(cb){
+    checked.push(Number(cb.getAttribute('data-ti')));
+  });
+  if (!checked.length) { alert('Select at least one transaction.'); return; }
+  // Sort descending so splicing by index doesn't shift positions
+  checked.sort(function(a,b){ return b-a; });
+  checked.forEach(function(ti) {
+    var t = c.bankTransactions && c.bankTransactions[ti]; if (!t) return;
+    _ccPostOne(c, t);
+    c.bankTransactions.splice(ti, 1);
+  });
+  sv(); renderCCTab(c);
+  _bankToast(checked.length + ' transaction' + (checked.length!==1?'s':'') + ' posted.');
+}
+
+function ccRejectOne(ti) {
+  var c = gc(); if (!c) return;
+  if (!confirm('Remove this transaction from the import queue?')) return;
+  c.bankTransactions.splice(ti, 1);
+  sv(); renderCCTab(c);
+}
+
+function _ccPostOne(c, t) {
+  if (!c.expenses)      c.expenses      = [];
+  if (!c.journalEntries) c.journalEntries = [];
+  var ccId = t._ccId;
+  var cc = (c.creditCards||[]).find(function(x){ return x.id===ccId; });
+  var cardName = cc ? cc.name : 'Credit Card';
+
+  if (t.type === 'cc_payment') {
+    // Payment: debit bank account, credit CC liability
+    var bankName = (t._bankAcctName) || 'Checking Account';
+    c.journalEntries.push({
+      id: uid(), date: t.date,
+      type: 'Credit Card Payment',
+      memo: t.description || t.desc || 'Credit Card Payment',
+      debitAcct: bankName,
+      creditAcct: cardName + ' Payable',
+      amt: t.amount || t.amt,
+      notes: 'Imported from CC statement', ccId: ccId
+    });
+  } else {
+    // Charge: expense with ccId
+    c.expenses.push({
+      id: uid(), desc: t.description || t.desc,
+      amt: t.amount || t.amt, date: t.date,
+      cat: t.category || 'Uncategorized',
+      ccId: ccId, ccPaid: false, reconciled: false, fromImport: true
+    });
+  }
+}
+
+// ── PULL MISSING CC TRANSACTIONS ─────────────────────────────
+// Shows expenses with ccId that came in through manual entry (not import)
+// so the user can see everything in one place
+function ccPullMissing() {
+  var c = gc(); if (!c) return;
+  if (!(c.creditCards||[]).length) { alert('No credit cards set up.'); return; }
+
+  // Find all expenses with ccId not already in bankTransactions pending queue
+  var pending = (c.bankTransactions||[]).map(function(t){ return t.id; });
+  var ccIds = (c.creditCards||[]).map(function(cc){ return cc.id; });
+  var missing = (c.expenses||[]).filter(function(e){
+    return e.ccId && ccIds.indexOf(e.ccId) >= 0 && !e.fromImport;
+  });
+
+  if (!missing.length) {
+    alert('No manually-entered CC transactions found — everything is already here.');
+    return;
+  }
+
+  // Build modal
+  var rows = missing.map(function(e, i) {
+    var cc = (c.creditCards||[]).find(function(x){ return x.id===e.ccId; });
+    return '<tr>'
+      + '<td><input type="checkbox" class="cc-pull-chk" data-idx="' + (c.expenses||[]).indexOf(e) + '" checked></td>'
+      + '<td style="font-size:11px;color:var(--muted)">' + (e.date||'—') + '</td>'
+      + '<td>' + escHtml(e.desc||'—') + '</td>'
+      + '<td style="font-size:11px;color:var(--muted)">' + escHtml(cc?cc.name:'—') + '</td>'
+      + '<td class="vr">' + fmt(e.amt) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var m = document.createElement('div');
+  m.className = 'overlay open';
+  m.id = 'cc-pull-modal';
+  m.style.zIndex = '10002';
+  m.innerHTML = '<div class="modal" style="max-width:620px">'
+    + '<button class="cx" onclick="document.getElementById(\'cc-pull-modal\').remove()">&#215;</button>'
+    + '<div class="m-title">Pull missing CC transactions</div>'
+    + '<div style="font-size:13px;color:var(--muted);margin-bottom:1rem">These were entered manually. Select any to mark as imported so they appear in the CC tab history.</div>'
+    + '<table><thead><tr><th style="width:4%"></th><th style="width:10%">Date</th><th style="width:38%">Description</th><th style="width:18%">Card</th><th style="width:14%">Amount</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table>'
+    + '<div style="margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end">'
+    + '<button class="lnk" onclick="document.getElementById(\'cc-pull-modal\').remove()">Cancel</button>'
+    + '<button class="sv-btn" onclick="ccPullConfirm()">Mark as imported</button>'
+    + '</div></div>';
+  document.body.appendChild(m);
+}
+
+function ccPullConfirm() {
+  var c = gc(); if (!c) return;
+  var checked = document.querySelectorAll('.cc-pull-chk:checked');
+  if (!checked.length) { alert('Select at least one transaction.'); return; }
+  checked.forEach(function(cb) {
+    var idx = parseInt(cb.getAttribute('data-idx'));
+    if (c.expenses[idx]) c.expenses[idx].fromImport = true;
+  });
+  var m = document.getElementById('cc-pull-modal');
+  if (m) m.remove();
+  sv(); renderCCTab(c);
+}
+
+// ── CC PDF IMPORT WIZARD ──────────────────────────────────────
+var _CC_HANDLING     = false;
+var _CC_PDF_FILE     = null;
+var _CC_TARGET_ID    = null;
+var _CC_MAP_TEMPLATE = null;
+var _CC_PDF_DOC      = null;
+var _CC_PDF_PAGE     = 1;
+var _CC_MAP_STEP     = 0;
+
+var _CC_STEPS = [
+  { key: 'cardName',   label: 'Card name',       prompt: 'Enter your card name below then click Next.' },
+  { key: 'txnDate',    label: 'Transaction date', prompt: 'Click the date of any transaction row on the PDF.' },
+  { key: 'txnDesc',    label: 'Description',      prompt: 'Click the description of that same transaction.' },
+  { key: 'txnCharge',  label: 'Charge column',    prompt: 'Click a charge amount — money spent on the card.' },
+  { key: 'txnPayment', label: 'Payment column',   prompt: 'Click a payment amount — money paid TO the card. Skip if your statement uses a single amount column.' }
+];
+
+function ccImportOpenUpload(ccId) {
+  if (_CC_HANDLING) return;
+  if (document.getElementById('cc-file-input-' + ccId)) return;
+  var fi = document.createElement('input');
+  fi.type = 'file'; fi.accept = '.pdf';
+  fi.id = 'cc-file-input-' + ccId;
+  fi.style.display = 'none';
+  fi.onchange = function() {
+    var file = fi.files && fi.files[0];
+    if (fi.parentNode) fi.parentNode.removeChild(fi);
+    if (file) ccHandlePDF(file, ccId);
+  };
+  fi.addEventListener('cancel', function(){ if (fi.parentNode) fi.parentNode.removeChild(fi); });
+  document.body.appendChild(fi);
+  fi.click();
+}
+
+async function ccHandlePDF(file, ccId) {
+  if (_CC_HANDLING) return;
+  if (!file || !ccId) return;
+  _CC_HANDLING = true;
+  _CC_PDF_FILE = file; _CC_TARGET_ID = ccId;
+  var c = gc();
+  if (!c) { _CC_HANDLING = false; return; }
+  if (!window.pdfjsLib) { alert('PDF reader not loaded. Please refresh and try again.'); _CC_HANDLING = false; return; }
+  if (!c.ccTemplates) c.ccTemplates = {};
+  var tpl = c.ccTemplates[ccId];
+  if (!tpl) { _CC_HANDLING = false; _ccStartMapper(file, c, ccId, null); }
+  else { await _ccRunTemplate(file, c, ccId, tpl); }
+}
+
+async function _ccRunTemplate(file, c, ccId, tpl) {
+  _bankShowProgress('Reading ' + file.name + '…');
+  try {
+    var lines = await _bankExtractLines(file);
+    var result = _ccApplyTemplate(lines, tpl);
+    _bankShowProgress('');
+    var total = result.charges.length + result.payments.length;
+    if (total) {
+      _ccAddPendingQueue(c, ccId, result.charges, result.payments, tpl);
+      sv(); renderCCTab(c);
+      var btn = document.querySelector('[data-panel="cc"]');
+      if (btn) switchTab({ target: btn }, 'cc');
+      _bankToast(total + ' transactions imported from ' + tpl.cardName + '. Review and post below.');
+    } else {
+      if (confirm('No transactions found using the saved layout for ' + tpl.cardName + '.\n\nRe-map this statement?')) {
+        _ccStartMapper(file, c, ccId, tpl); return;
+      }
+    }
+  } catch(e) {
+    _bankShowProgress('');
+    alert('Error reading PDF: ' + (e.message || e));
+  } finally { _CC_HANDLING = false; }
+}
+
+function _ccApplyTemplate(lines, tpl) {
+  var charges = [], payments = [];
+  var dateX = tpl.txnDateX, descX = tpl.txnDescX, chargeX = tpl.txnChargeX, paymentX = tpl.txnPaymentX;
+  var dateTol = 80, amtTol = 80;
+  var SKIP = /beginning balance|ending balance|opening balance|closing balance|previous balance|new balance|minimum payment|payment due|total charges|total payments|total fees|subtotal|statement period|account summary|credit limit|available credit|page \d/i;
+
+  function parseAmt(s) {
+    if (!s) return null;
+    var neg = /^\(/.test(s.trim());
+    var n = parseFloat(s.replace(/[$,()\s]/g,'').replace(/^-/,''));
+    return isNaN(n) ? null : (neg ? -n : n);
+  }
+  function isAmtStr(s) {
+    return s && /^\$?[\d,]+(\.\d{1,2})?$/.test(s.trim().replace(/[()]/g,''));
+  }
+  function parseDateCC(s) {
+    if (!s) return null;
+    var m = s.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+    if (m) { var yr = m[3] ? (m[3].length===2?'20'+m[3]:m[3]) : new Date().getFullYear(); return m[1].padStart(2,'0')+'/'+m[2].padStart(2,'0')+'/'+yr; }
+    return null;
+  }
+  function autoCat(desc) {
+    var dl=(desc||'').toLowerCase();
+    if(/amazon|walmart|target|costco|staples|office depot/.test(dl))return'Supplies';
+    if(/hotel|marriott|hilton|hyatt|airbnb/.test(dl))return'Travel';
+    if(/airline|delta|united|southwest|american air|flight/.test(dl))return'Travel';
+    if(/uber|lyft|taxi/.test(dl))return'Travel';
+    if(/restaurant|cafe|coffee|starbucks|doordash|grubhub|panera|chipotle|cheesecake/.test(dl))return'Meals';
+    if(/google|microsoft|adobe|zoom|slack|dropbox|aws|netflix|spotify|apple\.com/.test(dl))return'Software';
+    if(/verizon|at&t|t-mobile|comcast|spectrum|internet/.test(dl))return'Utilities';
+    if(/insurance/.test(dl))return'Insurance';
+    if(/rent|lease/.test(dl))return'Rent';
+    if(/cvs|walgreens|pharmacy/.test(dl))return'Health';
+    if(/shell|bp|exxon|chevron|mobil|sunoco/.test(dl))return'Gas & Fuel';
+    return'Uncategorized';
+  }
+
+  // Match amounts on both x0 and x1 (right edge) — handles right-aligned columns
+  function findAmtItem(items, targetX) {
+    if (targetX === null || targetX === undefined) return null;
+    var best = null, bestDist = amtTol;
+    items.forEach(function(it) {
+      if (!isAmtStr(it.str)) return;
+      var d = Math.min(Math.abs(it.x - targetX), Math.abs((it.x1||it.x) - targetX));
+      if (d < bestDist) { bestDist = d; best = it; }
+    });
+    return best;
+  }
+
+  var seen = {};
+  lines.forEach(function(line) {
+    if (SKIP.test(line.text)) return;
+    var items = line.items;
+
+    // Date — left-aligned, must parse as date
+    var dateItem = null;
+    items.forEach(function(it) {
+      if (!dateItem && Math.abs(it.x - dateX) < dateTol && parseDateCC(it.str)) dateItem = it;
+    });
+    if (!dateItem) return;
+    var date = parseDateCC(dateItem.str); if (!date) return;
+
+    var chargeItem = findAmtItem(items, chargeX);
+    var payItem    = findAmtItem(items, paymentX);
+
+    // If both columns resolved to the same item, assign to whichever column is closer
+    if (chargeItem && payItem && chargeItem === payItem) {
+      var dCharge = Math.min(Math.abs(chargeItem.x-chargeX), Math.abs((chargeItem.x1||chargeItem.x)-chargeX));
+      var dPay    = Math.min(Math.abs(payItem.x-paymentX),   Math.abs((payItem.x1||payItem.x)-paymentX));
+      if (dCharge <= dPay) payItem = null; else chargeItem = null;
+    }
+    if (!chargeItem && !payItem) return;
+
+    // Description: items between date column and leftmost amount
+    var amtXLeft = Math.min(
+      chargeItem ? chargeItem.x : 9999,
+      payItem    ? payItem.x    : 9999
+    );
+    var descItems = items.filter(function(it) {
+      return it !== dateItem && it !== chargeItem && it !== payItem
+          && it.x > (dateX + 20) && it.x < (amtXLeft - 5);
+    });
+    var desc = descItems.map(function(it){ return it.str; }).join(' ').trim();
+    if (!desc) {
+      desc = line.text;
+      [dateItem.str, chargeItem?chargeItem.str:'', payItem?payItem.str:''].forEach(function(tok){
+        if (tok) desc = desc.replace(tok,'');
+      });
+      desc = desc.replace(/\s{2,}/g,' ').trim();
+    }
+    desc = desc || 'CC Transaction';
+
+    var ca = chargeItem ? parseAmt(chargeItem.str) : null;
+    var pa = payItem    ? parseAmt(payItem.str)    : null;
+
+    var key = date+'|'+(ca||pa||0).toFixed(2)+'|'+desc.slice(0,15);
+    if (seen[key]) return; seen[key] = true;
+    if (pa!==null && Math.abs(pa)>0) payments.push({id:uid(),date:date,description:desc,amount:Math.abs(pa),type:'cc_payment'});
+    if (ca!==null && Math.abs(ca)>0) charges.push({id:uid(),date:date,description:desc,amount:Math.abs(ca),category:autoCat(desc),type:'charge'});
+  });
+
+  console.log('[cc] Charges:',charges.length,'| Payments:',payments.length);
+  return { charges:charges, payments:payments };
+}
+
+function _ccAddPendingQueue(c, ccId, charges, payments, tpl) {
+  if (!c.bankTransactions) c.bankTransactions = [];
+  var bankAcctName = (tpl && tpl.bankAcctName) || '';
+  charges.forEach(function(t) {
+    c.bankTransactions.push({ id:t.id, date:t.date, description:t.description, amount:t.amount, type:'charge', category:t.category, _ccId:ccId, approved:false });
+  });
+  payments.forEach(function(t) {
+    c.bankTransactions.push({ id:t.id, date:t.date, description:t.description, amount:t.amount, type:'cc_payment', _ccId:ccId, _bankAcctName:bankAcctName, approved:false });
+  });
+}
+
+// ── MAPPER MODAL ──────────────────────────────────────────────
+async function _ccStartMapper(file, c, ccId, existingTpl) {
+  _CC_PDF_FILE=file; _CC_TARGET_ID=ccId; _CC_MAP_STEP=0;
+  var cc=(c.creditCards||[]).find(function(x){return x.id===ccId;});
+  _CC_MAP_TEMPLATE = existingTpl ? JSON.parse(JSON.stringify(existingTpl)) : {
+    cardName: cc?cc.name:'', ccId:ccId, createdAt:new Date().toISOString(),
+    txnDateX:null, txnDescX:null, txnChargeX:null, txnPaymentX:null, bankAcctName:'', mappedText:{}
+  };
+  _ccInjectMapperModal(c);
+  var modal=document.getElementById('cc-mapper-modal');
+  if(!modal)return;
+  modal.classList.add('open');
+  try {
+    var ab=await file.arrayBuffer();
+    _CC_PDF_DOC=await pdfjsLib.getDocument({data:ab}).promise;
+    await _ccRenderPage(1);
+    _ccShowStep(0);
+  } catch(e) {
+    alert('Could not open PDF: '+(e.message||e));
+    modal.classList.remove('open');
+    _CC_HANDLING=false;
+  }
+}
+
+function _ccInjectMapperModal(c) {
+  var existing=document.getElementById('cc-mapper-modal');
+  if(existing)existing.parentNode.removeChild(existing);
+  var bankOpts='<option value="">— select bank account —</option>';
+  ((c&&c.bankAccounts)||[]).forEach(function(b){bankOpts+='<option value="'+escHtml(b.name)+'">'+escHtml(b.name)+'</option>';});
+  ((c&&c.accounts)||[]).filter(function(a){return(a.type==='Asset'||a.type==='Bank'||a.type==='Cash')&&a.active!==false;}).forEach(function(a){bankOpts+='<option value="'+escHtml(a.name||a.cat)+'">'+escHtml(a.name||a.cat)+'</option>';});
+
+  var div=document.createElement('div');
+  div.innerHTML='<div class="overlay" id="cc-mapper-modal" style="z-index:10000">'
+    +'<div class="modal" style="max-width:900px;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem;border-bottom:1px solid var(--border);flex-shrink:0">'
+    +'<div><div style="font-size:15px;font-weight:600">&#x1F4B3; Set Up Credit Card Import</div>'
+    +'<div style="font-size:11px;color:var(--muted)">Map your statement once — Clarity handles every import after that</div></div>'
+    +'<button class="cx" onclick="ccMapperCancel()">&#215;</button></div>'
+    +'<div id="cc-map-steps" style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;padding:.6rem 1.25rem;gap:.4rem"></div>'
+    +'<div id="cc-map-prompt" style="padding:.75rem 1.25rem;background:var(--np-bg);border-bottom:1px solid var(--border);flex-shrink:0">'
+    +'<div id="cc-map-step-counter" style="font-size:13px;font-weight:500;color:var(--np)">Step 1 of '+_CC_STEPS.length+'</div>'
+    +'<div id="cc-map-prompt-text" style="font-size:13px;margin-top:2px"></div></div>'
+    +'<div id="cc-step0-row" style="padding:.75rem 1.25rem;border-bottom:1px solid var(--border);flex-shrink:0;display:none">'
+    +'<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem">'
+    +'<label style="font-size:12px;font-weight:500;white-space:nowrap">Card name:</label>'
+    +'<input id="cc-name-input" type="text" placeholder="e.g. Chase Sapphire" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:\'DM Sans\',sans-serif;background:var(--surface);color:var(--text)"></div>'
+    +'<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">'
+    +'<label style="font-size:12px;font-weight:500;white-space:nowrap">Payments come from:</label>'
+    +'<select id="cc-bank-select" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:\'DM Sans\',sans-serif;background:var(--surface);color:var(--text)">'+bankOpts+'</select></div></div>'
+    +'<div id="cc-canvas-wrap" style="flex:1;overflow:auto;position:relative;background:#888;cursor:crosshair">'
+    +'<canvas id="cc-pdf-canvas" style="display:block"></canvas>'
+    +'<div id="cc-map-dot" style="position:absolute;width:18px;height:18px;border-radius:50%;background:var(--blue);border:2px solid #fff;pointer-events:none;display:none;transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.3)"></div></div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;border-top:1px solid var(--border);flex-shrink:0">'
+    +'<div style="display:flex;gap:.5rem">'
+    +'<button onclick="ccMapperPrev()" id="cc-map-prev" style="padding:7px 16px;border:1px solid var(--border);border-radius:7px;background:none;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--text)">&#8592; Back</button>'
+    +'<button onclick="ccMapperSkip()" style="padding:7px 16px;border:1px solid var(--border);border-radius:7px;background:none;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--muted)">Skip this field</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:.5rem;align-items:center">'
+    +'<div style="display:flex;align-items:center;gap:.5rem;font-size:12px;color:var(--muted)">'
+    +'<button onclick="ccMapperPagePrev()" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:none;cursor:pointer;font-size:11px">&#9668;</button>'
+    +'<span id="cc-map-page-label">Page 1</span>'
+    +'<button onclick="ccMapperPageNext()" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:none;cursor:pointer;font-size:11px">&#9658;</button></div>'
+    +'<button onclick="ccMapperNext()" id="cc-map-next" style="padding:7px 16px;border:none;border-radius:7px;background:var(--np);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">Next &#8594;</button>'
+    +'<button onclick="ccMapperFinish()" id="cc-map-finish" style="padding:7px 16px;border:none;border-radius:7px;background:var(--green);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif;display:none">Save &amp; Import</button>'
+    +'</div></div></div></div>';
+  document.body.appendChild(div.firstChild);
+  var canvas=document.getElementById('cc-pdf-canvas');
+  if(canvas){canvas.addEventListener('click',function(e){var rect=canvas.getBoundingClientRect();_ccMapClick((e.clientX-rect.left)/_BANK_SCALE,(e.clientY-rect.top)/_BANK_SCALE,e.clientX-rect.left,e.clientY-rect.top);});}
+}
+
+async function _ccRenderPage(pageNum) {
+  if(!_CC_PDF_DOC)return;
+  _CC_PDF_PAGE=pageNum;
+  var page=await _CC_PDF_DOC.getPage(pageNum);
+  var vp=page.getViewport({scale:_BANK_SCALE});
+  var canvas=document.getElementById('cc-pdf-canvas');if(!canvas)return;
+  canvas.width=vp.width;canvas.height=vp.height;
+  await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+  var lbl=document.getElementById('cc-map-page-label');
+  if(lbl)lbl.textContent='Page '+pageNum+' of '+_CC_PDF_DOC.numPages;
+}
+
+function _ccShowStep(step) {
+  _CC_MAP_STEP=step;
+  var stepInfo=_CC_STEPS[step];if(!stepInfo)return;
+  var el=document.getElementById('cc-map-prompt-text');if(el)el.textContent=stepInfo.prompt;
+  var sc=document.getElementById('cc-map-step-counter');if(sc)sc.textContent='Step '+(step+1)+' of '+_CC_STEPS.length;
+  var stepsEl=document.getElementById('cc-map-steps');
+  if(stepsEl){stepsEl.innerHTML=_CC_STEPS.map(function(s,i){var done=_CC_MAP_TEMPLATE.mappedText&&_CC_MAP_TEMPLATE.mappedText[s.key];var active=i===step;return'<div style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;'+(active?'background:var(--blue);color:#fff':done?'background:var(--green-bg);color:var(--green)':'color:var(--muted)')+'">'+(done&&!active?'&#10003; ':((i+1)+'. '))+s.label+'</div>';}).join('');}
+  var row0=document.getElementById('cc-step0-row');
+  if(row0){row0.style.display=step===0?'block':'none';if(step===0){var inp=document.getElementById('cc-name-input');if(inp&&_CC_MAP_TEMPLATE.cardName)inp.value=_CC_MAP_TEMPLATE.cardName;var sel=document.getElementById('cc-bank-select');if(sel&&_CC_MAP_TEMPLATE.bankAcctName)sel.value=_CC_MAP_TEMPLATE.bankAcctName;}}
+  var canFinish=step>=3&&_CC_MAP_TEMPLATE&&_CC_MAP_TEMPLATE.cardName&&_CC_MAP_TEMPLATE.txnDateX!==null;
+  var prev=document.getElementById('cc-map-prev');var next=document.getElementById('cc-map-next');var finish=document.getElementById('cc-map-finish');
+  if(prev)prev.style.display=step>0?'':'none';
+  if(next)next.style.display=step<_CC_STEPS.length-1?'':'none';
+  if(finish)finish.style.display=canFinish?'':'none';
+  var dot=document.getElementById('cc-map-dot');if(dot)dot.style.display='none';
+}
+
+function _ccMapClick(pdfX,pdfY,canvasX,canvasY) {
+  var step=_CC_STEPS[_CC_MAP_STEP];if(!step)return;
+  var dot=document.getElementById('cc-map-dot');if(dot){dot.style.display='block';dot.style.left=canvasX+'px';dot.style.top=canvasY+'px';}
+  if(!_CC_MAP_TEMPLATE.mappedText)_CC_MAP_TEMPLATE.mappedText={};
+  if(step.key==='txnDate')    {_CC_MAP_TEMPLATE.txnDateX   =pdfX;_CC_MAP_TEMPLATE.mappedText[step.key]='x='+Math.round(pdfX);}
+  else if(step.key==='txnDesc')    {_CC_MAP_TEMPLATE.txnDescX   =pdfX;_CC_MAP_TEMPLATE.mappedText[step.key]='x='+Math.round(pdfX);}
+  else if(step.key==='txnCharge')  {_CC_MAP_TEMPLATE.txnChargeX =pdfX;_CC_MAP_TEMPLATE.mappedText[step.key]='x='+Math.round(pdfX);}
+  else if(step.key==='txnPayment') {_CC_MAP_TEMPLATE.txnPaymentX=pdfX;_CC_MAP_TEMPLATE.mappedText[step.key]='x='+Math.round(pdfX);}
+  if(step.key!=='cardName')setTimeout(function(){ccMapperNext();},400);
+}
+
+function ccMapperNext() {
+  if(_CC_MAP_STEP===0){
+    var inp=document.getElementById('cc-name-input');
+    var name=inp?inp.value.trim():'';
+    if(!name){if(inp){inp.style.borderColor='var(--red)';inp.placeholder='Please enter a card name first';inp.focus();setTimeout(function(){inp.style.borderColor='';inp.placeholder='e.g. Chase Sapphire';},2500);}return;}
+    _CC_MAP_TEMPLATE.cardName=name;
+    var sel=document.getElementById('cc-bank-select');if(sel&&sel.value)_CC_MAP_TEMPLATE.bankAcctName=sel.value;
+    if(!_CC_MAP_TEMPLATE.mappedText)_CC_MAP_TEMPLATE.mappedText={};
+    _CC_MAP_TEMPLATE.mappedText['cardName']=name;
+  }
+  if(_CC_MAP_STEP<_CC_STEPS.length-1)_ccShowStep(_CC_MAP_STEP+1);
+}
+
+function ccMapperPrev(){if(_CC_MAP_STEP>0)_ccShowStep(_CC_MAP_STEP-1);}
+function ccMapperSkip(){if(_CC_MAP_STEP<_CC_STEPS.length-1)_ccShowStep(_CC_MAP_STEP+1);}
+async function ccMapperPagePrev(){if(_CC_PDF_DOC&&_CC_PDF_PAGE>1)await _ccRenderPage(_CC_PDF_PAGE-1);}
+async function ccMapperPageNext(){if(_CC_PDF_DOC&&_CC_PDF_PAGE<_CC_PDF_DOC.numPages)await _ccRenderPage(_CC_PDF_PAGE+1);}
+
+async function ccMapperFinish() {
+  var c=gc();if(!c)return;
+  if(!_CC_MAP_TEMPLATE.cardName){alert('Please enter a card name.');return;}
+  if(_CC_MAP_TEMPLATE.txnDateX===null||_CC_MAP_TEMPLATE.txnChargeX===null){alert('Please map at least the date and charge columns.');return;}
+  if(!c.ccTemplates)c.ccTemplates={};
+  c.ccTemplates[_CC_TARGET_ID]=_CC_MAP_TEMPLATE;
+  var _file=_CC_PDF_FILE;var _tpl=JSON.parse(JSON.stringify(_CC_MAP_TEMPLATE));var _ccId=_CC_TARGET_ID;
+  ccMapperCancel();
+  _bankShowProgress('Extracting transactions…');
+  try {
+    var lines=await _bankExtractLines(_file);
+    var result=_ccApplyTemplate(lines,_tpl);
+    _bankShowProgress('');
+    var total=result.charges.length+result.payments.length;
+    if(total){
+      _ccAddPendingQueue(c,_ccId,result.charges,result.payments,_tpl);
+      sv();
+      var btn=document.querySelector('[data-panel="cc"]');if(btn)switchTab({target:btn},'cc');
+      else renderCCTab(c);
+      _bankToast(total+' transactions imported from '+_tpl.cardName+'. Review and post below.');
+    } else {
+      sv();renderCCTab(c);
+      _bankToast('Layout saved for '+_tpl.cardName+'. No transactions found — try importing again.');
+    }
+  } catch(e){_bankShowProgress('');sv();alert('Layout saved, but extraction failed: '+(e.message||e));}
+  finally{_CC_HANDLING=false;}
+}
+
+function ccMapperCancel(){
+  var modal=document.getElementById('cc-mapper-modal');if(modal)modal.classList.remove('open');
+  _CC_PDF_FILE=null;_CC_PDF_DOC=null;_CC_MAP_TEMPLATE=null;_CC_HANDLING=false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// CC CARD CRUD — saveCC, editCC, deleteCC, openCCCharge, markCCPaid
+// ══════════════════════════════════════════════════════════════
+
+function openAddCC() {
+  var c = gc(); if (!c) return;
+  // Always ensure buildDynMods has run so m-cc exists in the DOM
+  if (typeof buildDynMods === 'function') buildDynMods(c.type);
+  EI = -1;
+  // Clear form fields
+  if (g('cc-name'))    { g('cc-name').value = '';    g('cc-name').style.borderColor = ''; }
+  if (g('cc-network')) g('cc-network').value = 'Visa';
+  if (g('cc-last4'))   g('cc-last4').value = '';
+  if (g('cc-limit'))   g('cc-limit').value = '';
+  openM('m-cc');
+}
+
+function saveCC() {
+  var c = gc(); if (!c) return;
+  var name = (g('cc-name') && g('cc-name').value.trim()) || '';
+  if (!name) { if (g('cc-name')) { g('cc-name').style.borderColor = 'var(--red)'; setTimeout(function(){ g('cc-name').style.borderColor = ''; }, 2000); } return; }
+  var network = g('cc-network') ? g('cc-network').value : 'Visa';
+  var last4   = g('cc-last4')   ? g('cc-last4').value.trim().replace(/\D/g,'').slice(-4) : '';
+  var limit   = g('cc-limit')   ? Number(g('cc-limit').value || 0) : 0;
+
+  if (!c.creditCards) c.creditCards = [];
+  var idx = resolveEI(c.creditCards);
+  if (idx >= 0) {
+    // Edit existing
+    c.creditCards[idx].name    = name;
+    c.creditCards[idx].network = network;
+    c.creditCards[idx].last4   = last4;
+    c.creditCards[idx].limit   = limit;
+  } else {
+    // New card
+    c.creditCards.push({ id: uid(), name: name, network: network, last4: last4, limit: limit });
+  }
+  EI = -1;
+  sv();
+  closeM('m-cc');
+  renderCCTab(c);
+}
+
+function editCC(ci) {
+  var c = gc(); if (!c) return;
+  var cc = (c.creditCards || [])[ci]; if (!cc) return;
+  EI = ci;
+  if (!g('m-cc') && typeof buildDynMods === 'function') buildDynMods(c.type);
+  if (g('cc-name'))    g('cc-name').value    = cc.name    || '';
+  if (g('cc-network')) g('cc-network').value = cc.network || 'Visa';
+  if (g('cc-last4'))   g('cc-last4').value   = cc.last4   || '';
+  if (g('cc-limit'))   g('cc-limit').value   = cc.limit   || '';
+  openM('m-cc');
+}
+
+function deleteCC(ccId) {
+  var c = gc(); if (!c) return;
+  var cc = (c.creditCards || []).find(function(x){ return x.id === ccId; });
+  if (!cc) return;
+  if (!confirm('Delete "' + cc.name + '"? This will not delete associated charges.')) return;
+  c.creditCards = c.creditCards.filter(function(x){ return x.id !== ccId; });
+  sv();
+  renderCCTab(c);
+}
+
+function openCCCharge(ccId) {
+  var c = gc(); if (!c) return;
+  // Ensure the expense modal exists
+  if (!g('m-exp') && typeof buildDynMods === 'function') buildDynMods(c.type);
+  EI = -1;
+  // Pre-clear form fields that are safe to touch
+  ['e-d','e-a','e-dt','e-ref','e-vendor','e-tin','e-url'].forEach(function(id){ var el = g(id); if (el) el.value = ''; });
+  if (g('e-gid')) g('e-gid').value = '';
+  if (g('e-c')) g('e-c').value = (g('e-c').options[0] || {}).value || '';
+  if (g('e-f')) g('e-f').value = '';
+  if (g('e-proj')) g('e-proj').value = '';
+  if (g('e-1099')) g('e-1099').value = '';
+  // Tag the expense as a CC charge so saveExp() can stamp ccId
+  if (g('e-gid')) g('e-gid').setAttribute('data-ccid', ccId);
+  // Set date to today
+  if (g('e-dt')) {
+    var now = new Date();
+    var mm = String(now.getMonth()+1).padStart(2,'0');
+    var dd = String(now.getDate()).padStart(2,'0');
+    var yyyy = now.getFullYear();
+    g('e-dt').value = mm + '/' + dd + '/' + yyyy;
+  }
+  openM('m-exp');
+}
+
+function markCCPaid(expIdx) {
+  var c = gc(); if (!c) return;
+  var e = (c.expenses || [])[expIdx]; if (!e) return;
+  e.ccPaid = true;
+  sv();
+  renderCCTab(c);
+}

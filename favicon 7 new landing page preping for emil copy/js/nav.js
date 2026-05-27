@@ -82,9 +82,9 @@ function renderMobSel(){
 // TABS
 // ══════════════════════════════════════════
 function getTabs(t){
-  if(t==='np')return[['grants','Grants'],['procurement','Procurement'],['donors','Donors'],['funding','Income'],['npexp','Expenses'],['reimbursements','Reimbursements'],['vendors','Vendors'],['budget','Budget'],['recon','Reconciliation'],['coa','Accounts'],['gl','General ledger'],['trialbal','Trial Balance'],['funds','Funds'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['f990','Form 990'],['importrules','Import Rules'],['flagged','🚩 Flagged'],['closedperiods','Closed Periods'],['vault','📎 Vault'],['reports','Reports'],['trash','🗑 Deleted']];
-  if(t==='sb')return[['revenue','Revenue'],['cashflow','Cash flow'],['sbexp','Expenses'],['reimbursements','Reimbursements'],['ar','A/R & Invoicing'],['vendors','Vendors'],['customers','Customers'],['jentries','Journal entries'],['bsheet','Balance sheet'],['recon','Reconciliation'],['budget','Budget'],['coa','Accounts'],['gl','General ledger'],['trialbal','Trial Balance'],['salestax','Sales Tax'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['importrules','Import Rules'],['flagged','🚩 Flagged'],['closedperiods','Closed Periods'],['vault','📎 Vault'],['reports','Reports'],['trash','🗑 Deleted']];
-  return[['peinc','Income'],['peexp','Expenses'],['vendors','Vendors'],['budget','Budget'],['coa','Accounts'],['gl','General ledger'],['trialbal','Trial Balance'],['pettycash','Petty Cash'],['importrules','Import Rules'],['flagged','🚩 Flagged'],['closedperiods','Closed Periods'],['vault','📎 Vault'],['reports','Reports'],['trash','🗑 Deleted']];
+  if(t==='np')return[['grants','🏛 Grants'],['procurement','📋 Procurement'],['donors','🤝 Donors'],['funding','💰 Income'],['npexp','📤 Expenses'],['cc','💳 Credit Cards'],['reimbursements','🧾 Reimbursements'],['vendors','🏢 Vendors'],['budget','📊 Budget'],['recon','🔁 Reconciliation'],['coa','📒 Accounts'],['gl','📖 General Ledger'],['trialbal','⚖️ Trial Balance'],['funds','🗂 Funds'],['pettycash','💵 Petty Cash'],['openingbal','🔓 Opening Balances'],['f990','📄 Form 990'],['importrules','⚙️ Import Rules'],['flagged','🚩 Flagged'],['closedperiods','🔒 Closed Periods'],['vault','📎 Vault'],['reports','📈 Reports'],['trash','🗑 Deleted']];
+  if(t==='sb')return[['revenue','💰 Revenue'],['cashflow','💸 Cash Flow'],['sbexp','📤 Expenses'],['cc','💳 Credit Cards'],['reimbursements','🧾 Reimbursements'],['ar','📬 A/R & Invoicing'],['vendors','🏢 Vendors'],['customers','👥 Customers'],['jentries','✏️ Journal Entries'],['bsheet','🏦 Balance Sheet'],['recon','🔁 Reconciliation'],['budget','📊 Budget'],['coa','📒 Accounts'],['gl','📖 General Ledger'],['trialbal','⚖️ Trial Balance'],['salestax','🧾 Sales Tax'],['pettycash','💵 Petty Cash'],['openingbal','🔓 Opening Balances'],['importrules','⚙️ Import Rules'],['flagged','🚩 Flagged'],['closedperiods','🔒 Closed Periods'],['vault','📎 Vault'],['reports','📈 Reports'],['trash','🗑 Deleted']];
+  return[['peinc','💰 Income'],['peexp','📤 Expenses'],['vendors','🏢 Vendors'],['budget','📊 Budget'],['coa','📒 Accounts'],['gl','📖 General Ledger'],['trialbal','⚖️ Trial Balance'],['pettycash','💵 Petty Cash'],['importrules','⚙️ Import Rules'],['flagged','🚩 Flagged'],['closedperiods','🔒 Closed Periods'],['vault','📎 Vault'],['reports','📈 Reports'],['trash','🗑 Deleted']];
 }
 
 // STABILITY FIX-2: Tab order now keyed by client ID instead of client type.
@@ -128,7 +128,8 @@ function switchPanelMob(panel){
   afterSwitch(panel);
 }
 function afterSwitch(p){
-  if(p==='cashflow')renderCF();
+  if(p==='cc')renderCCTab(gc());
+  else if(p==='cashflow')renderCF();
   else if(p==='coa'){renderCOA(gc());}
   else if(p==='gl')renderGL(gc());
   else if(p==='reports')renderReports();else if(p==='funds')renderFundsManager();
