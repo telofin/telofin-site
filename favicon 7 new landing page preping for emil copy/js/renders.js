@@ -3874,7 +3874,7 @@ function buildDynMods(type){
     h+='<div class="overlay" id="m-peinc"><div class="modal"><button class="cx" onclick="closeM(\'m-peinc\')">&#215;</button><div class="m-title">Add income</div>'+pia+'<div class="fl"><label>Source</label><input type="text" id="pi-n" placeholder="e.g. Salary"></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="pi-c" style="width:100%"></select></div></div><div><label>Amount ($)</label><input type="number" id="pi-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Frequency</label><select id="pi-f">'+FO+'</select></div><div><label>Date (MM/DD/YYYY)</label><input type="text" id="pi-d" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="savePeInc()">Save</button><button class="add-btn" style="flex:1" onclick="savePeIncAndNew()">Save &amp; new</button></div></div></div>';
     h+='<div class="overlay" id="m-exp"><div class="modal"><button class="cx" onclick="closeM(\'m-exp\')">&#215;</button><div class="m-title">Add expense</div>'+ca+'<div class="fl"><label>Description</label><input type="text" id="e-d" placeholder="e.g. Rent"></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="e-c" style="width:100%"></select></div></div><div><label>Amount ($)</label><input type="number" id="e-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Frequency</label><select id="e-fr">'+FO+'</select></div><div><label>Date (MM/DD/YYYY)</label><input type="text" id="e-dt" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Paid from account <span style=\\\"color:var(--red)\\\">*</span></label><div class=\"sw\" style=\"width:100%\"><select id=\"e-bank\" style=\"width:100%\"></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-proj\" style=\"width:100%\"></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Check / Ref # (optional)</label><input type=\"text\" id=\"e-ref\" placeholder=\"e.g. 1472 or ACH\"></div>'+'<div class=\"fr\"><div class=\"fl\" style=\"margin-bottom:0\"><label>1099 contractor?</label><select id=\"e-1099\"><option value=\"\">No</option><option value=\"yes\">Yes</option></select></div><div class=\"fl\" style=\"margin-bottom:0\"><label>Vendor name</label><input type=\"text\" id=\"e-vendor\" placeholder=\"e.g. John Smith Consulting\\"></div><div class=\\"fl\\" style=\\"margin-bottom:0\"><label>EIN / TIN <span style=\\"font-size:10px;color:var(--muted)\">for 1099</span></label><input type=\\"text\" id=\\"e-tin\" placeholder="12-3456789"></div></div<div class=\\\"fl\\\" style=\\\"margin-bottom:.5rem\\\"><label>Receipt URL (optional)</label><input type=\\\"url\\\" id=\\\"e-url\\\" placeholder=\\\"https://drive.google.com/...\\\"></div>>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveExp()">Save</button><button class="add-btn" style="flex:1" onclick="saveExpAndNew()">Save &amp; new</button><button class="add-btn" id="del-exp-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;expenses&quot;)">🗑 Delete</button></div></div></div>';
   }
-  h+='<div class="overlay" id="m-budget"><div class="modal"><button class="cx" onclick="closeM(\'m-budget\')">&#215;</button><div class="m-title">Budget line item</div><div class="fl"><label>Group</label><div class="sw" style="width:100%"><select id="b-g" style="width:100%"></select></div></div><div class="fl"><label>Line item (category)</label><div class="sw" style="width:100%"><select id="b-c" style="width:100%"></select></div></div><div class="fr"><div><label>Type</label><select id="b-t"><option>Income</option><option>Expense</option></select></div><div><label>Budgeted amount ($)</label><input type="number" id="b-a" oninput="fmtAmt(this)"></div></div><div class="fl"><label>Fund (optional)</label><div class="sw" style="width:100%"><select id="b-fund" style="width:100%"><option value="">— None —</option></select></div></div><div style="display:flex;gap:8px"><button class="sv-btn" id="budget-sv-btn" onclick="saveBudget()">Save &amp; close</button><button class="add-btn" style="flex:1" onclick="saveBudgetAndNew()">Save &amp; new</button></div></div></div>';
+  h+='<div class="overlay" id="m-budget"><div class="modal"><button class="cx" onclick="closeM(\'m-budget\')">&#215;</button><div class="m-title">Budget line item</div><div class="fl"><label>Group</label><div class="sw" style="width:100%"><select id="b-g" style="width:100%"></select></div></div><div class="fl"><label>Line item (category)</label><div class="sw" style="width:100%"><select id="b-c" style="width:100%"></select></div></div><div class="fr"><div><label>Type</label><select id="b-t"><option>Income</option><option>Expense</option></select></div><div><label>Budgeted amount ($)</label><input type="number" id="b-a" oninput="fmtAmt(this)"></div></div><div class="fl"><label>Fund (optional)</label><div class="sw" style="width:100%"><select id="b-fund" style="width:100%"><option value="">— None —</option></select></div></div><div class="fl"><label>Overspend policy</label><select id="b-overspend"><option value="warn">⚠ Warn — allow with warning</option><option value="strict">🔒 Strict — block save</option></select></div><div style="display:flex;gap:8px"><button class="sv-btn" id="budget-sv-btn" onclick="saveBudget()">Save &amp; close</button><button class="add-btn" style="flex:1" onclick="saveBudgetAndNew()">Save &amp; new</button></div></div></div>';
   h+='<div class="overlay" id="m-jrn"><div class="modal"><button class="cx" onclick="closeM(\'m-jrn\')">&#215;</button><div class="m-title">Journal entry</div><div class="fl"><label>Entry</label><textarea id="j-t" placeholder="Wins, challenges, reflections..."></textarea></div><button class="sv-btn" onclick="saveJrn()">Save</button></div></div>';
   h+='<div class="overlay" id="m-act"><div class="modal"><button class="cx" onclick="closeM(\'m-act\')">&#215;</button><div class="m-title">Daily action item</div><div class="fl"><label>Task</label><input type="text" id="a-t" placeholder="e.g. Follow up on grant"></div><div class="fr"><div><label>Due date</label><input type="text" id="a-d" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Assigned to</label><input type="text" id="a-w" placeholder="Optional"></div></div><div class="fl"><label>Priority</label><select id="a-p"><option>High</option><option>Medium</option><option>Low</option></select></div><button class="sv-btn" onclick="saveAct()">Save</button></div></div>';
   mc.innerHTML=h;
@@ -3887,12 +3887,12 @@ function buildDynMods(type){
 // are left as-is (branching logic). Refactoring these is medium-risk and deferred to Phase 3.
 function saveGrant(){
   var c=gc();if(!c.grants)c.grants=[];
-  var n=g('g-n').value.trim();if(!n)return;
+  var n=sanitizeInput(g('g-n').value.trim());if(!n)return;
   var _rGEI=resolveEI(c.grants);
   var prevGrant=_rGEI>=0?c.grants[_rGEI]:null;
   var item={
     id:_rGEI>=0?c.grants[_rGEI].id:uid(),
-    name:n,funder:g('g-f').value,
+    name:n,funder:sanitizeInput(g('g-f').value.trim()),
     awarded:Number(g('g-a').value||0),
     status:g('g-st').value,
     deadline:g('g-dl').value,
@@ -4081,15 +4081,16 @@ function deleteFromModal(type){
   var arr=type==='expenses'?c.expenses:type==='income'?c.income:type==='revenue'?c.revenue:null;
   if(!arr||EI<0||EI>=arr.length)return;
   var item=arr[EI];
-  var desc=item.desc||item.name||'this transaction';
-  var amt=Number(item.amt||item.recv||item.act||0);
-  if(!confirm('Delete "'+desc+'" ($'+amt.toFixed(2)+')?\n\nThis cannot be undone.'))return;
-  arr.splice(EI,1);
-  sv();
-  if(type==='expenses'){if(typeof renderExp==='function')renderExp(c);if(typeof renderReconciliation==='function')renderReconciliation(c);}
-  else if(type==='income'){if(typeof renderInc==='function')renderInc(c);if(typeof renderReconciliation==='function')renderReconciliation(c);}
-  else if(type==='revenue'){if(typeof renderRev==='function')renderRev(c);if(typeof renderReconciliation==='function')renderReconciliation(c);}
+  // Period lock check
+  var itemDate=item.date||'';
+  if(itemDate&&typeof isDateLocked==='function'&&isDateLocked(c,itemDate)){
+    if(typeof periodLockAlert==='function')periodLockAlert(c.closedThrough);
+    return;
+  }
+  var idx=EI;
   closeM(type==='expenses'?'m-exp':type==='income'?'m-inc':'m-rev');
+  // Route through delItem: soft delete, ledger reversal, 30-day restore window
+  if(typeof delItem==='function')delItem(type,idx);
 }
 function saveExp(){
   var c=gc();if(!c.expenses)c.expenses=[];
@@ -4121,6 +4122,26 @@ function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
   var _oldExp=_rXEI>=0?c.expenses[_rXEI]:null;
   // ── FIX-C: Restricted fund check helper ─────────────────────────────────
   // Returns true if save should proceed, false if user cancelled.
+  function checkBudgetOverspend(cat,newAmt,oldAmt){
+    if(!cat)return true;
+    var budLine=(c.budgetItems||[]).find(function(b){return b.cat===cat&&b.type==='Expense';});
+    if(!budLine||budLine.amt===null||budLine.amt===undefined)return true;
+    var budgeted=Number(budLine.amt||0);
+    var spent=(c.expenses||[]).filter(function(e,idx){return e.cat===cat&&!e.voided&&!e.deleted&&(EI<0||idx!==EI);}).reduce(function(s,e){return s+Number(e.amt||0);},0);
+    var afterThis=spent+newAmt-oldAmt;
+    if(afterThis>budgeted){
+      var policy=budLine.overspendPolicy||'warn';
+      var detail='Category: '+cat+'\nBudgeted: '+fmt(budgeted)+'\nAlready spent: '+fmt(spent)+'\nThis expense: '+fmt(newAmt)+'\nTotal after: '+fmt(afterThis)+'\nOver budget by: '+fmt(afterThis-budgeted);
+      if(policy==='strict'){
+        alert('🔒 Blocked — Budget Exceeded\n\n'+detail+'\n\nThis line item is set to Strict. Adjust the amount or update the budget line policy.');
+        return false;
+      }else{
+        return confirm('⚠ Budget Warning\n\n'+detail+'\n\nThis expense exceeds the budgeted amount. Proceed anyway?');
+      }
+    }
+    return true;
+  }
+
   function checkRestrictedFund(fundName,newAmt,oldAmt){
     if(!fundName)return true;
     var fund=(c.funds||[]).find(function(f){return f.name===fundName;});
@@ -4149,6 +4170,7 @@ function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
   if(c.type==='np'){var cat=g('e-c').value;item={desc:d,cat:cat,amt:Number(g('e-a').value||0),date:g('e-dt').value,fund:g('e-f').value,grantId:g('e-gid').value||'',acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,functional:g('e-func')&&g('e-func').value||'',receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
     item.audit=EI>=0?auditTxn(_oldExp,item,'expenses'):(_oldExp&&_oldExp.audit||_auditCreated());
     if(!checkRestrictedFund(item.fund,item.amt,_oldExp?Number(_oldExp.amt||0):0))return;
+    if(!checkBudgetOverspend(item.cat,Number(item.amt||0),_oldExp?Number(_oldExp.amt||0):0))return;
     var _prevAmt=_oldExp?Number(_oldExp.amt||0):0;var _newAmt=Number(item.amt||0);
     if(bsAssetId){applyBSAssetDelta(c,bsAssetId,_prevAmt-_newAmt);}
     else if(_oldExp&&_oldExp.bsAssetId){applyBSAssetDelta(c,_oldExp.bsAssetId,_prevAmt);}// account changed — reverse old
@@ -4160,6 +4182,7 @@ function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
     if(bsAssetId){applyBSAssetDelta(c,bsAssetId,_prevAmt2-_newAmt2);}
     else if(_oldExp&&_oldExp.bsAssetId){applyBSAssetDelta(c,_oldExp.bsAssetId,_prevAmt2);}
     if(c.accounts&&c.accounts.length){var _coaMatch=(c.accounts||[]).find(function(a){return a.cat===cat||a.name===cat||a.code===item.acctCode;});if(!_coaMatch){if(!confirm('⚠ COA Warning: "'+cat+'" is not in your chart of accounts.\n\nSave anyway? (You can add this category to your COA later.)'))return;}}
+    if(!checkBudgetOverspend(item.cat,Number(item.amt||0),_oldExp?Number(_oldExp.amt||0):0))return;
     if(_rXEI>=0)updateLedgerEntry(c,item.id||c.expenses[_rXEI].id,item.acctCode||'5010',_defaultCashCode(c),Number(item.amt||0),item.desc||'Expense','expense');else postToLedger(c,item.acctCode||'5010',_defaultCashCode(c),Number(item.amt||0),item.desc||'Expense','expense',item.id);markDirty('sbexp','budget','reports','bs');if(_rXEI>=0)c.expenses[_rXEI]=item;else c.expenses.push(item);syncVendorFromExpense(c,item);sv();renderSbExp(c);renderBudgetMultiYear();renderReports();renderBalanceSheet(c);closeM('m-exp');['e-d','e-c','e-a','e-ref','e-url'].forEach(function(id){var el=g(id);if(el)el.value='';}); }
   else{var cat=g('e-c').value;item={desc:d,cat:cat,amt:Number(g('e-a').value||0),freq:g('e-fr').value,date:g('e-dt').value,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
     item.audit=EI>=0?auditTxn(_oldExp,item,'expenses'):_auditCreated();
@@ -4498,6 +4521,7 @@ function editBudgetLine(i){
   g('b-t').value=b.type||'Expense';
   g('b-a').value=b.amt||'';
   if(g('b-fund'))g('b-fund').value=b.fund||'';
+  if(g('b-overspend'))g('b-overspend').value=b.overspendPolicy||'warn';
   openM('m-budget');
 }
 function delBudgetLine(i){var c=gc();if(!c||!c.budgetItems[i])return;if(!confirm('Delete "'+c.budgetItems[i].cat+'"?'))return;c.budgetItems.splice(i,1);sv();renderBudgetMultiYear();}
@@ -4516,11 +4540,12 @@ function saveBudget(){
     // Edit in place by identity — immune to sort reordering
     _editItem.cat=cat;_editItem.type=type;_editItem.amt=amt;_editItem.group=grp;
     _editItem.fund=g('b-fund')&&g('b-fund').value||'';
+    _editItem.overspendPolicy=g('b-overspend')&&g('b-overspend').value||'warn';
     _BUDGET_EDIT_CAT='';_BUDGET_EDIT_TYPE='';
   }else{
     var ex=c.budgetItems.find(function(b){return b.cat===cat&&b.type===type;});
-    if(ex){ex.amt=amt;ex.group=grp;ex.fund=g('b-fund')&&g('b-fund').value||'';}
-    else{c.budgetItems.push({cat:cat,type:type,amt:amt,group:grp,fund:g('b-fund')&&g('b-fund').value||''});syncBudgetToCOA(c,cat,type,grp);}
+    if(ex){ex.amt=amt;ex.group=grp;ex.fund=g('b-fund')&&g('b-fund').value||'';ex.overspendPolicy=g('b-overspend')&&g('b-overspend').value||'warn';}
+    else{c.budgetItems.push({cat:cat,type:type,amt:amt,group:grp,fund:g('b-fund')&&g('b-fund').value||'',overspendPolicy:g('b-overspend')&&g('b-overspend').value||'warn'});syncBudgetToCOA(c,cat,type,grp);}
   }
   // Sort budgetItems by account code so they render in COA order
   c.budgetItems.sort(function(a,b){

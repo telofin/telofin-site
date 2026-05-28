@@ -11,6 +11,15 @@ function reconSaveField(field, val) {
 }
 
 function tgAct(i){var c=gc();c.actions[i].done=!c.actions[i].done;sv();if(c.type==='np')renderNpAct(c);else if(c.type==='sb')renderSbAct(c);else renderPeAct(c);}
+function _bankTxnExists(c,txnId){
+  if(!txnId)return false;
+  var exp=c.expenses||[];
+  for(var i=0;i<exp.length;i++){if(exp[i].bankTxnId===txnId&&!exp[i].deleted)return true;}
+  var inc=(c.income||[]).concat(c.revenue||[]);
+  for(var j=0;j<inc.length;j++){if(inc[j].bankTxnId===txnId&&!inc[j].deleted)return true;}
+  return false;
+}
+
 function delItem(type,i){
   var c=gc();if(!confirm('Move this item to Recently Deleted? You can restore it within 30 days.'))return;
   var item=c[type]&&c[type][i];if(!item)return;
@@ -820,9 +829,9 @@ function saveProposedBudget(){
     var ts=new Date().toISOString();
     if(String(ex.amt)!==String(amt))ex.audit.push({field:'amt',oldValue:String(ex.amt),newValue:String(amt),timestamp:ts});
     if(ex.group!==grp)ex.audit.push({field:'group',oldValue:ex.group||'',newValue:grp,timestamp:ts});
-    ex.cat=cat;ex.type=type;ex.amt=amt;ex.group=grp;
+    ex.cat=cat;ex.type=type;ex.amt=amt;ex.group=grp;ex.overspendPolicy=g('b-overspend')&&g('b-overspend').value||'warn';
   }else{
-    pb.items.push({cat:cat,type:type,amt:amt,group:grp,audit:[]});
+    pb.items.push({cat:cat,type:type,amt:amt,group:grp,overspendPolicy:g('b-overspend')&&g('b-overspend').value||'warn',audit:[]});
     syncBudgetToCOA(c,cat,type,grp);
   }
   EI=-1;_BUDGET_EDIT_CAT='';_BUDGET_EDIT_TYPE='';
@@ -843,6 +852,7 @@ function editProposedBudgetLine(oi){
   g('b-t').value=b.type||'Expense';
   g('b-a').value=b.amt||'';
   if(g('b-fund'))g('b-fund').value=b.fund||'';
+  if(g('b-overspend'))g('b-overspend').value=b.overspendPolicy||'warn';
   openM('m-budget');
 }
 function openProposedBudgetAudit(oi){
@@ -866,6 +876,33 @@ function openBudgetFromActuals(cat,type){
   var bt=g('b-t');if(bt)bt.value=type;
   openM('m-budget');
 }
+function toggleBudgetDrill(safeId,cat,type){
+  var row=document.getElementById('bud-drill-'+safeId);
+  var body=document.getElementById('bud-drill-body-'+safeId);
+  if(!row||!body)return;
+  if(row.style.display!=='none'){row.style.display='none';return;}
+  var c=gc();if(!c)return;
+  var items=[];
+  if(type==='Expense'){
+    items=(c.expenses||[]).map(function(e,i){return{i:i,item:e};}).filter(function(x){return x.item.cat===cat&&!x.item.deleted&&!x.item.voided;});
+  }else{
+    var src=c.type==='sb'?(c.revenue||[]):(c.income||[]);
+    var itype=c.type==='sb'?'revenue':'income';
+    items=src.map(function(r,i){return{i:i,item:r,itype:itype};}).filter(function(x){return x.item.cat===cat&&!x.item.deleted;});
+  }
+  if(!items.length){body.innerHTML='<div style="font-size:12px;color:var(--muted);padding:.5rem 0">No transactions in this category yet.</div>';row.style.display='';return;}
+  var rows=items.map(function(x){
+    var it=x.item;
+    var amt=type==='Expense'?Number(it.amt||0):(c.type==='sb'?Number(it.act||0):Number(it.recv||it.amt||0));
+    var desc=escHtml(it.desc||it.name||'—');
+    var date=it.date||'—';
+    var editType=type==='Expense'?'expenses':(x.itype||'income');
+    return'<tr style="font-size:12px"><td style="color:var(--muted);width:90px">'+date+'</td><td>'+desc+'</td><td style="text-align:right;width:90px;color:'+(type==='Expense'?'var(--red)':'var(--green)')+'">'+fmt(amt)+'</td><td style="width:60px;text-align:right"><button class="add-btn" style="font-size:10px;padding:2px 7px" onclick="editItem(\''+editType+'\','+x.i+')">✏️ Edit</button></td></tr>';
+  }).join('');
+  body.innerHTML='<table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:11px;color:var(--muted)"><th style="text-align:left;padding-bottom:4px">Date</th><th style="text-align:left">Description</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  row.style.display='';
+}
+
 function renderBudgetMultiYear(){
   var p=g('p-budget');if(!p)return;var c=gc();if(!c)return;
   var fy=getFiscalYear(c.fiscalYearEnd);
@@ -924,7 +961,10 @@ function renderBudgetMultiYear(){
         :'<td><div class="row-acts"><button class="add-btn" style="font-size:10px;padding:2px 7px" onclick="openBudgetFromActuals(\''+b.cat.replace(/'/g,'\\\'')+'\',\''+b.type+'\')" title="Add to budget">+ Budget</button></div></td>';
       // Planning view (no actuals): show budgeted only
       if(!showVariance&&hb)return'<tr><td style="padding-left:1rem">'+b.cat+'</td>'+codeCell+'<td>'+fmt(bud||0)+'</td>'+acts+'</tr>';
-      return'<tr><td style="padding-left:1rem">'+b.cat+'</td>'+codeCell+'<td>'+fmt(act)+'</td>'+(showVariance?vc(bud,act,b.type==='Expense'):'')+acts+'</tr>';
+      var _safeId=b.cat.replace(/[^a-zA-Z0-9]/g,'-');
+      var _actCell=act>0?'<span style="cursor:pointer;color:var(--blue);text-decoration:underline;font-weight:500" onclick="toggleBudgetDrill(\''+_safeId+'\',\''+b.cat.replace(/\'/g,"\\\\'")+'\'\,\''+b.type+'\')" title="Click to see transactions">'+fmt(act)+'</span>':fmt(act);
+      var _drillRow='<tr id="bud-drill-'+_safeId+'" style="display:none"><td colspan="6" style="padding:0"><div id="bud-drill-body-'+_safeId+'" style="background:var(--bg);border-top:1px solid var(--border);padding:.75rem 1rem"></div></td></tr>';
+      return'<tr><td style="padding-left:1rem">'+b.cat+'</td>'+codeCell+'<td>'+_actCell+'</td>'+(showVariance?vc(bud,act,b.type==='Expense'):'')+acts+'</tr>'+_drillRow;
     }).join('');
     grandActInc+=grpActInc;grandBudInc+=grpBudInc;grandActExp+=grpActExp;grandBudExp+=grpBudExp;
     var grpAct=isExp?(grpActExp):(grpActInc-grpActExp||grpActInc);
