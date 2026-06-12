@@ -2015,12 +2015,20 @@ function renderForm990(c){
   var donorItems=(c.donors||[]);
   var p8map={};
   function _p8add(lineKey,amt){if(!p8map[lineKey])p8map[lineKey]=0;p8map[lineKey]+=Number(amt||0);}
+  // General income — exclude grant-linked entries (they are counted separately below)
   incItems.forEach(function(i){
+    if(i.grantId)return; // grant receipts counted in grant line, not here
     var acct=(c.accounts||[]).find(function(a){return a.code===i.acctCode;});
     var line=acct&&acct.f990?acct.f990:('Other revenue — '+(i.cat||'Uncategorized'));
     _p8add(line,i.recv||i.amt||0);
   });
-  grantItems.forEach(function(g){_p8add('Part VIII Line 1 (Grants)',Number(g.awarded||g.received||0));});
+  // Grant revenue — use actual received amounts from income entries, not awarded amount
+  grantItems.forEach(function(g){
+    var grantRecv=(c.income||[]).filter(function(i){
+      return!i.deleted&&!i.voided&&i.grantId===g.id;
+    }).reduce(function(s,i){return s+Number(i.recv||i.amt||0);},0);
+    if(grantRecv>0)_p8add('Part VIII Line 1 (Grants)',grantRecv);
+  });
   var donorTotal=donorItems.reduce(function(s,d){return s+(d.donations||[]).reduce(function(t,dn){return t+Number(dn.amt||0);},0);},0);
   if(donorTotal>0&&!incItems.some(function(i){var a=(c.accounts||[]).find(function(a){return a.code===i.acctCode;});return a&&(a.f990||'').indexOf('Part VIII Line 1')===0;}))
     _p8add('Part VIII Line 1 (Contributions)',donorTotal);
