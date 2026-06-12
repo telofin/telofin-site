@@ -3943,6 +3943,17 @@ function saveGrant(){
   sv();renderGrants(c);renderBudgetMultiYear();renderReports();renderTodoBar();
   closeM('m-grant');
   ['g-n','g-f','g-a','g-dl','g-appdl','g-portal','g-m','g-mr','g-r'].forEach(function(id){var el=g(id);if(el)el.value='';});
+  // If opened from bank tab — link the new grant to the pending transaction and re-render
+  if(window._bankPendingGrantTxnId){
+    var _bt=(c.bankTransactions||[]).find(function(x){return x.id===window._bankPendingGrantTxnId;});
+    if(_bt){
+      _bt.grantId=item.id;
+      _bt.category=_bt.type==='debit'?_bt.category:'Grant';
+      sv();
+      if(typeof renderBank==='function')setTimeout(function(){renderBank(c);},50);
+    }
+    window._bankPendingGrantTxnId=null;
+  }
 }
 function saveInc(){var c=gc();if(!c.income)c.income=[];
   // PERIOD LOCK GUARD
