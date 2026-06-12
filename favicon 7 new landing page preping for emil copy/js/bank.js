@@ -482,14 +482,20 @@ function bankDeleteTemplate(idx) {
 // ── POST TO BOOKS ─────────────────────────────────────────────
 function _bankPost(c, t) {
   var id = uid();
-  // Derive the bankId from RECON_ACCT so reconciliation can find this item.
-  // If RECON_ACCT points to a specific bank (e.g. 'bank:abc123'), tag it.
-  // If it's the default fallback, leave bankId unset — the reconciliation
-  // filter now shows untagged items under any account.
+  // Derive the bankId from RECON_ACCT or from the transaction's bankName.
+  // Priority: 1) RECON_ACCT if it points to a specific bank
+  //           2) Look up bank account by t.bankName
+  //           3) Leave unset — recon filter handles untagged items
   var tagBankId = null;
   if (typeof RECON_ACCT === 'string' && RECON_ACCT.indexOf('bank:') === 0) {
     var _bid = RECON_ACCT.slice(5);
     if (_bid && _bid !== 'default') tagBankId = _bid;
+  }
+  if (!tagBankId && t.bankName && c.bankAccounts && c.bankAccounts.length) {
+    var _ba = c.bankAccounts.find(function(b){
+      return b.name && b.name.toLowerCase() === (t.bankName||'').toLowerCase();
+    });
+    if (_ba) tagBankId = _ba.id;
   }
 
   // Skip if already imported (duplicate detection)
@@ -515,7 +521,8 @@ function _bankPost(c, t) {
         date: t.date, cat: t.category,
         acctCode: t.acctCode || '',
         vendor1099: t.vendorName || '',
-        reconciled: false, fromBank: true, bankTxnId: t.id
+        reconciled: false, fromBank: true, bankTxnId: t.id,
+        bankName: t.bankName || ''
       };
       if (tagBankId) incItem.bankId = tagBankId;
       // Link grant: prefer manually selected, then auto-match by name
@@ -559,7 +566,8 @@ function _bankPost(c, t) {
       date: t.date, cat: t.category,
       acctCode: t.acctCode || '',
       vendor1099: t.vendorName || '',
-      reconciled: false, fromBank: true, bankTxnId: t.id
+      reconciled: false, fromBank: true, bankTxnId: t.id,
+      bankName: t.bankName || ''
     };
     if (tagBankId) expItem.bankId = tagBankId;
     if (t.grantId) {
