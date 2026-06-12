@@ -121,9 +121,45 @@ function openM(id){
       _ec.removeAttribute('data-pending-val');
       populateExpCatDropdown('e-c',_ecCur);
     }
+    // Populate grant dropdown for NP expense modal
+    var _egid=g('e-gid');
+    if(_egid&&_egid.tagName==='SELECT'){
+      var _egc=gc();
+      var _egrants=(_egc&&_egc.grants||[]).filter(function(gr){return gr.status!=='Closed';});
+      _egid.innerHTML='<option value="">— No grant —</option>'+_egrants.map(function(gr){
+        return '<option value="'+gr.id+'">'+escHtml(gr.name)+'</option>';
+      }).join('');
+      // Restore pending grant selection (set before openM was called)
+      var _pendingGid=_egid.getAttribute('data-pending-gid');
+      if(_pendingGid!==null&&_pendingGid!==undefined){
+        _egid.value=_pendingGid;
+        _egid.removeAttribute('data-pending-gid');
+      } else if(EI>=0&&_egc&&_egc.expenses&&_egc.expenses[EI]&&_egc.expenses[EI].grantId){
+        _egid.value=_egc.expenses[EI].grantId;
+        var _gpctEl=g('e-gpct');
+        if(_gpctEl)_gpctEl.value=_egc.expenses[EI].grantPct!=null?_egc.expenses[EI].grantPct:'';
+      }
+    }
   }
   // Populate income/revenue category dropdowns from COA
-  if(id==='m-inc'){var _ic=g('i-c');if(_ic&&_ic.tagName==='SELECT'){var _icCur=_ic.getAttribute('data-pending-val')||_ic.value||'';_ic.removeAttribute('data-pending-val');populateIncCatDropdown('i-c',_icCur,'Income');}
+  if(id==='m-inc'){var _ic=g('i-c');if(_ic&&_ic.tagName==='SELECT'){var _icCur=_ic.getAttribute('data-pending-val')||_ic.value||'';_ic.removeAttribute('data-pending-val');populateIncCatDropdown('i-c',_icCur,'Income');
+    // Wire: when category = Grant, auto-select matching grant in i-gid
+    var _icOrigChange=_ic.onchange;
+    _ic.onchange=function(){
+      if(_icOrigChange)_icOrigChange.call(this);
+      var _gidSel=g('i-gid');var _nc=gc();
+      if(_ic.value==='Grant'&&_gidSel&&_nc&&_nc.grants&&_nc.grants.length){
+        // If no grant selected yet, highlight the dropdown and flash it
+        if(!_gidSel.value){
+          _gidSel.style.borderColor='var(--np)';
+          _gidSel.style.boxShadow='0 0 0 2px var(--np-bg)';
+          setTimeout(function(){_gidSel.style.borderColor='';_gidSel.style.boxShadow='';},2500);
+          // Try to auto-select if only one grant exists
+          if(_nc.grants.length===1){_gidSel.value=_nc.grants[0].id;}
+        }
+      }
+    };
+  }
     // Populate grant dropdown
     var _igid=g('i-gid');if(_igid){var _igc=gc();var _igrants=(_igc&&_igc.grants||[]).filter(function(gr){return gr.status!=='Closed';});_igid.innerHTML='<option value="">— None —</option>'+_igrants.map(function(gr){return'<option value="'+gr.id+'">'+escHtml(gr.name)+'</option>';}).join('');if(EI>=0&&_igc&&_igc.income[EI])_igid.value=_igc.income[EI].grantId||'';}
   }
@@ -290,7 +326,30 @@ function populateExpCatDropdown(selId,currentVal){
     // Sync e-acct to match chosen category
     var opt=sel.options[sel.selectedIndex];
     var code=opt?opt.getAttribute('data-code'):'';
-    var acctSel=g('e-acct');if(acctSel&&code)acctSel.value=code;
+    var acctSel=g('e-acct');
+    if(acctSel){
+      if(code){
+        // Category maps to a COA account — select it
+        acctSel.value=code;
+      } else {
+        // No matching COA account — auto-suggest next available expense code
+        var _c2=gc();
+        if(_c2){
+          var _used=(_c2.accounts||[]).filter(function(a){return a.code&&a.code.indexOf('5')===0;}).map(function(a){return parseInt(a.code)||0;});
+          var _next=_used.length?(Math.max.apply(null,_used)+10):5010;
+          // Add a temporary placeholder option so the user sees the suggestion
+          var _existing=Array.from(acctSel.options).find(function(o){return o.value===String(_next);});
+          if(!_existing){
+            var _ph=document.createElement('option');
+            _ph.value=String(_next);
+            _ph.textContent='(new) '+_next+' — '+sel.value;
+            _ph.setAttribute('data-temp','1');
+            acctSel.appendChild(_ph);
+          }
+          acctSel.value=String(_next);
+        }
+      }
+    }
   };
   // If currentVal not in list, set blank
   if(currentVal&&!Array.from(sel.options).some(function(o){return o.value===currentVal;})){

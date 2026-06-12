@@ -1,4 +1,6 @@
 
+var ACCT_EI = -1;
+
 function renderProjectsHTML(c){
   if(!c.projects)c.projects=[];
   var projects=c.projects;
@@ -313,7 +315,24 @@ function renderImportRulesPanel(c){
   p.appendChild(div);
 }
 function delImportRule(i){var c=gc();if(!c.importRules)return;c.importRules.splice(i,1);sv();renderImportRulesPanel(c);renderImportRulesPanel(c);}// double call to re-render
-function resetAcctForm(){['acct-code','acct-name'].forEach(function(id){var el=g(id);if(el)el.value='';});var t=g('acct-type');if(t)t.value='Expense';}
+function resetAcctForm(){
+  ['acct-code','acct-name'].forEach(function(id){var el=g(id);if(el)el.value='';});
+  var t=g('acct-type');if(t)t.value='Expense';
+  // Auto-suggest next Expense account code
+  var c=gc();if(!c||!c.accounts)return;
+  var codeEl=g('acct-code');if(!codeEl)return;
+  var used5=c.accounts.filter(function(a){return a.code&&a.code.indexOf('5')===0;}).map(function(a){return parseInt(a.code)||0;});
+  var next=used5.length?(Math.max.apply(null,used5)+10):5010;
+  codeEl.value=String(next);
+  // Re-suggest when type changes
+  var typeEl=g('acct-type');
+  if(typeEl){typeEl.onchange=function(){
+    var prefix={Income:'4',Expense:'5',Asset:'1',Liability:'2',Equity:'3'}[typeEl.value]||'5';
+    var used=c.accounts.filter(function(a){return a.code&&a.code.indexOf(prefix)===0;}).map(function(a){return parseInt(a.code)||0;});
+    var nextC=used.length?(Math.max.apply(null,used)+10):parseInt(prefix+'010');
+    codeEl.value=String(nextC);
+  };}
+}
 function editAcct(i){var c=gc();if(!c.accounts[i])return;ACCT_EI=i;var a=c.accounts[i];g('acct-code').value=a.code||'';g('acct-name').value=a.name||'';g('acct-type').value=a.type||'Expense';if(g('acct-fund'))g('acct-fund').value=a.fund||'';openM('m-coa');}
 function delAcct(i){var c=gc();if(!confirm('Delete this account?'))return;c.accounts.splice(i,1);sv();renderCOA(c);}
 function saveAcct(){
@@ -327,6 +346,13 @@ function saveAcct(){
   if(ACCT_EI>=0)c.accounts[ACCT_EI]=item;else c.accounts.push(item);
   c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
   ACCT_EI=-1;sv();renderCOA(c);closeM('m-coa');resetAcctForm();
+  // If opened from bank tab — link the new account to the pending transaction
+  if(window._bankPendingAcctTxnId){
+    var _bt=(c.bankTransactions||[]).find(function(x){return x.id===window._bankPendingAcctTxnId;});
+    if(_bt){_bt.acctCode=code;sv();if(typeof renderBank==='function')renderBank(c);}
+    window._bankPendingAcctTxnId=null;
+    window._bankPendingAcctType=null;
+  }
 }
 
 function toggleAcctActive(i){
@@ -607,9 +633,9 @@ function saveBill(){
   // PERIOD LOCK GUARD — check bill received date
   var _billLockDate=g('bill-recv')&&g('bill-recv').value.trim();
   if(_billLockDate&&isDateLocked(c,_billLockDate)){periodLockAlert(c.closedThrough);return;}
-  var vendor=g('bill-vendor').value.trim();if(!vendor){alert('Please enter a vendor name.');return;}
+  var vendor=sanitizeInput(g('bill-vendor').value.trim());if(!vendor){alert('Please enter a vendor name.');return;}
   var billId=BILL_EI>=0?(c.bills[BILL_EI].id||uid()):uid();
-  var item={id:billId,vendor:vendor,desc:g('bill-desc').value,amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:g('bill-acct')&&g('bill-acct').value||'2010',cat:g('bill-cat').value||'Accounts Payable',status:'Unpaid',notes:g('bill-notes').value};
+  var item={id:billId,vendor:vendor,desc:sanitizeInput(g('bill-desc').value.trim()),amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:g('bill-acct')&&g('bill-acct').value||'2010',cat:g('bill-cat').value||'Accounts Payable',status:'Unpaid',notes:g('bill-notes').value};
   var isNew=BILL_EI<0;
   if(BILL_EI>=0)c.bills[BILL_EI]=item;else c.bills.push(item);
   // AP ACCRUAL: on new bill entry post Dr Expense / Cr AP (accrual basis)

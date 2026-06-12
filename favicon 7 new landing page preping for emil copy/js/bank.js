@@ -72,7 +72,8 @@ function renderBank(c) {
       }).join('');
 
       var acctList = isInc ? incAccts : expAccts;
-      var acctOpts = '<option value="">— Account (optional) —</option>'
+      var acctStyle = t.acctCode ? 'width:100%;max-width:150px' : 'width:100%;max-width:150px;border-color:var(--red)';
+      var acctOpts = '<option value="">— Select account * —</option>'
         + acctList.map(function(a){
             return '<option value="' + escHtml(a.code) + '"' + (t.acctCode === a.code ? ' selected' : '') + '>'
               + escHtml(a.code + ' ' + a.name) + '</option>';
@@ -87,8 +88,31 @@ function renderBank(c) {
           }).join('')
         + '<option value="__new__">+ Add new ' + partyLabel.toLowerCase() + '…</option>';
 
-      var sel = 'style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);max-width:130px"';
-      return '<tr id="btr-' + t.id + '">'        + '<td style="width:26px"><input type="checkbox" class="bank-chk" data-id="' + t.id + '" style="width:14px;height:14px;cursor:pointer"></td>'        + '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + escHtml(t.date || '—') + '</td>'        + '<td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(t.description) + '">' + escHtml(t.description) + '</td>'        + '<td><select onchange="bankSetType(\'' + t.id + '\',this.value)" ' + sel + '>'        + '<option value="debit"' + (t.type === 'debit' ? ' selected' : '') + '>Expense</option>'        + '<option value="credit"' + (t.type === 'credit' ? ' selected' : '') + '>Income</option>'        + '</select></td>'        + '<td><select onchange="bankSetCat(\'' + t.id + '\',this.value)" ' + sel + '>' + catOpts + '</select></td>'        + '<td><select onchange="bankSetParty(\'' + t.id + '\',this.value,\'' + (isInc ? 'customer' : 'vendor') + '\')" ' + sel + '>' + partyOpts + '</select></td>'        + '<td><select onchange="bankSetAcct(\'' + t.id + '\',this.value,\'' + (isInc ? 'income' : 'expense') + '\')" ' + sel + '>' + acctOpts + '</select></td>'        + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap" class="' + (isInc ? 'vg' : 'vr') + '">'        + (isInc ? '+' : '−') + fmt(t.amount) + '</td>'        + '<td style="text-align:right;white-space:nowrap">'        + '<button onclick="bankApproveOne(\'' + t.id + '\')" style="font-size:11px;padding:4px 9px;border:none;border-radius:5px;background:var(--green);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif">✓ Post</button>'        + ' <button onclick="bankDeletePending(\'' + t.id + '\')" style="font-size:11px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer">✕</button>'        + '</td>'        + '</tr>';
+      var sel = 'style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);width:100%;max-width:150px"';
+
+      var grants = c.grants || [];
+      var grantOpts = '<option value="">— Link grant —</option>'
+        + grants.map(function(gr){
+            return '<option value="' + gr.id + '"' + (t.grantId === gr.id ? ' selected' : '') + '>' + escHtml(gr.name) + '</option>';
+          }).join('')
+        + '<option value="__new__">+ New grant…</option>';
+
+      var grantDropStyle = 'font-size:11px;padding:3px 5px;border-radius:5px;width:100%;max-width:140px;font-family:\'DM Sans\',sans-serif;'
+        + (t.grantId ? 'border:1px solid var(--np);background:var(--np-bg);color:var(--np);' : 'border:1px solid var(--border);background:var(--soft);color:var(--text);');
+
+      var grantCol = '<td style="min-width:160px">'
+        + '<select onchange="bankSetGrant(\'' + t.id + '\',this.value)" style="' + grantDropStyle + '">' + grantOpts + '</select>'
+        + (!isInc && t.grantId
+            ? '<div style="display:flex;align-items:center;gap:3px;margin-top:3px">'
+              + '<input type="number" min="0" max="100" placeholder="%" value="' + (t.grantPct != null ? t.grantPct : '') + '"'
+              + ' onchange="bankSetGrantPct(\'' + t.id + '\',this.value)"'
+              + ' style="width:48px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--soft);color:var(--text)">'
+              + '<span style="font-size:10px;color:var(--muted)">% of exp</span>'
+              + '</div>'
+            : '')
+        + '</td>';
+
+      return '<tr id="btr-' + t.id + '">'        + '<td style="width:26px"><input type="checkbox" class="bank-chk" data-id="' + t.id + '" style="width:14px;height:14px;cursor:pointer"></td>'        + '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + escHtml(t.date || '—') + '</td>'        + '<td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(t.description) + '">' + escHtml(t.description) + '</td>'        + '<td><select onchange="bankSetType(\'' + t.id + '\',this.value)" ' + sel + '>'        + '<option value="debit"' + (t.type === 'debit' ? ' selected' : '') + '>Expense</option>'        + '<option value="credit"' + (t.type === 'credit' ? ' selected' : '') + '>Income</option>'        + '</select></td>'        + '<td><select onchange="bankSetCat(\'' + t.id + '\',this.value)" ' + sel + '>' + catOpts + '</select></td>'        + grantCol        + '<td><select onchange="bankSetParty(\'' + t.id + '\',this.value,\'' + (isInc ? 'customer' : 'vendor') + '\')" ' + sel + '>' + partyOpts + '</select></td>'        + '<td><select onchange="bankSetAcct(\'' + t.id + '\',this.value,\'' + (isInc ? 'income' : 'expense') + '\')" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);' + acctStyle + '">' + acctOpts + '</select></td>'        + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap" class="' + (isInc ? 'vg' : 'vr') + '">'        + (isInc ? '+' : '−') + fmt(t.amount) + '</td>'        + '<td style="text-align:right;white-space:nowrap">'        + '<button onclick="bankApproveOne(\'' + t.id + '\')" style="font-size:11px;padding:4px 9px;border:none;border-radius:5px;background:var(--green);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif">✓ Post</button>'        + ' <button onclick="bankDeletePending(\'' + t.id + '\')" style="font-size:11px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer">✕</button>'        + '</td>'        + '</tr>';
     }).join('');
   }
 
@@ -129,12 +153,13 @@ function renderBank(c) {
     + '</div>'
     + (pending.length
       ? '<div style="overflow-x:auto"><table style="font-size:12px;width:100%">'
-        + '<thead><tr style="border-bottom:1px solid var(--border)">'
+        + '<thead><tr style="border-bottom:1px solid var(--border);">'
         + '<th style="width:26px;padding-bottom:.5rem"></th>'
         + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">DATE</th>'
         + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">DESCRIPTION</th>'
         + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">TYPE</th>'
         + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">CATEGORY</th>'
+        + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">GRANT</th>'
         + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">VENDOR / CUSTOMER</th>'
         + '<th style="text-align:left;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">ACCOUNT</th>'
         + '<th style="text-align:right;padding-bottom:.5rem;color:var(--muted);font-weight:500;font-size:11px">AMOUNT</th>'
@@ -219,7 +244,48 @@ function bankSetCat(id, cat) {
   var t = c.bankTransactions.find(function(x){ return x.id === id; });
   if (!t) return;
   t.category = cat;
+  // Auto-match COA account from category if not already set
+  if (!t.acctCode && c.accounts && c.accounts.length) {
+    var match = c.accounts.find(function(a){
+      return (a.cat === cat || a.name === cat) && a.active !== false;
+    });
+    if (match) t.acctCode = match.code;
+  }
   sv();
+  renderBank(c);
+}
+
+function bankSetGrant(id, val) {
+  var c = gc(); if (!c) return;
+  var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
+  if (!t) return;
+  if (val === '__new__') { bankNewGrant(id); return; }
+  t.grantId = val || '';
+  if (!t.grantId) t.grantPct = null; // clear % when grant cleared
+  sv();
+  renderBank(c); // re-render so % field appears/disappears
+}
+
+function bankSetGrantPct(id, val) {
+  var c = gc(); if (!c) return;
+  var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
+  if (!t) return;
+  var n = parseFloat(val);
+  t.grantPct = (!isNaN(n) && n >= 0 && n <= 100) ? n : null;
+  sv();
+}
+
+function bankNewGrant(txnId) {
+  // Store the pending txnId so saveGrant() can link it after saving
+  window._bankPendingGrantTxnId = txnId;
+  EI = -1;
+  // Ensure dynamic modals are built so m-grant exists
+  var c = gc();
+  if (!g('m-grant') && typeof buildDynMods === 'function' && c) buildDynMods(c.type);
+  openM('m-grant');
+  setTimeout(function(){
+    var st = g('g-st'); if (st) st.value = 'Awarded';
+  }, 50);
 }
 
 function bankSetParty(id, val, partyType) {
@@ -228,26 +294,55 @@ function bankSetParty(id, val, partyType) {
   if (!t) return;
 
   if (val === '__new__') {
-    var name = prompt('Enter new ' + partyType + ' name:');
-    if (!name || !name.trim()) { renderBank(gc()); return; }
-    name = name.trim();
-    if (partyType === 'vendor') {
-      if (!c.vendors) c.vendors = [];
-      if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); })) {
-        c.vendors.push({ id: uid(), name: name, is1099: false, defaultCat: t.category || '' });
-      }
-    } else {
-      if (!c.customers) c.customers = [];
-      if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); })) {
-        c.customers.push({ id: uid(), name: name });
-      }
-    }
-    t.vendorName = name;
-    sv(); renderBank(gc()); return;
+    // Show a small inline modal instead of a ugly prompt
+    var existing = document.getElementById('bank-party-modal');
+    if (existing) existing.parentNode.removeChild(existing);
+    var modal = document.createElement('div');
+    modal.id = 'bank-party-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = '<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
+      + '<div style="font-size:15px;font-weight:600;margin-bottom:1rem;color:var(--text)">Add new ' + partyType + '</div>'
+      + '<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:.3rem">' + (partyType === 'vendor' ? 'Vendor' : 'Customer') + ' name *</label>'
+      + '<input id="bpm-name" type="text" placeholder="e.g. ' + (partyType === 'vendor' ? 'Office Depot' : 'Smith Foundation') + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box;background:var(--soft);color:var(--text)">'
+      + (partyType === 'vendor' ? '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:.4rem;margin-top:.75rem"><input type="checkbox" id="bpm-1099"> 1099 vendor</label>' : '')
+      + '<div style="display:flex;gap:.5rem;margin-top:1.25rem;justify-content:flex-end">'
+      + '<button onclick="document.getElementById(\'bank-party-modal\').remove();renderBank(gc())" style="padding:7px 16px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--text)">Cancel</button>'
+      + '<button onclick="bankSaveNewParty(\'' + id + '\',\'' + partyType + '\')" style="padding:7px 16px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">Add ' + partyType + '</button>'
+      + '</div></div>';
+    document.body.appendChild(modal);
+    setTimeout(function(){ var n=document.getElementById('bpm-name');if(n)n.focus(); }, 50);
+    return;
   }
 
   t.vendorName = val;
   sv();
+}
+
+function bankSaveNewParty(txnId, partyType) {
+  var c = gc(); if (!c) return;
+  var nameEl = document.getElementById('bpm-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { nameEl && (nameEl.style.borderColor = 'var(--red)'); return; }
+  var is1099El = document.getElementById('bpm-1099');
+  var is1099 = is1099El ? is1099El.checked : false;
+  if (partyType === 'vendor') {
+    if (!c.vendors) c.vendors = [];
+    if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); })) {
+      c.vendors.push({ id: uid(), name: name, is1099: is1099, defaultCat: '' });
+    }
+  } else {
+    if (!c.customers) c.customers = [];
+    if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); })) {
+      c.customers.push({ id: uid(), name: name });
+    }
+  }
+  var t = (c.bankTransactions || []).find(function(x){ return x.id === txnId; });
+  if (t) t.vendorName = name;
+  sv();
+  var modal = document.getElementById('bank-party-modal');
+  if (modal) modal.parentNode.removeChild(modal);
+  renderBank(gc());
+  _bankToast((partyType === 'vendor' ? 'Vendor' : 'Customer') + ' "' + name + '" added.');
 }
 
 function bankSetAcct(id, val, acctType) {
@@ -256,24 +351,22 @@ function bankSetAcct(id, val, acctType) {
   if (!t) return;
 
   if (val === '__new__') {
-    var name = prompt('New account name:');
-    if (!name || !name.trim()) { renderBank(gc()); return; }
-    name = name.trim();
-    var code = prompt('Account code (e.g. 5999):');
-    if (!code || !code.trim()) { renderBank(gc()); return; }
-    code = code.trim();
-    if (!c.accounts) c.accounts = [];
-    if (c.accounts.find(function(a){ return a.code === code; })) {
-      alert('Account code ' + code + ' already exists.');
-      renderBank(gc()); return;
-    }
-    var type = acctType === 'income' ? 'Income' : 'Expense';
-    c.accounts.push({
-      code: code, name: name, type: type,
-      cat: name, active: true
-    });
-    t.acctCode = code;
-    sv(); renderBank(gc()); return;
+    // Store pending txnId and type so saveAcct() can link back
+    window._bankPendingAcctTxnId = id;
+    window._bankPendingAcctType = acctType;
+    // Ensure dynamic modals are built so m-coa exists
+    if (!g('m-coa') && typeof buildDynMods === 'function') buildDynMods(c.type);
+    // Pre-select the right type in the COA modal
+    if (typeof resetAcctForm === 'function') resetAcctForm();
+    setTimeout(function(){
+      var typeEl = g('acct-type');
+      if (typeEl) {
+        typeEl.value = acctType === 'income' ? 'Income' : 'Expense';
+        if (typeof typeEl.onchange === 'function') typeEl.onchange();
+      }
+    }, 50);
+    openM('m-coa');
+    return;
   }
 
   t.acctCode = val;
@@ -288,6 +381,18 @@ function bankApproveOne(id) {
   var c = gc(); if (!c) return;
   var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
   if (!t) return;
+  // Account is required
+  if (!t.acctCode) {
+    var row = document.getElementById('btr-' + id);
+    var acctSel = row && row.querySelector('select[onchange*="bankSetAcct"]');
+    if (acctSel) {
+      acctSel.style.borderColor = 'var(--red)';
+      acctSel.style.boxShadow = '0 0 0 2px rgba(192,57,43,.2)';
+      setTimeout(function(){ acctSel.style.borderColor=''; acctSel.style.boxShadow=''; }, 2500);
+    }
+    _bankToast('⚠ Select an account before posting.');
+    return;
+  }
   _bankPost(c, t);
   t.approved = true;
   t.postedAt = new Date().toISOString();
@@ -303,6 +408,16 @@ function bankApproveSelected() {
     checked.push(cb.getAttribute('data-id'));
   });
   if (!checked.length) { alert('Select at least one transaction.'); return; }
+  // Check all selected have an account
+  var missing = [];
+  checked.forEach(function(id) {
+    var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
+    if (t && !t.approved && !t.acctCode) missing.push(t.description || id);
+  });
+  if (missing.length) {
+    alert('⚠ The following transactions are missing an account code:\n\n' + missing.join('\n') + '\n\nPlease select an account for each before posting.');
+    return;
+  }
   var count = 0;
   checked.forEach(function(id) {
     var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
@@ -377,6 +492,9 @@ function _bankPost(c, t) {
     if (_bid && _bid !== 'default') tagBankId = _bid;
   }
 
+  // Skip if already imported (duplicate detection)
+  if(typeof _bankTxnExists==='function'&&_bankTxnExists(c,t.id))return;
+
   if (t.type === 'credit') {
     // Income / Revenue
     if (c.type === 'sb') {
@@ -400,6 +518,37 @@ function _bankPost(c, t) {
         reconciled: false, fromBank: true, bankTxnId: t.id
       };
       if (tagBankId) incItem.bankId = tagBankId;
+      // Link grant: prefer manually selected, then auto-match by name
+      if (t.category === 'Grant') {
+        if (t.grantId) {
+          incItem.grantId = t.grantId;
+          incItem.fromGrantId = t.grantId;
+        } else if (c.grants && c.grants.length) {
+          var _dl = t.description.toLowerCase();
+          var _matched = c.grants.find(function(gr){
+            return _dl.indexOf((gr.name||'').toLowerCase()) >= 0
+              || (gr.name||'').toLowerCase().indexOf(_dl) >= 0
+              || (gr.funder && _dl.indexOf(gr.funder.toLowerCase()) >= 0);
+          });
+          if (_matched) { incItem.grantId = _matched.id; incItem.fromGrantId = _matched.id; }
+        }
+        // If an auto-created income entry already exists for this grant (recv=0),
+        // update it instead of creating a duplicate
+        if (incItem.grantId) {
+          var _existingInc = (c.income||[]).find(function(r){
+            return r.fromGrantId === incItem.grantId && Number(r.recv||0) === 0 && !r.fromBank;
+          });
+          if (_existingInc) {
+            _existingInc.recv = t.amount;
+            _existingInc.bankId = incItem.bankId || '';
+            _existingInc.bankTxnId = t.id;
+            _existingInc.fromBank = true;
+            _existingInc.date = t.date || _existingInc.date;
+            sv(); renderAll();
+            return; // Don't push a new income entry
+          }
+        }
+      }
       c.income.push(incItem);
     }
   } else {
@@ -413,6 +562,10 @@ function _bankPost(c, t) {
       reconciled: false, fromBank: true, bankTxnId: t.id
     };
     if (tagBankId) expItem.bankId = tagBankId;
+    if (t.grantId) {
+      expItem.grantId = t.grantId;
+      if (t.grantPct != null) expItem.grantPct = t.grantPct;
+    }
     c.expenses.push(expItem);
   }
 }
