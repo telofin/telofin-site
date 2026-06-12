@@ -26,6 +26,7 @@ var _BANK_PDF_DOC      = null;   // PDF.js document object
 var _BANK_PDF_PAGE     = 1;      // current page being displayed
 var _BANK_MAP_STEP     = 0;      // current step in template wizard
 var _BANK_MAP_TEMPLATE = null;   // template being built
+var _BANK_PDF_LINES    = null;   // extracted lines for preview in mapper
 var _BANK_CANVAS       = null;   // canvas element for PDF render
 var _BANK_SCALE        = 1.5;    // render scale for readability
 
@@ -38,8 +39,8 @@ var _BANK_STEPS = [
   { key: 'periodEnd',    label: 'End date',            prompt: 'Click the statement end date.' },
   { key: 'txnDate',      label: 'Transaction date',    prompt: 'Click the date of any transaction row.' },
   { key: 'txnDesc',      label: 'Description',         prompt: 'Click the description of that same transaction.' },
-  { key: 'txnDebit',     label: 'Debit / Expense',     prompt: 'Click the debit or expense amount for that transaction. This is money going OUT — withdrawals, payments, expenses.' },
-  { key: 'txnCredit',    label: 'Credit / Deposit',    prompt: 'Click the credit or deposit amount for that transaction. This is money coming IN — deposits, income, refunds. Skip if your bank uses a single amount column with +/− signs.' },
+  { key: 'txnDebit',     label: 'Debit / Expense',     prompt: 'Click an ACTUAL DOLLAR AMOUNT in the withdrawals/debits column — click a number like "143.87", not the column header. Money going OUT.' },
+  { key: 'txnCredit',    label: 'Credit / Deposit',    prompt: 'Click an ACTUAL DOLLAR AMOUNT in the deposits/credits column — click a number like "5,740.20", not the column header. Money coming IN. Click Skip if your bank uses one column with +/− signs.' },
 ];
 
 // ── RENDER BANK TAB ───────────────────────────────────────────
@@ -848,7 +849,7 @@ function _bankApplyTemplate(lines, tpl, fileName) {
   }
 
   // Skip lines
-  var SKIP = /beginning balance|ending balance|opening balance|closing balance|total deposit|total withdrawal|total debit|total credit|account summary|statement period|available balance|service charge total|subtotal|page \d/i;
+  var SKIP = /beginning balance|ending balance|opening balance|closing balance|total deposit|total withdrawal|total debit|total credit|account summary|statement period|available balance|service charge total|subtotal|page \d|^date$|^description$|^details$|^transaction$|^withdrawals?$|^deposits?$|^debits?$|^credits?$|^balance$|^amount$|^type$|previous balance|new balance|forward balance|carried forward/i;
 
   var AMT_RE = /[\$\(]?\d{1,3}(?:,\d{3})*\.\d{2}\)?/g;
 
@@ -1052,6 +1053,8 @@ async function _bankStartMapper(file, c, existingTpl) {
     _BANK_PDF_DOC = await pdfjsLib.getDocument({ data: ab }).promise;
     await _bankRenderPage(1);
     _bankShowStep(0);
+    // Pre-extract lines for preview feedback during mapping
+    _bankExtractLines(file).then(function(lines){ _BANK_PDF_LINES = lines; }).catch(function(){});
   } catch(e) {
     alert('Could not open PDF: ' + (e.message || e));
     modal.classList.remove('open');
@@ -1234,9 +1237,31 @@ function _bankMapClick(pdfX, pdfY, canvasX, canvasY) {
     _BANK_MAP_TEMPLATE.mappedText[step.key] = 'x=' + Math.round(pdfX);
   }
 
+  // For amount columns, show a preview of what was detected so user can verify
+  if (step.key === 'txnDebit' || step.key === 'txnCredit') {
+    var promptEl = g('bank-map-prompt-text');
+    if (promptEl && _BANK_PDF_LINES) {
+      var colTolPrev = 20;
+      var samples = [];
+      _BANK_PDF_LINES.forEach(function(line) {
+        var item = line.items.find(function(it){ return Math.abs(it.x - pdfX) < colTolPrev; });
+        if (item && item.str && /\d/.test(item.str) && samples.length < 4) {
+          samples.push(item.str.trim());
+        }
+      });
+      if (samples.length) {
+        promptEl.textContent = '✓ Captured — values at this column: ' + samples.join(', ') + '. Click Next to confirm or click a different row to re-set.';
+      } else {
+        promptEl.textContent = '⚠ No numbers found at that position — try clicking directly on an amount value, not the column header.';
+        // Don't auto-advance if nothing was found
+        return;
+      }
+    }
+  }
+
   // Auto-advance after click (except first step which needs bank name typed first)
   if (step.key !== 'bankName') {
-    setTimeout(function() { bankMapperNext(); }, 400);
+    setTimeout(function() { bankMapperNext(); }, 600);
   }
 }
 
