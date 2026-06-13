@@ -318,9 +318,23 @@ function migrateToLedger(c){
   });
 
   // ── NP Income ─────────────────────────────────────────────────────────────
+  // Build a set of grantIds already covered by a recv>0 entry so placeholders (recv=0)
+  // from the same grant don't also get posted and create a double-credit.
+  var _grantIdPosted={};
+  (c.income||[]).forEach(function(r){
+    if(r.grantId&&Number(r.recv||r.amt||0)>0)_grantIdPosted[r.grantId]=(_grantIdPosted[r.grantId]||0)+1;
+  });
   (c.income||[]).forEach(function(r){
     if(!r.id||posted[r.id])return;
     if(r.deleted||r.voided||r.isReversal)return;
+    // Skip recv=0 placeholders — nothing to post yet
+    if(Number(r.recv||r.amt||0)===0)return;
+    // Skip duplicate: if this grantId already has another entry with recv>0 that was posted
+    // (covers the case where _bankPost failed to merge and two entries both have recv>0)
+    if(r.grantId&&_grantIdPosted[r.grantId]>1){
+      // Only post the fromBank entry (most authoritative); skip the manual placeholder
+      if(!r.fromBank){posted[r.id]=true;return;}
+    }
     var credit=r.acctCode||'4010';
     var debit=cashCode;
     postToLedger(c,debit,credit,Number(r.recv||r.amt||0),(r.name||'Income'),'income',r.id);

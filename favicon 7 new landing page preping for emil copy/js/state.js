@@ -277,11 +277,19 @@ function taxJurOpts(c){
 
 // getTrialBalance(c) — returns array of {code,name,type,dr,cr,balance,normalSide}
 // Sums all non-superseded ledger entries. Grand total dr === grand total cr if books balance.
-function getTrialBalance(c){
+function getTrialBalance(c,asOfDate){
   if(!c)return[];
+  // asOfDate: 'YYYY-MM-DD' string or null (all entries)
+  var asOf=asOfDate?new Date(asOfDate+' 23:59:59'):null;
   var map={};
   (c.ledgerEntries||[]).forEach(function(e){
     if(e.superseded)return;
+    if(asOf){
+      var eDate=e.date?new Date(String(e.date).length===8
+        ?String(e.date).slice(0,4)+'-'+String(e.date).slice(4,6)+'-'+String(e.date).slice(6,8)
+        :e.date):null;
+      if(eDate&&eDate>asOf)return;
+    }
     (e.lines||[]).forEach(function(l){
       if(!l.accountCode)return;
       if(!map[l.accountCode])map[l.accountCode]={dr:0,cr:0};

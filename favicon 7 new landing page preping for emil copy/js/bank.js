@@ -540,18 +540,19 @@ function _bankPost(c, t) {
           });
           if (_matched) { incItem.grantId = _matched.id; incItem.fromGrantId = _matched.id; }
         }
-        // If an auto-created income entry already exists for this grant (recv=0),
-        // update it instead of creating a duplicate
+        // If any income entry already exists for this grant — placeholder (recv=0) OR
+        // manually entered (recv>0) — link the bank transaction instead of duplicating
         if (incItem.grantId) {
           var _existingInc = (c.income||[]).find(function(r){
-            return r.fromGrantId === incItem.grantId && Number(r.recv||0) === 0 && !r.fromBank;
+            return r.fromGrantId === incItem.grantId && !r.fromBank;
           });
           if (_existingInc) {
-            _existingInc.recv = t.amount;
-            _existingInc.bankId = incItem.bankId || '';
+            // Only overwrite recv if still a placeholder; preserve manually-entered amounts
+            if (Number(_existingInc.recv||0) === 0) _existingInc.recv = t.amount;
+            _existingInc.bankId = incItem.bankId || _existingInc.bankId || '';
             _existingInc.bankTxnId = t.id;
             _existingInc.fromBank = true;
-            _existingInc.date = t.date || _existingInc.date;
+            if (!_existingInc.date) _existingInc.date = t.date;
             sv(); renderAll();
             return; // Don't push a new income entry
           }

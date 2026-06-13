@@ -1600,11 +1600,11 @@ function renderReconciliation(c){
   }
 
   var unreconExp=periExp.filter(function(e){return!e.reconciled;});
-  var unreconInc=periRev.filter(function(r){return r.reconciled===false;});
+  var unreconInc=periRev.filter(function(r){return r.reconciled!==true;});
   var outstandingChecks=unreconExp.filter(function(e){return e.cat&&(e.cat.toLowerCase().indexOf('check')>=0||e.cat.toLowerCase().indexOf('payable')>=0)||(!e.date);});
   var otherUnrecon=unreconExp.filter(function(e){return outstandingChecks.indexOf(e)<0;});
 
-  var clearedInc=periRev.filter(function(r){return r.reconciled!==false;}).reduce(function(s,r){return s+Number(r.act||r.amt||r.recv||0);},0);
+  var clearedInc=periRev.filter(function(r){return r.reconciled===true;}).reduce(function(s,r){return s+Number(r.act||r.amt||r.recv||0);},0);
   var clearedExp=periExp.filter(function(e){return e.reconciled;}).reduce(function(s,e){return s+Number(e.amt||0);},0);
   var rawBookBal=openBal+(isCCRecon?-clearedExp:clearedInc-clearedExp);
   // Use ledger-derived balance as book balance when available (more accurate)
@@ -1643,7 +1643,7 @@ function renderReconciliation(c){
   var allRows=bankImportedRows+ccImportedRows+manualRows;
   // Cleared items (reconciled=true) — show with Undo button
   var clearedExpItems = periExp.filter(function(e){return e.reconciled;});
-  var clearedIncItems = periRev.filter(function(r){return r.reconciled!==false;});
+  var clearedIncItems = periRev.filter(function(r){return r.reconciled===true;});
   var _showCleared = RECON_STATUS_FILTER !== 'uncleared';
   var clearedBankRows = _showCleared?(clearedExpItems.filter(function(e){return !e.ccId;}).map(function(e){return clearedExpRow(e);}).join('')+clearedIncItems.map(function(r){return clearedIncRow(r);}).join('')):'' ;
   var clearedCCRows = _showCleared?clearedExpItems.filter(function(e){return !!e.ccId;}).map(function(e){return clearedExpRow(e);}).join(''):'' ;
@@ -1722,13 +1722,13 @@ function printReconStatement(){
 
   var openBal=Number(rs.openBal||0);
   var closeBal=Number(rs.closeBal||0);
-  var clearedInc=periRev.filter(function(r){return r.reconciled!==false;}).reduce(function(s,r){return s+Number(r.act||r.amt||r.recv||0);},0);
+  var clearedInc=periRev.filter(function(r){return r.reconciled===true;}).reduce(function(s,r){return s+Number(r.act||r.amt||r.recv||0);},0);
   var clearedExp=periExp.filter(function(e){return e.reconciled;}).reduce(function(s,e){return s+Number(e.amt||0);},0);
   var bookBal=openBal+(isCCRecon?-clearedExp:clearedInc-clearedExp);
   var diff=closeBal-bookBal;
 
   var unreconExp=periExp.filter(function(e){return!e.reconciled;});
-  var unreconInc=periRev.filter(function(r){return r.reconciled===false;});
+  var unreconInc=periRev.filter(function(r){return r.reconciled!==true;});
   var outChecks=unreconExp.filter(function(e){return e.cat&&(e.cat.toLowerCase().indexOf('check')>=0||e.cat.toLowerCase().indexOf('payable')>=0)||(!e.date);});
   var otherUnrecon=unreconExp.filter(function(e){return outChecks.indexOf(e)<0;});
 
@@ -1736,7 +1736,7 @@ function printReconStatement(){
   function row(cells,cls){return'<tr'+(cls?' class="'+cls+'"':'')+'>'+cells.map(function(cx,i){return'<td'+(i>0?' style="text-align:right"':'')+'>'+cx+'</td>';}).join('')+'</tr>';}
 
   var clearedExpRows=periExp.filter(function(e){return e.reconciled;}).map(function(e){return row([e.date||'—',escHtml(e.desc||'—'),escHtml(e.cat||'—'),'('+fmtN(e.amt)+')']);}).join('');
-  var clearedIncRows=periRev.filter(function(r){return r.reconciled!==false;}).map(function(r){return row([r.date||'—',escHtml(r.name||r.desc||'—'),escHtml(r.cat||'—'),fmtN(r.act||r.amt||r.recv||0)]);}).join('');
+  var clearedIncRows=periRev.filter(function(r){return r.reconciled===true;}).map(function(r){return row([r.date||'—',escHtml(r.name||r.desc||'—'),escHtml(r.cat||'—'),fmtN(r.act||r.amt||r.recv||0)]);}).join('');
   var outCheckRows=outChecks.map(function(e){return row([e.date||'—',escHtml(e.desc||'—'),escHtml(e.cat||'—'),'('+fmtN(e.amt)+')'],'muted');}).join('');
   var otherUnreconRows=otherUnrecon.map(function(e){return row([e.date||'—',escHtml(e.desc||'—'),escHtml(e.cat||'—'),'('+fmtN(e.amt)+')'],'muted');}).join('');
   var unreconIncRows=unreconInc.map(function(r){return row([r.date||'—',escHtml(r.name||r.desc||'—'),escHtml(r.cat||'—'),fmtN(r.act||r.amt||r.recv||0)],'muted');}).join('');
@@ -1785,7 +1785,7 @@ function reconIncRC(i){
   var c=gc();
   var src=c.type==='sb'?c.revenue:c.income;
   if(!src||!src[i])return;
-  src[i].reconciled=src[i].reconciled===false?true:false;
+  src[i].reconciled=src[i].reconciled===true?false:true;
   sv();renderReconciliation(c);
 }
 

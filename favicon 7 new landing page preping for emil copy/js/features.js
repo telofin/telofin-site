@@ -441,10 +441,12 @@ function renderGL(c){
 // ══════════════════════════════════════════
 // TRIAL BALANCE  (Phase 1-C)
 // ══════════════════════════════════════════
-function renderTrialBalance(c){
+function renderTrialBalance(c,asOfDate){
   var p=document.getElementById('p-trialbal');if(!p)return;
   p.innerHTML=FB()+XB();
   if(!c){p.innerHTML+='<div class="insight">No client selected.</div>';return;}
+  if(asOfDate)p.dataset.tbAsOf=asOfDate;
+  var _asOf=asOfDate||p.dataset.tbAsOf||today();
   if(!c.ledgerEntries||!c.ledgerEntries.length){
     p.innerHTML+='<div class="insight" style="border-left-color:var(--amber)">'
       +'<div class="ins-lbl">Trial Balance</div>'
@@ -453,22 +455,27 @@ function renderTrialBalance(c){
       +'<div class="xbar"><button class="xbtn p" onclick="migrateToLedger(gc());sv();renderTrialBalance(gc())">Rebuild ledger from existing transactions</button></div>';
     return;
   }
-  var rows=getTrialBalance(c);
+  var rows=getTrialBalance(c,_asOf);
   var totDr=rows.reduce(function(s,r){return s+r.dr;},0);
   var totCr=rows.reduce(function(s,r){return s+r.cr;},0);
   var balanced=Math.abs(totDr-totCr)<0.01;
   var fmt2=function(n){return'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var typeOrder={Asset:1,Liability:2,Equity:3,Income:4,Revenue:4,Expense:5,Unknown:6};
   rows.sort(function(a,b){return(typeOrder[a.type]||6)-(typeOrder[b.type]||6)||a.code.localeCompare(b.code);});
+  // Standard TB format: each account appears in Debit OR Credit column only,
+  // based on its normal balance side. Assets/Expenses -> Debit, Income/Liability/Equity -> Credit.
+  var _drTypes={Asset:true,Expense:true};
   var tbody=rows.map(function(r){
-    var balStyle=r.balance<0?'color:var(--red)':'color:var(--green)';
+    var netBal=Math.abs(r.dr-r.cr);
+    var isDebitSide=_drTypes[r.type];
+    var drAmt=isDebitSide?fmt2(netBal):'';
+    var crAmt=isDebitSide?'':fmt2(netBal);
     return'<tr>'
       +'<td style="font-family:monospace;font-size:11px">'+escHtml(r.code)+'</td>'
       +'<td style="font-weight:500">'+escHtml(r.name)+'</td>'
       +'<td style="color:var(--muted);font-size:11px">'+escHtml(r.type)+'</td>'
-      +'<td style="text-align:right">'+fmt2(r.dr)+'</td>'
-      +'<td style="text-align:right">'+fmt2(r.cr)+'</td>'
-      +'<td style="text-align:right;font-weight:600;'+balStyle+'">'+fmt2(r.balance)+'</td>'
+      +'<td style="text-align:right">'+drAmt+'</td>'
+      +'<td style="text-align:right">'+crAmt+'</td>'
       +'</tr>';
   }).join('');
   var statusBadge=balanced
@@ -478,24 +485,21 @@ function renderTrialBalance(c){
     +'<div class="c-head"><span class="c-title">Trial Balance &mdash; '+escHtml(c.name)+'</span>'
     +statusBadge
     +'<button class="add-btn" style="font-size:11px" onclick="doPDF(\'trialbal\')">&#128438; Export PDF</button></div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-bottom:.75rem">As of '+today()+' &nbsp;&middot;&nbsp; All non-voided posted entries</div>'
+    +'<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">'    +'<label style="font-size:11px;color:var(--muted)">As of</label>'    +'<input type="date" id="tb-asof-date" value="'+_asOf+'" '    +'style="font-size:11px;padding:3px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer" '    +'onchange="renderTrialBalance(gc(),this.value)">'    +'<span style="font-size:11px;color:var(--muted)">&nbsp;&middot;&nbsp; All non-voided posted entries on or before selected date</span>'    +'</div>'
     +'<div style="overflow-x:auto"><table>'
     +'<thead><tr>'
     +'<th style="width:8%">Code</th>'
-    +'<th style="width:28%">Account</th>'
-    +'<th style="width:12%">Type</th>'
-    +'<th style="width:17%;text-align:right">Debit</th>'
-    +'<th style="width:17%;text-align:right">Credit</th>'
-    +'<th style="width:18%;text-align:right">Balance</th>'
+    +'<th style="width:35%">Account</th>'
+    +'<th style="width:15%">Type</th>'
+    +'<th style="width:21%;text-align:right">Debit</th>'
+    +'<th style="width:21%;text-align:right">Credit</th>'
     +'</tr></thead>'
     +'<tbody>'+tbody+'</tbody>'
     +'<tfoot><tr style="font-weight:700;border-top:2px solid var(--border)">'
     +'<td colspan="3">Totals</td>'
     +'<td style="text-align:right">'+fmt2(totDr)+'</td>'
     +'<td style="text-align:right">'+fmt2(totCr)+'</td>'
-    +'<td style="text-align:right">'
-    +(balanced?'<span style="color:var(--green)">&#10003; In balance</span>':'<span style="color:var(--red)">'+fmt2(Math.abs(totDr-totCr))+' off</span>')
-    +'</td></tr></tfoot></table></div></div>'
+    +'</tr></tfoot></table></div></div>'
     +'<div class="xbar" style="margin-top:.75rem">'
     +'<button class="add-btn" style="font-size:11px" onclick="migrateToLedger(gc());sv();renderTrialBalance(gc())">&#8635; Rebuild ledger from all transactions</button>'
     +'</div>';
