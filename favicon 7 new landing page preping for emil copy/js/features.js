@@ -446,7 +446,8 @@ function renderTrialBalance(c,asOfDate){
   p.innerHTML=FB()+XB();
   if(!c){p.innerHTML+='<div class="insight">No client selected.</div>';return;}
   if(asOfDate)p.dataset.tbAsOf=asOfDate;
-  var _asOf=asOfDate||p.dataset.tbAsOf||today();
+  var _isoToday=(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})();
+  var _asOf=asOfDate||p.dataset.tbAsOf||_isoToday;
   if(!c.ledgerEntries||!c.ledgerEntries.length){
     p.innerHTML+='<div class="insight" style="border-left-color:var(--amber)">'
       +'<div class="ins-lbl">Trial Balance</div>'
@@ -462,12 +463,10 @@ function renderTrialBalance(c,asOfDate){
   var fmt2=function(n){return'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var typeOrder={Asset:1,Liability:2,Equity:3,Income:4,Revenue:4,Expense:5,Unknown:6};
   rows.sort(function(a,b){return(typeOrder[a.type]||6)-(typeOrder[b.type]||6)||a.code.localeCompare(b.code);});
-  // Standard TB format: each account appears in Debit OR Credit column only,
-  // based on its normal balance side. Assets/Expenses -> Debit, Income/Liability/Equity -> Credit.
   var _drTypes={Asset:true,Expense:true};
   var tbody=rows.map(function(r){
     var netBal=Math.abs(r.dr-r.cr);
-    var isDebitSide=_drTypes[r.type];
+    var isDebitSide=!!_drTypes[r.type];
     var drAmt=isDebitSide?fmt2(netBal):'';
     var crAmt=isDebitSide?'':fmt2(netBal);
     return'<tr>'
@@ -485,7 +484,7 @@ function renderTrialBalance(c,asOfDate){
     +'<div class="c-head"><span class="c-title">Trial Balance &mdash; '+escHtml(c.name)+'</span>'
     +statusBadge
     +'<button class="add-btn" style="font-size:11px" onclick="doPDF(\'trialbal\')">&#128438; Export PDF</button></div>'
-    +'<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">'    +'<label style="font-size:11px;color:var(--muted)">As of</label>'    +'<input type="date" id="tb-asof-date" value="'+_asOf+'" '    +'style="font-size:11px;padding:3px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer" '    +'onchange="renderTrialBalance(gc(),this.value)">'    +'<span style="font-size:11px;color:var(--muted)">&nbsp;&middot;&nbsp; All non-voided posted entries on or before selected date</span>'    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">'+'<label style="font-size:11px;color:var(--muted)">As of</label>'+'<input type="date" id="tb-asof-date" value="'+_asOf+'" '+'style="font-size:11px;padding:3px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer" '+'onchange="renderTrialBalance(gc(),this.value)">'+'<span style="font-size:11px;color:var(--muted)">All non-voided posted entries on or before this date</span>'+'</div>'
     +'<div style="overflow-x:auto"><table>'
     +'<thead><tr>'
     +'<th style="width:8%">Code</th>'
