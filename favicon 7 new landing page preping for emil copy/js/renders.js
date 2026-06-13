@@ -781,8 +781,8 @@ function renderDonors(cc){
       +'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--muted)" title="View change history" onclick="openDonorAuditLog(\''+di+'\')">&#128203; History</button>'
       +'<button class="d-btn" style="border:1px solid var(--red-bg);border-radius:7px;padding:5px 10px;font-size:12px" title="Remove donor" onclick="delDonor('+di+')">&#215; Remove</button></div>'
       +((d.donations||[]).length
-        ?'<table><thead><tr><th style="width:14%">Amount</th><th style="width:18%">Date</th><th style="width:17%">Campaign</th><th style="width:9%">Recurring</th><th style="width:12%">Restricted</th><th style="width:12%">TY Sent</th><th style="width:18%"></th></tr></thead><tbody>'
-        +(function(){var _rows=[];(d.donations||[]).forEach(function(dn,dni){if(RST_F!=='all'&&normalizeRst(dn.rst)!==RST_F)return;_rows.push('<tr><td class="vg" style="font-weight:500">'+fmt(dn.amt)+(dn.inkind==='Yes'?' <span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:9px">In-kind</span>':'')+(dn.qpq>0?' <span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:9px">QPQ</span><span style="font-size:10px;color:var(--muted);margin-left:3px">'+fmt(Math.max(0,Number(dn.amt||0)-dn.qpq))+' deductible</span>':'')+'</td><td style="color:var(--muted)">'+(dn.date||'—')+'</td><td>'+(dn.fund||'—')+'</td><td>'+(dn.rec==='Yes'?'<span class="badge b-rec">↻ Yes</span>':'—')+'</td><td>'+rstBadge(dn.rst)+'</td><td>'+(dn.ty==='Yes'?'<span class="badge b-green">✓ Sent</span>':'<span class="badge b-amber">Pending</span>')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editDonation('+di+','+dni+')" title="Edit donation">&#9998;</button><button class="e-btn" onclick="openAuditLog('+di+','+dni+')" title="Edit history">&#128221;</button><button class="e-btn" onclick="openTYLetter('+di+','+dni+')" title="Generate thank you letter">💌</button><button class="e-btn" onclick="toggleTY('+di+','+dni+')" title="Toggle TY sent">✓</button><button class="d-btn" title="Delete donation" onclick="delDonation('+di+','+dni+')">&#215;</button></div></td></tr>');});return _rows.join('');})()+(!((d.donations||[]).some(function(dn){return RST_F==='all'||normalizeRst(dn.rst)===RST_F;}))?'<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--muted);font-size:12px">No donations match this filter.</td></tr>':'')+'</tbody></table>'
+        ?'<table><thead><tr><th style="width:12%">Amount</th><th style="width:13%">Date</th><th style="width:14%">Campaign</th><th style="width:12%">Project</th><th style="width:8%">Recurring</th><th style="width:10%">Restricted</th><th style="width:10%">TY Sent</th><th style="width:21%"></th></tr></thead><tbody>'
+        +(function(){var _rows=[];(d.donations||[]).forEach(function(dn,dni){if(RST_F!=='all'&&normalizeRst(dn.rst)!==RST_F)return;_rows.push('<tr><td class="vg" style="font-weight:500">'+fmt(dn.amt)+(dn.inkind==='Yes'?' <span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:9px">In-kind</span>':'')+(dn.qpq>0?' <span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:9px">QPQ</span><span style="font-size:10px;color:var(--muted);margin-left:3px">'+fmt(Math.max(0,Number(dn.amt||0)-dn.qpq))+' deductible</span>':'')+'</td><td style="color:var(--muted)">'+(dn.date||'—')+'</td><td>'+(dn.fund||'—')+'</td><td style="font-size:11px;color:var(--muted)">'+(dn.proj?(function(){var _pr=(c&&c.projects||[]).find(function(p){return p.id===dn.proj||p.name===dn.proj;});return escHtml(_pr?_pr.name:dn.proj);})():'—')+'</td><td>'+(dn.rec==='Yes'?'<span class="badge b-rec">↻ Yes</span>':'—')+'</td><td>'+rstBadge(dn.rst)+'</td><td>'+(dn.ty==='Yes'?'<span class="badge b-green">✓ Sent</span>':'<span class="badge b-amber">Pending</span>')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editDonation('+di+','+dni+')" title="Edit donation">&#9998;</button><button class="e-btn" onclick="openAuditLog('+di+','+dni+')" title="Edit history">&#128221;</button><button class="e-btn" onclick="openTYLetter('+di+','+dni+')" title="Generate thank you letter">💌</button><button class="e-btn" onclick="toggleTY('+di+','+dni+')" title="Toggle TY sent">✓</button><button class="d-btn" title="Delete donation" onclick="delDonation('+di+','+dni+')">&#215;</button></div></td></tr>');});return _rows.join('');})()+(!((d.donations||[]).some(function(dn){return RST_F==='all'||normalizeRst(dn.rst)===RST_F;}))?'<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--muted);font-size:12px">No donations match this filter.</td></tr>':'')+'</tbody></table>'
         :'<div style="font-size:12px;color:var(--muted);padding:.5rem 0">No donations logged yet.</div>')
       +(d.notes?'<div style="font-size:12px;color:var(--muted);margin-top:.75rem;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.5"><strong style="color:var(--text)">Notes: </strong>'+escHtml(d.notes)+'</div>':'')
       +_renderActivityLog(d,di)
@@ -908,7 +908,14 @@ function updateQpqDeductible(){
   el.textContent=fmt(ded);
   el.style.color=ded>0?'var(--green)':'var(--muted)';
 }
-function openAddDonation(di){g('dnt-donor-id').value=di;['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});g('dnt-rec').value='No';g('dnt-ty').value='No';g('dnt-rst').value='unrestricted';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';toggleInkindFMV();toggleQpq();DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');}
+function _populateDonationProjDropdown(c, selectedProj) {
+  var sel = g('dnt-proj'); if (!sel) return;
+  var projects = (c && c.projects) || [];
+  sel.innerHTML = '<option value="">— None —</option>'
+    + projects.map(function(p){ return '<option value="'+escHtml(p.id||p.name)+'"'+(( selectedProj===p.id||selectedProj===p.name)?' selected':'')+'>'+escHtml(p.name)+'</option>'; }).join('');
+}
+
+function openAddDonation(di){var c=gc();g('dnt-donor-id').value=di;['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});g('dnt-rec').value='No';g('dnt-ty').value='No';g('dnt-rst').value='unrestricted';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';_populateDonationProjDropdown(c,'');toggleInkindFMV();toggleQpq();DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');}
 // editDonation: pre-fills the existing m-donation modal with the selected donation's
 // values, sets DONATION_EI so saveDonation() updates in place instead of pushing.
 // Follows the exact same pattern as editDonor().
@@ -919,7 +926,7 @@ function editDonation(di,dni){
   DONATION_EI=dni;
   g('dnt-amt').value=dn.amt||'';
   g('dnt-date').value=dn.date||'';
-  g('dnt-fund').value=dn.fund||'';
+  g('dnt-fund').value=dn.fund||'';_populateDonationProjDropdown(gc(),dn.proj||'');
   g('dnt-rec').value=dn.rec||'No';
   g('dnt-rst').value=normalizeRst(dn.rst);
   g('dnt-ty').value=dn.ty||'No';
@@ -1144,7 +1151,7 @@ function saveDonation(){
   var di=parseInt(g('dnt-donor-id').value);if(isNaN(di)||!c.donors[di])return;
   if(!c.donors[di].donations)c.donors[di].donations=[];
 
-  var record={amt:amt,date:dateVal,fund:g('dnt-fund').value,rec:g('dnt-rec').value,ty:g('dnt-ty').value,rst:g('dnt-rst').value,inkind:g('dnt-inkind')&&g('dnt-inkind').value||'No',fmv:g('dnt-fmv')&&Number(g('dnt-fmv').value||0)||0,itemDescription:g('dnt-item-desc')&&g('dnt-item-desc').value.trim()||'',auctioned:g('dnt-auctioned')&&g('dnt-auctioned').value==='Yes',auctionDate:g('dnt-auction-date')&&g('dnt-auction-date').value||'',auctionSalePrice:g('dnt-auction-sale')&&Number(g('dnt-auction-sale').value||0)||0,auctionBuyerName:g('dnt-auction-buyer')&&g('dnt-auction-buyer').value.trim()||'',qpq:g('dnt-hasqpq')&&g('dnt-hasqpq').value==='Yes'?Number(g('dnt-qpq')&&g('dnt-qpq').value||0):0};
+  var record={amt:amt,date:dateVal,fund:g('dnt-fund').value,proj:g('dnt-proj')&&g('dnt-proj').value||'',rec:g('dnt-rec').value,ty:g('dnt-ty').value,rst:g('dnt-rst').value,inkind:g('dnt-inkind')&&g('dnt-inkind').value||'No',fmv:g('dnt-fmv')&&Number(g('dnt-fmv').value||0)||0,itemDescription:g('dnt-item-desc')&&g('dnt-item-desc').value.trim()||'',auctioned:g('dnt-auctioned')&&g('dnt-auctioned').value==='Yes',auctionDate:g('dnt-auction-date')&&g('dnt-auction-date').value||'',auctionSalePrice:g('dnt-auction-sale')&&Number(g('dnt-auction-sale').value||0)||0,auctionBuyerName:g('dnt-auction-buyer')&&g('dnt-auction-buyer').value.trim()||'',qpq:g('dnt-hasqpq')&&g('dnt-hasqpq').value==='Yes'?Number(g('dnt-qpq')&&g('dnt-qpq').value||0):0};
   if(record.inkind==='Yes'&&!record.fmv){alert('Please enter the fair market value for this in-kind donation.');return;}
   if(record.inkind==='Yes'&&!record.itemDescription){alert('Please describe the donated item or service.');return;}
 
@@ -1196,7 +1203,7 @@ function saveDonation(){
     }
   }
 
-  sv();renderDonors(c);closeM('m-donation');['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';toggleInkindFMV();toggleQpq();
+  sv();renderDonors(c);closeM('m-donation');['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});var _dp=g('dnt-proj');if(_dp)_dp.value='';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';toggleInkindFMV();toggleQpq();
 }
 
 // ── SB REVENUE ──────────────────────────
@@ -4499,7 +4506,7 @@ function deleteActivity(di,ai){
   sv();renderDonors(c);
 }
 
-function saveDonationAndNew(){var di=g('dnt-donor-id').value;var fund=g('dnt-fund').value;var rst=g('dnt-rst').value;saveDonation();setTimeout(function(){g('dnt-donor-id').value=di;g('dnt-fund').value=fund;g('dnt-rst').value=rst;DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');if(g('dnt-amt'))g('dnt-amt').focus();},100);}
+function saveDonationAndNew(){var di=g('dnt-donor-id').value;var fund=g('dnt-fund').value;var proj=g('dnt-proj')&&g('dnt-proj').value||'';var rst=g('dnt-rst').value;saveDonation();setTimeout(function(){g('dnt-donor-id').value=di;g('dnt-fund').value=fund;g('dnt-rst').value=rst;_populateDonationProjDropdown(gc(),proj);DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');if(g('dnt-amt'))g('dnt-amt').focus();},100);}
 function saveBillAndNew(){var cat=g('bill-cat').value;saveBill();setTimeout(function(){BILL_EI=-1;resetBillForm();g('bill-cat').value=cat;openM('m-bill');if(g('bill-vendor'))g('bill-vendor').focus();},100);}
 function renameGroup(oldName){
   var newName=prompt('Rename group "'+oldName+'" to:',oldName);

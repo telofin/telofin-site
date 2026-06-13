@@ -295,23 +295,37 @@ function bankSetParty(id, val, partyType) {
   if (!t) return;
 
   if (val === '__new__') {
-    // Show a small inline modal instead of a ugly prompt
     var existing = document.getElementById('bank-party-modal');
     if (existing) existing.parentNode.removeChild(existing);
     var modal = document.createElement('div');
     modal.id = 'bank-party-modal';
     modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
-    modal.innerHTML = '<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
-      + '<div style="font-size:15px;font-weight:600;margin-bottom:1rem;color:var(--text)">Add new ' + partyType + '</div>'
-      + '<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:.3rem">' + (partyType === 'vendor' ? 'Vendor' : 'Customer') + ' name *</label>'
-      + '<input id="bpm-name" type="text" placeholder="e.g. ' + (partyType === 'vendor' ? 'Office Depot' : 'Smith Foundation') + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box;background:var(--soft);color:var(--text)">'
-      + (partyType === 'vendor' ? '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:.4rem;margin-top:.75rem"><input type="checkbox" id="bpm-1099"> 1099 vendor</label>' : '')
+
+    // Determine which types make sense based on transaction direction
+    var isInc = partyType === 'customer';
+    var typeOpts = isInc
+      ? '<option value="donor">Donor (goes to Donors tab)</option>'
+        + '<option value="customer">Customer (A/R or Sales)</option>'
+        + '<option value="grantor">Grantor (goes to Grants tab)</option>'
+      : '<option value="vendor">Vendor (Payables / Expenses)</option>'
+        + '<option value="customer">Customer (A/R or Sales)</option>';
+
+    modal.innerHTML = '<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
+      + '<div style="font-size:15px;font-weight:600;margin-bottom:1.25rem;color:var(--text)">What are you adding?</div>'
+      + '<div style="margin-bottom:.75rem">'
+      + '<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:.3rem">Type</label>'
+      + '<select id="bpm-type" onchange="_bankPartyTypeChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;background:var(--soft);color:var(--text)">'
+      + typeOpts + '</select></div>'
+      + '<div style="margin-bottom:.75rem">'
+      + '<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:.3rem" id="bpm-name-label">Name *</label>'
+      + '<input id="bpm-name" type="text" placeholder="" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box;background:var(--soft);color:var(--text)"></div>'
+      + '<div id="bpm-extra"></div>'
       + '<div style="display:flex;gap:.5rem;margin-top:1.25rem;justify-content:flex-end">'
       + '<button onclick="document.getElementById(\'bank-party-modal\').remove();renderBank(gc())" style="padding:7px 16px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--text)">Cancel</button>'
-      + '<button onclick="bankSaveNewParty(\'' + id + '\',\'' + partyType + '\')" style="padding:7px 16px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">Add ' + partyType + '</button>'
+      + '<button id="bpm-save-btn" onclick="bankSaveNewParty(\'' + id + '\')" style="padding:7px 16px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">Add</button>'
       + '</div></div>';
     document.body.appendChild(modal);
-    setTimeout(function(){ var n=document.getElementById('bpm-name');if(n)n.focus(); }, 50);
+    setTimeout(function(){ _bankPartyTypeChange(); var n=document.getElementById('bpm-name');if(n)n.focus(); }, 50);
     return;
   }
 
@@ -319,31 +333,72 @@ function bankSetParty(id, val, partyType) {
   sv();
 }
 
-function bankSaveNewParty(txnId, partyType) {
-  var c = gc(); if (!c) return;
-  var nameEl = document.getElementById('bpm-name');
-  var name = nameEl ? nameEl.value.trim() : '';
-  if (!name) { nameEl && (nameEl.style.borderColor = 'var(--red)'); return; }
-  var is1099El = document.getElementById('bpm-1099');
-  var is1099 = is1099El ? is1099El.checked : false;
-  if (partyType === 'vendor') {
-    if (!c.vendors) c.vendors = [];
-    if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); })) {
-      c.vendors.push({ id: uid(), name: name, is1099: is1099, defaultCat: '' });
-    }
-  } else {
-    if (!c.customers) c.customers = [];
-    if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); })) {
-      c.customers.push({ id: uid(), name: name });
+function _bankPartyTypeChange() {
+  var sel = document.getElementById('bpm-type'); if (!sel) return;
+  var type = sel.value;
+  var lbl = document.getElementById('bpm-name-label');
+  var extra = document.getElementById('bpm-extra');
+  var btn = document.getElementById('bpm-save-btn');
+  var inp = document.getElementById('bpm-name');
+  var placeholders = { donor:'e.g. Jane Smith', customer:'e.g. Acme Corp', vendor:'e.g. Office Depot', grantor:'e.g. Smith Foundation' };
+  var labels = { donor:'Donor name *', customer:'Customer name *', vendor:'Vendor name *', grantor:'Grantor name *' };
+  if (lbl) lbl.textContent = labels[type] || 'Name *';
+  if (inp) inp.placeholder = placeholders[type] || '';
+  if (btn) btn.textContent = 'Add ' + type;
+  if (extra) {
+    if (type === 'vendor') {
+      extra.innerHTML = '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem"><input type="checkbox" id="bpm-1099"> 1099 vendor</label>';
+    } else if (type === 'donor') {
+      extra.innerHTML = '<div style="font-size:11px;color:var(--muted)">This donor will appear in the Donors tab automatically.</div>';
+    } else if (type === 'grantor') {
+      extra.innerHTML = '<div style="font-size:11px;color:var(--muted)">A new grant record will be created in the Grants tab.</div>';
+    } else {
+      extra.innerHTML = '';
     }
   }
+}
+
+function bankSaveNewParty(txnId) {
+  var c = gc(); if (!c) return;
+  var typeEl = document.getElementById('bpm-type');
+  var type = typeEl ? typeEl.value : 'vendor';
+  var nameEl = document.getElementById('bpm-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { if (nameEl) nameEl.style.borderColor = 'var(--red)'; return; }
+  var is1099El = document.getElementById('bpm-1099');
+  var is1099 = is1099El ? is1099El.checked : false;
+
+  if (type === 'vendor') {
+    if (!c.vendors) c.vendors = [];
+    if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); }))
+      c.vendors.push({ id: uid(), name: name, is1099: is1099, defaultCat: '' });
+  } else if (type === 'customer') {
+    if (!c.customers) c.customers = [];
+    if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); }))
+      c.customers.push({ id: uid(), name: name });
+  } else if (type === 'donor') {
+    if (!c.donors) c.donors = [];
+    var _newDonor = c.donors.find(function(d){ return d.name.toLowerCase() === name.toLowerCase(); });
+    if (!_newDonor) { _newDonor = { id: uid(), name: name, donations: [] }; c.donors.push(_newDonor); }
+    if (!_newDonor.donations) _newDonor.donations = [];
+    // Link the bank transaction amount as a donation record
+    var _txnForDonor = (c.bankTransactions || []).find(function(x){ return x.id === txnId; });
+    if (_txnForDonor && !_newDonor.donations.find(function(dn){ return dn.bankTxnId === txnId; })) {
+      _newDonor.donations.push({ amt: _txnForDonor.amount, date: _txnForDonor.date || '', fund: '', rec: 'Yes', ty: 'No', rst: 'Unrestricted', inkind: 'No', fmv: 0, itemDescription: '', qpq: 0, bankTxnId: txnId, fromBank: true });
+    }
+  } else if (type === 'grantor') {
+    if (!c.grants) c.grants = [];
+    if (!c.grants.find(function(g){ return (g.funder||'').toLowerCase() === name.toLowerCase(); }))
+      c.grants.push({ id: uid(), name: name + ' Grant', funder: name, status: 'Applied', awarded: 0 });
+  }
+
   var t = (c.bankTransactions || []).find(function(x){ return x.id === txnId; });
   if (t) t.vendorName = name;
   sv();
   var modal = document.getElementById('bank-party-modal');
   if (modal) modal.parentNode.removeChild(modal);
   renderBank(gc());
-  _bankToast((partyType === 'vendor' ? 'Vendor' : 'Customer') + ' "' + name + '" added.');
+  _bankToast(name + ' added as ' + type + '.');
 }
 
 function bankSetAcct(id, val, acctType) {
@@ -559,6 +614,35 @@ function _bankPost(c, t) {
         }
       }
       c.income.push(incItem);
+    }
+    // Auto-create/update donor when category is Donation and vendorName is set
+    if ((t.category === 'Donation' || t.category === 'Donations') && t.vendorName) {
+      if (!c.donors) c.donors = [];
+      var _dName = t.vendorName.trim();
+      var _donor = c.donors.find(function(d){ return d.name.toLowerCase() === _dName.toLowerCase(); });
+      if (!_donor) {
+        _donor = { id: uid(), name: _dName, donations: [] };
+        c.donors.push(_donor);
+      }
+      if (!_donor.donations) _donor.donations = [];
+      // Only add the donation record if it hasn't already been linked (avoid re-post duplicates)
+      var _alreadyLinked = _donor.donations.find(function(dn){ return dn.bankTxnId === t.id; });
+      if (!_alreadyLinked) {
+        _donor.donations.push({
+          amt: t.amount,
+          date: t.date || '',
+          fund: '',
+          rec: 'Yes',   // received = yes since it came through the bank
+          ty: 'No',     // thank-you letter — default no, bookkeeper can update
+          rst: 'Unrestricted',
+          inkind: 'No',
+          fmv: 0,
+          itemDescription: '',
+          qpq: 0,
+          bankTxnId: t.id,  // link back to the bank transaction for dedup
+          fromBank: true
+        });
+      }
     }
   } else {
     // Expense
