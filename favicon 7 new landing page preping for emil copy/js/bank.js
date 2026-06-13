@@ -81,13 +81,19 @@ function renderBank(c) {
           }).join('')
         + '<option value="__new__">+ Add new account…</option>';
 
-      var partyList = isInc ? customerNames : vendorNames;
-      var partyLabel = isInc ? 'Customer' : 'Vendor';
+      // Income rows show donors + customers + grantors; expense rows show vendors + customers
+      var donorNames   = (c.donors  || []).map(function(d){ return d.name; });
+      var grantorNames = (c.grants  || []).filter(function(g){ return g.funder; }).map(function(g){ return g.funder; });
+      var partyList = isInc
+        ? donorNames.concat(customerNames.filter(function(n){ return donorNames.indexOf(n)<0; }))
+                    .concat(grantorNames.filter(function(n){ return donorNames.indexOf(n)<0 && customerNames.indexOf(n)<0; }))
+        : vendorNames.concat(customerNames.filter(function(n){ return vendorNames.indexOf(n)<0; }));
+      var partyLabel = isInc ? 'Donor / Customer' : 'Vendor';
       var partyOpts = '<option value="">— ' + partyLabel + ' (optional) —</option>'
         + partyList.map(function(n){
             return '<option value="' + escHtml(n) + '"' + (t.vendorName === n ? ' selected' : '') + '>' + escHtml(n) + '</option>';
           }).join('')
-        + '<option value="__new__">+ Add new ' + partyLabel.toLowerCase() + '…</option>';
+        + '<option value="__new__">+ Add new…</option>';
 
       var sel = 'style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);width:100%;max-width:150px"';
 
@@ -435,6 +441,11 @@ function bankApproveOne(id) {
   var c = gc(); if (!c) return;
   var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
   if (!t) return;
+  // Hard guard — never double-post an already-approved transaction
+  if (t.approved) {
+    _bankToast('⚠ This transaction has already been posted.');
+    return;
+  }
   // Account is required
   if (!t.acctCode) {
     var row = document.getElementById('btr-' + id);
@@ -475,7 +486,7 @@ function bankApproveSelected() {
   var count = 0;
   checked.forEach(function(id) {
     var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
-    if (!t || t.approved) return;
+    if (!t || t.approved) { _bankToast('⚠ One or more transactions were already posted and skipped.'); return; }
     _bankPost(c, t);
     t.approved = true;
     t.postedAt = new Date().toISOString();
