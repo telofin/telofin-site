@@ -304,11 +304,11 @@ function bankSetParty(id, val, partyType) {
     // Determine which types make sense based on transaction direction
     var isInc = partyType === 'customer';
     var typeOpts = isInc
-      ? '<option value="donor">Donor (goes to Donors tab)</option>'
-        + '<option value="customer">Customer (A/R or Sales)</option>'
-        + '<option value="grantor">Grantor (goes to Grants tab)</option>'
-      : '<option value="vendor">Vendor (Payables / Expenses)</option>'
-        + '<option value="customer">Customer (A/R or Sales)</option>';
+      ? '<option value="donor">Donor</option>'
+        + '<option value="customer">Customer</option>'
+        + '<option value="grantor">Grantor</option>'
+      : '<option value="vendor">Vendor</option>'
+        + '<option value="customer">Customer</option>';
 
     modal.innerHTML = '<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
       + '<div style="font-size:15px;font-weight:600;margin-bottom:1.25rem;color:var(--text)">What are you adding?</div>'
@@ -345,16 +345,11 @@ function _bankPartyTypeChange() {
   if (lbl) lbl.textContent = labels[type] || 'Name *';
   if (inp) inp.placeholder = placeholders[type] || '';
   if (btn) btn.textContent = 'Add ' + type;
+  var _cf = '<div style="margin-top:.6rem;display:flex;flex-direction:column;gap:.4rem">'    +'<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:.2rem">Email</label>'    +'<input id="bpm-email" type="email" placeholder="optional" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box;background:var(--soft);color:var(--text)"></div>'    +'<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:.2rem">Phone</label>'    +'<input id="bpm-phone" type="tel" placeholder="optional" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box;background:var(--soft);color:var(--text)"></div>'    +'<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:.2rem">Address</label>'    +'<input id="bpm-address" type="text" placeholder="optional" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:\'DM Sans\',sans-serif;box-sizing:border-box;background:var(--soft);color:var(--text)"></div>'    +'</div>';
   if (extra) {
-    if (type === 'vendor') {
-      extra.innerHTML = '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem"><input type="checkbox" id="bpm-1099"> 1099 vendor</label>';
-    } else if (type === 'donor') {
-      extra.innerHTML = '<div style="font-size:11px;color:var(--muted)">This donor will appear in the Donors tab automatically.</div>';
-    } else if (type === 'grantor') {
-      extra.innerHTML = '<div style="font-size:11px;color:var(--muted)">A new grant record will be created in the Grants tab.</div>';
-    } else {
-      extra.innerHTML = '';
-    }
+    extra.innerHTML = (type === 'vendor'
+      ? '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:.4rem;margin-top:.25rem;margin-bottom:.25rem"><input type="checkbox" id="bpm-1099"> 1099 vendor</label>'
+      : '') + _cf;
   }
 }
 
@@ -367,19 +362,22 @@ function bankSaveNewParty(txnId) {
   if (!name) { if (nameEl) nameEl.style.borderColor = 'var(--red)'; return; }
   var is1099El = document.getElementById('bpm-1099');
   var is1099 = is1099El ? is1099El.checked : false;
+  var bpmEmail   = (document.getElementById('bpm-email')   || {}).value || '';
+  var bpmPhone   = (document.getElementById('bpm-phone')   || {}).value || '';
+  var bpmAddress = (document.getElementById('bpm-address') || {}).value || '';
 
   if (type === 'vendor') {
     if (!c.vendors) c.vendors = [];
     if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); }))
-      c.vendors.push({ id: uid(), name: name, is1099: is1099, defaultCat: '' });
+      c.vendors.push({ id: uid(), name: name, is1099: is1099, defaultCat: '', email: bpmEmail, phone: bpmPhone, address: bpmAddress });
   } else if (type === 'customer') {
     if (!c.customers) c.customers = [];
     if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); }))
-      c.customers.push({ id: uid(), name: name });
+      c.customers.push({ id: uid(), name: name, email: bpmEmail, phone: bpmPhone, address: bpmAddress });
   } else if (type === 'donor') {
     if (!c.donors) c.donors = [];
     var _newDonor = c.donors.find(function(d){ return d.name.toLowerCase() === name.toLowerCase(); });
-    if (!_newDonor) { _newDonor = { id: uid(), name: name, donations: [] }; c.donors.push(_newDonor); }
+    if (!_newDonor) { _newDonor = { id: uid(), name: name, email: bpmEmail, phone: bpmPhone, address: bpmAddress, donations: [] }; c.donors.push(_newDonor); }
     if (!_newDonor.donations) _newDonor.donations = [];
     // Link the bank transaction amount as a donation record
     var _txnForDonor = (c.bankTransactions || []).find(function(x){ return x.id === txnId; });
@@ -389,7 +387,7 @@ function bankSaveNewParty(txnId) {
   } else if (type === 'grantor') {
     if (!c.grants) c.grants = [];
     if (!c.grants.find(function(g){ return (g.funder||'').toLowerCase() === name.toLowerCase(); }))
-      c.grants.push({ id: uid(), name: name + ' Grant', funder: name, status: 'Applied', awarded: 0 });
+      c.grants.push({ id: uid(), name: name + ' Grant', funder: name, funderEmail: bpmEmail, funderPhone: bpmPhone, funderAddress: bpmAddress, status: 'Applied', awarded: 0 });
   }
 
   var t = (c.bankTransactions || []).find(function(x){ return x.id === txnId; });
