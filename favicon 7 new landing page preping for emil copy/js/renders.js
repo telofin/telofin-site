@@ -779,7 +779,7 @@ function renderDonors(cc){
       +(d.constituentType==='workplace'?'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px" onclick="openWorkplaceGivingLetter('+di+')" title="Generate stewardship letter for workplace giving donor">🏢 Stewardship letter</button>':'')
       +'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--text)" title="Edit donor" onclick="editDonor('+di+')">&#9998; Edit</button>'
       +'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--muted)" title="View change history" onclick="openDonorAuditLog(\''+di+'\')">&#128203; History</button>'
-      +'<button class="d-btn" data-del-donor="'+di+'" style="border:1px solid var(--red-bg);border-radius:7px;padding:5px 10px;font-size:12px" title="Remove donor" onclick="delDonor('+di+')">&#215; Remove</button></div>'
+      +'<button style="border:none;border-radius:7px;padding:5px 12px;font-size:12px;background:var(--red,#c0392b);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:500" title="Remove donor" onclick="delDonor('+di+')">&#215; Remove</button></div>'
       +((d.donations||[]).length
         ?'<table><thead><tr><th style="width:12%">Amount</th><th style="width:13%">Date</th><th style="width:14%">Campaign</th><th style="width:12%">Project</th><th style="width:8%">Recurring</th><th style="width:10%">Restricted</th><th style="width:10%">TY Sent</th><th style="width:21%"></th></tr></thead><tbody>'
         +(function(){var _rows=[];(d.donations||[]).forEach(function(dn,dni){if(RST_F!=='all'&&normalizeRst(dn.rst)!==RST_F)return;_rows.push('<tr><td class="vg" style="font-weight:500">'+fmt(dn.amt)+(dn.inkind==='Yes'?' <span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:9px">In-kind</span>':'')+(dn.qpq>0?' <span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:9px">QPQ</span><span style="font-size:10px;color:var(--muted);margin-left:3px">'+fmt(Math.max(0,Number(dn.amt||0)-dn.qpq))+' deductible</span>':'')+'</td><td style="color:var(--muted)">'+(dn.date||'—')+'</td><td>'+(dn.fund||'—')+'</td><td style="font-size:11px;color:var(--muted)">'+(dn.proj?(function(){var _pr=(c&&c.projects||[]).find(function(p){return p.id===dn.proj||p.name===dn.proj;});return escHtml(_pr?_pr.name:dn.proj);})():'—')+'</td><td>'+(dn.rec==='Yes'?'<span class="badge b-rec">↻ Yes</span>':'—')+'</td><td>'+rstBadge(dn.rst)+'</td><td>'+(dn.ty==='Yes'?'<span class="badge b-green">✓ Sent</span>':'<span class="badge b-amber">Pending</span>')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editDonation('+di+','+dni+')" title="Edit donation">&#9998;</button><button class="e-btn" onclick="openAuditLog('+di+','+dni+')" title="Edit history">&#128221;</button><button class="e-btn" onclick="openTYLetter('+di+','+dni+')" title="Generate thank you letter">💌</button><button class="e-btn" onclick="toggleTY('+di+','+dni+')" title="Toggle TY sent">✓</button><button class="d-btn" title="Delete donation" onclick="delDonation('+di+','+dni+')">&#215;</button></div></td></tr>');});return _rows.join('');})()+(!((d.donations||[]).some(function(dn){return RST_F==='all'||normalizeRst(dn.rst)===RST_F;}))?'<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--muted);font-size:12px">No donations match this filter.</td></tr>':'')+'</tbody></table>'
@@ -1027,28 +1027,7 @@ function openAnnualLetter(di){
 }
 function toggleTY(di,dni){var c=gc();if(!c||!c.donors[di]||!c.donors[di].donations[dni])return;var dn=c.donors[di].donations[dni];dn.ty=dn.ty==='Yes'?'No':'Yes';sv();renderDonors(c);}
 function delDonation(di,dni){var c=gc();if(!confirm('Delete this donation?'))return;c.donors[di].donations.splice(dni,1);sv();renderDonors(c);}
-function delDonor(di){
-  var c=gc();if(!c||!c.donors[di])return;
-  var btn=document.querySelector('[data-del-donor="'+di+'"]');
-  if(!btn)return;
-  if(btn.dataset.confirmed==='1'){
-    c.donors.splice(di,1);sv();renderDonors(c);return;
-  }
-  // First click: show confirmation state on the button
-  var orig=btn.innerHTML;var origBg=btn.style.background||'';
-  btn.dataset.confirmed='1';
-  btn.innerHTML='Confirm delete?';
-  btn.style.background='var(--red)';
-  btn.style.color='#fff';
-  btn.style.borderColor='var(--red)';
-  // Auto-reset after 3s if they don't confirm
-  setTimeout(function(){
-    if(btn&&btn.dataset.confirmed==='1'){
-      btn.dataset.confirmed='0';btn.innerHTML=orig;
-      btn.style.background=origBg;btn.style.color='';btn.style.borderColor='';
-    }
-  },3000);
-}
+function delDonor(di){var c=gc();if(!confirm('Remove this donor and all their donation history? Cannot be undone.'))return;c.donors.splice(di,1);sv();renderDonors(c);}
 function editDonor(di){
   var c=gc();if(!c||!c.donors[di])return;DONOR_EI=di;var d=c.donors[di];
   g('m-donor-title').textContent='Edit donor';
