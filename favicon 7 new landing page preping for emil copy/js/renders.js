@@ -1155,6 +1155,38 @@ function saveDonation(){
   if(record.inkind==='Yes'&&!record.fmv){alert('Please enter the fair market value for this in-kind donation.');return;}
   if(record.inkind==='Yes'&&!record.itemDescription){alert('Please describe the donated item or service.');return;}
 
+  // Scenario B: Check for existing bank-imported income entry that matches this donation
+  if(DONATION_EI<0){
+    var _donorName=(c.donors[di]&&c.donors[di].name||'').toLowerCase();
+    var _newAmt=Number(amtNum);
+    var _newDate=dateVal;
+    var _dupInc=(c.income||[]).find(function(r){
+      if(!r.fromBank)return false;
+      var amtMatch=Math.abs(Number(r.recv||r.amt||0)-_newAmt)<0.01;
+      var dateDiff=r.date&&_newDate?Math.abs(new Date(r.date)-new Date(_newDate))/(1000*60*60*24):999;
+      var nameMatch=!_donorName||(r.vendor1099||r.name||'').toLowerCase().indexOf(_donorName)>=0||_donorName.indexOf((r.vendor1099||'').toLowerCase())>=0;
+      return amtMatch&&dateDiff<=5&&nameMatch;
+    });
+    if(_dupInc){
+      // Show warning modal with link to the existing entry
+      var _dupModal=document.createElement('div');
+      _dupModal.id='don-dup-modal';
+      _dupModal.style.cssText='position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+      _dupModal.innerHTML='<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
+        +'<div style="font-size:15px;font-weight:600;margin-bottom:.5rem;color:var(--text)">⚠️ Possible duplicate donation</div>'
+        +'<div style="font-size:13px;color:var(--muted);margin-bottom:.75rem">A bank import already recorded <strong style="color:var(--text)">$'+_newAmt.toFixed(2)+'</strong> on <strong style="color:var(--text)">'+(_dupInc.date||'unknown date')+'</strong>'
+        +(_dupInc.vendor1099?' from <strong style="color:var(--text)">'+escHtml(_dupInc.vendor1099)+'</strong>':'')+'.</div>'
+        +'<div style="font-size:12px;color:var(--muted);margin-bottom:1.25rem">This may already be recorded from your bank statement. If it\'s the same payment, saving this will create a duplicate \u2014 the reconciliation tab is the final check. If it\'s a separate donation, click Save anyway.</div>'
+        +'<div style="display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap">'
+        +'<button onclick="document.getElementById(\'don-dup-modal\').remove()" style="padding:7px 14px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--text)">Cancel</button>'
+        +'<button onclick="_donForceLog()" style="padding:7px 14px;border:none;border-radius:8px;background:var(--np);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">Save anyway — separate donation</button>'
+        +'</div></div>';
+      window._donPendingRecord={c:c,di:di,record:record};
+      document.body.appendChild(_dupModal);
+      return;
+    }
+  }
+
   if(DONATION_EI>=0){
     // Edit in place — audit changed fields before overwriting
     var old=c.donors[di].donations[DONATION_EI];
@@ -4504,6 +4536,15 @@ function deleteActivity(di,ai){
     }
   }
   sv();renderDonors(c);
+}
+
+function _donForceLog(){
+  var m=document.getElementById('don-dup-modal');if(m)m.remove();
+  if(!window._donPendingRecord)return;
+  var _p=window._donPendingRecord;
+  _p.c.donors[_p.di].donations.push(_p.record);
+  sv();renderDonors(_p.c);closeM('m-donation');
+  window._donPendingRecord=null;
 }
 
 function saveDonationAndNew(){var di=g('dnt-donor-id').value;var fund=g('dnt-fund').value;var proj=g('dnt-proj')&&g('dnt-proj').value||'';var rst=g('dnt-rst').value;saveDonation();setTimeout(function(){g('dnt-donor-id').value=di;g('dnt-fund').value=fund;g('dnt-rst').value=rst;_populateDonationProjDropdown(gc(),proj);DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');if(g('dnt-amt'))g('dnt-amt').focus();},100);}

@@ -2010,6 +2010,9 @@ function renderForm990(c){
     +'Part IX line references come from the <strong>f990</strong> field on each COA account. '
     +'Functional classification is set per expense via the Functional field (Program / Management / Fundraising). '
     +'Verify all amounts with your CPA before filing Form 990.'
+    +'</div>'
+    +'<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:.6rem .9rem;font-size:11px;color:#795548;margin-bottom:.75rem">'
+    +'<strong>⚠️ Internal use only.</strong> This report is for reference and planning purposes only. It does not constitute a filed IRS Form 990 and is not transmitted to the IRS or any government agency. Always consult a qualified CPA or tax professional before filing.'
     +'</div>';
 
   // Part VIII: Statement of Revenue
@@ -2069,6 +2072,9 @@ function renderForm990(c){
 
   p.innerHTML=FB()+XB()
     +'<div class="xbar" style="margin-bottom:.75rem">'
+    +'<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:6px 10px;font-size:10px;color:#795548;margin-bottom:.75rem">'
+    +'<strong>⚠️ INTERNAL USE ONLY</strong> — This document is not a filed IRS Form 990 and is not transmitted to the IRS or any government agency. Consult a qualified CPA or tax professional before filing.'
+    +'</div>'
     +'<span style="font-weight:700;font-size:15px">Form 990 — Financial Statements</span>'
     +' <span class="badge b-blue" style="font-size:11px;vertical-align:middle">'+_npTypeLabel+'</span>'
     +(_fsCount?(' <span class="badge b-amber" style="font-size:11px;vertical-align:middle;cursor:pointer" onclick="var t=document.querySelector(\'[data-panel=grants]\');if(t)switchTab({target:t},\'grants\')" title="Active fiscal sponsorships — disclosure required on Form 990">'+_fsCount+' fiscal sponsorship'+(  _fsCount>1?'s':'')+' ↗</span>'):'')

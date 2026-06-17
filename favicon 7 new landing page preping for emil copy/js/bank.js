@@ -437,6 +437,26 @@ function bankToggleAll(checked) {
   document.querySelectorAll('.bank-chk').forEach(function(cb){ cb.checked = checked; });
 }
 
+function _bankForcePushIncome(){
+  var m=document.getElementById('bank-dup-donation-modal');if(m)m.remove();
+  if(!window._bankPendingDupInc)return;
+  var _p=window._bankPendingDupInc;
+  _p.c.income.push(_p.incItem);
+  // Auto-create donor record too
+  if((_p.t.category==='Donation'||_p.t.category==='Donations')&&_p.t.vendorName){
+    if(!_p.c.donors)_p.c.donors=[];
+    var _dn=_p.t.vendorName.trim();
+    var _dor=_p.c.donors.find(function(d){return d.name.toLowerCase()===_dn.toLowerCase();});
+    if(!_dor){_dor={id:uid(),name:_dn,donations:[]};_p.c.donors.push(_dor);}
+    if(!_dor.donations)_dor.donations=[];
+    if(!_dor.donations.find(function(dn){return dn.bankTxnId===_p.t.id;})){
+      _dor.donations.push({amt:_p.t.amount,date:_p.t.date||'',fund:'',rec:'Yes',ty:'No',rst:'Unrestricted',inkind:'No',fmv:0,itemDescription:'',qpq:0,bankTxnId:_p.t.id,fromBank:true});
+    }
+  }
+  sv();renderBank(_p.c);
+  window._bankPendingDupInc=null;
+}
+
 function bankApproveOne(id) {
   var c = gc(); if (!c) return;
   var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
@@ -622,6 +642,47 @@ function _bankPost(c, t) {
           }
         }
       }
+      // Scenario A: Donation already manually logged? Warn instead of duplicating.
+      if ((t.category === 'Donation' || t.category === 'Donations') && !incItem.grantId) {
+        var _donorNameLower = (t.vendorName||'').trim().toLowerCase();
+        var _dupDonation = null;
+        (c.donors||[]).forEach(function(d){
+          if(_dupDonation)return;
+          var nameMatch = !_donorNameLower || d.name.toLowerCase()===_donorNameLower;
+          (d.donations||[]).forEach(function(dn){
+            if(_dupDonation)return;
+            var amtMatch = Math.abs(Number(dn.amt||0)-Number(t.amount||0))<0.01;
+            var dateDiff = dn.date&&t.date?Math.abs(new Date(dn.date)-new Date(t.date))/(1000*60*60*24):999;
+            if(amtMatch && dateDiff<=5 && nameMatch && !dn.fromBank){
+              _dupDonation={donor:d,donation:dn};
+            }
+          });
+        });
+        if(_dupDonation){
+          // Show warning modal — let user decide
+          var _dd=_dupDonation;
+          var _inc=incItem;
+          var _t=t;
+          var _mEl=document.createElement('div');
+          _mEl.id='bank-dup-donation-modal';
+          _mEl.style.cssText='position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+          _mEl.innerHTML='<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
+            +'<div style="font-size:15px;font-weight:600;margin-bottom:.5rem;color:var(--text)">⚠️ Donation already logged</div>'
+            +'<div style="font-size:13px;color:var(--muted);margin-bottom:.75rem">A donation of <strong style="color:var(--text)">$'+Number(_dd.donation.amt).toFixed(2)+'</strong>'
+            +(_dd.donor?' from <strong style="color:var(--text)">'+escHtml(_dd.donor.name)+'</strong>':'')
+            +' was already manually logged on <strong style="color:var(--text)">'+(_dd.donation.date||'unknown date')+'</strong>.'
+            +' This bank transaction may already be recorded.</div>'
+            +'<div style="font-size:12px;color:var(--muted);margin-bottom:1.25rem">If this is the same payment, importing it will create a duplicate. If it\'s a separate donation, you can still import it \u2014 it will need to be reconciled separately.</div>'
+            +'<div style="display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap">'
+            +'<button onclick="document.getElementById(\'bank-dup-donation-modal\').remove()" style="padding:7px 14px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;font-size:13px;font-family:\'DM Sans\',sans-serif;color:var(--text)">Skip — already recorded</button>'
+            +'<button onclick="_bankForcePushIncome()" style="padding:7px 14px;border:none;border-radius:8px;background:var(--np);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">Import anyway — separate donation</button>'
+            +'</div></div>';
+          // Store the pending incItem on window so _bankForcePushIncome can access it
+          window._bankPendingDupInc={c:c,incItem:_inc,t:_t};
+          document.body.appendChild(_mEl);
+          return; // Don't push yet — wait for user decision
+        }
+      }
       c.income.push(incItem);
     }
     // Auto-create/update donor when category is Donation and vendorName is set
@@ -751,10 +812,8 @@ async function bankHandlePDF(file) {
     _bankStartMapper(file, c, null);
     return;
   }
-  if (templates.length === 1) {
-    _bankRunTemplate(file, c, templates[0]);
-    return;
-  }
+  // Always show the picker when templates exist — even just one —
+  // so the user can choose it or map a new bank
   _BANK_HANDLING = false;
   _bankShowTemplatePicker(file, c, templates);
 }

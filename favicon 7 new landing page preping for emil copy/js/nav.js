@@ -99,9 +99,8 @@ function buildDash(c){
   var tEl=g('tabs'),pEl=g('panels'),ms=g('mob-tab-sel');
   var tabs=getTabs(c.type),saved=getTO(c.type);
   if(saved&&saved.length===tabs.length){var re=[];saved.forEach(function(s){tabs.forEach(function(t){if(t[0]===s)re.push(t);});});if(re.length===tabs.length)tabs=re;}
-  var lastTab=null;try{lastTab=localStorage.getItem('last-tab-'+c.id);}catch(e){}
-  var validPanels=tabs.map(function(t){return t[0];});
-  if(!lastTab||validPanels.indexOf(lastTab)<0)lastTab=tabs[0][0];
+  // Always open to Waypoint regardless of last visited tab
+  var lastTab='waypoint';
   tEl.innerHTML='<span style="font-size:10px;color:var(--muted);padding:0 10px;align-self:center;white-space:nowrap;opacity:.7;pointer-events:none">&#x2194; drag to reorder</span>'+tabs.map(function(t){return'<button class="tab'+(t[0]===lastTab?' active':'')+'" data-panel="'+t[0]+'" onclick="switchTab(event,\''+t[0]+'\')">'+t[1]+'</button>';}).join('');
   pEl.innerHTML=tabs.map(function(t){return'<div class="panel'+(t[0]===lastTab?' active':'')+'" id="p-'+t[0]+'"></div>';}).join('');
   ms.innerHTML=tabs.map(function(t){return'<option value="'+t[0]+'"'+(t[0]===lastTab?' selected':'')+'>'+t[1]+'</option>';}).join('');
