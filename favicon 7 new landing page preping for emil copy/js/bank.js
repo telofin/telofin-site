@@ -136,8 +136,20 @@ function renderBank(c) {
     : '<div style="font-size:12px;color:var(--muted);padding:.5rem 0">No layouts saved yet. Import a statement to set one up.</div>';
 
   // ── Render ────────────────────────────────────────────────
+  // Balance validation banner
+  var _balBanner = '';
+  if (c._bankBalanceNotes && c._bankBalanceNotes.length) {
+    var _bn = c._bankBalanceNotes[0];
+    var _col = _bn.ok ? 'var(--green)' : 'var(--amber)';
+    var _bg  = _bn.ok ? '#f0faf4' : '#fffbea';
+    _balBanner = '<div style="background:'+_bg+';border:1px solid '+_col+';border-radius:8px;padding:.6rem 1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="font-size:12px;color:'+_col+';font-weight:500">'+(_bn.ok?'&#10003;':'&#9888;')+' '+escHtml(_bn.msg)+'</span>'
+      +'<button onclick="var c=gc();if(c){c._bankBalanceNotes=[];sv();renderBank(gc());}" style="font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 4px">&#215;</button>'
+      +'</div>';
+  }
   p.innerHTML =
     '<div style="padding:1.25rem">'
+    + _balBanner
 
     // Header
     + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem">'
@@ -819,6 +831,41 @@ async function bankHandlePDF(file) {
 }
 
 // ── RUN A KNOWN TEMPLATE AGAINST A PDF ───────────────────────
+function _bankExtractBalances(lines) {
+  var opening = null, closing = null;
+  lines.forEach(function(line) {
+    var txt = line.text.toLowerCase();
+    var isOpen  = /opening balance|beginning balance|start balance/.test(txt);
+    var isClose = /closing balance|ending balance|end balance/.test(txt);
+    if (!isOpen && !isClose) return;
+    // Collect amounts with their item positions (sorted left to right)
+    var amtItems = [];
+    line.items.forEach(function(it, idx){
+      var n = parseFloat(it.str.replace(/[$,\s]/g,''));
+      if (!isNaN(n) && n > 0 && /\d{1,3}(,\d{3})*\.\d{2}/.test(it.str)) {
+        amtItems.push({ n: n, x: it.x });
+      }
+    });
+    if (!amtItems.length) {
+      var m = line.text.match(/\$?([\d,]+\.\d{2})/g);
+      if (m) amtItems = m.map(function(s){ return { n: parseFloat(s.replace(/[$,]/g,'')), x: 0 }; }).filter(function(a){ return !isNaN(a.n)&&a.n>0; });
+    }
+    if (!amtItems.length) return;
+    amtItems.sort(function(a,b){ return a.x - b.x; });
+    if (isOpen && isClose) {
+      // Both labels on same line — opening is leftmost amount, closing is rightmost
+      if (opening === null) opening = amtItems[0].n;
+      if (closing === null) closing = amtItems[amtItems.length-1].n;
+    } else if (isOpen && opening === null) {
+      opening = amtItems[amtItems.length-1].n;
+    } else if (isClose && closing === null) {
+      closing = amtItems[amtItems.length-1].n;
+    }
+  });
+  console.log('[bank] Balance labels found — opening:', opening, 'closing:', closing);
+  return { opening: opening, closing: closing };
+}
+
 async function _bankRunTemplate(file, c, tpl) {
   _bankShowProgress('Reading ' + file.name + '…');
   try {
@@ -826,8 +873,24 @@ async function _bankRunTemplate(file, c, tpl) {
     var txns  = _bankApplyTemplate(lines, tpl, file.name);
     _bankShowProgress('');
     if (txns.length) {
+      var _bals = _bankExtractBalances(lines);
+      var openingBal = _bals.opening, closingBal = _bals.closing;
+      var totalCredits = 0, totalDebits = 0;
+      txns.forEach(function(t){ if (t.type==='credit') totalCredits+=t.amount; else totalDebits+=t.amount; });
+      var calcClosing   = openingBal !== null ? Math.round((openingBal + totalCredits - totalDebits)*100)/100 : null;
+      var actualClosing = closingBal !== null ? Math.round(closingBal*100)/100 : null;
+      var balOk   = calcClosing !== null && actualClosing !== null && Math.abs(calcClosing - actualClosing) < 0.02;
+      var balDiff = calcClosing !== null && actualClosing !== null ? Math.abs(calcClosing - actualClosing) : null;
+      console.log('[bank] Balance check — opening:', openingBal, 'calc closing:', calcClosing, 'actual closing:', actualClosing, 'ok:', balOk);
+      var balanceNote = null;
+      if (openingBal !== null && closingBal !== null) {
+        var fmtAmt = function(n){ return '$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+        balanceNote = balOk
+          ? { ok:true,  msg:'Balance verified — ' + txns.length + ' transactions reconcile to closing balance of ' + fmtAmt(actualClosing) }
+          : { ok:false, msg:'Balance mismatch — expected ' + fmtAmt(actualClosing) + ', calculated ' + fmtAmt(calcClosing) + ' (' + fmtAmt(balDiff) + ' off). Check for missing or duplicate transactions.' };
+      }
       _bankStoreKeywords(tpl, lines);
-      _bankAddPending(c, txns, tpl.bankName, file.name);
+      _bankAddPending(c, txns, tpl.bankName, file.name, balanceNote);
       tpl.usageCount = (tpl.usageCount || 0) + 1;
       tpl.lastUsed = new Date().toISOString();
       sv();
@@ -961,49 +1024,10 @@ async function _bankExtractLines(file) {
 }
 
 // ── APPLY TEMPLATE TO EXTRACT TRANSACTIONS ────────────────────
-function _bankApplyTemplate(lines, tpl, fileName) {
+function _bankApplyTemplate(lines, tpl, fileName, noFallback) {
   var txns = [];
 
-  // Template stores column X positions from the mapping clicks
-  // txnDateX, txnDescX, txnAmtX — and the Y band where transactions live
-  var dateX   = tpl.txnDateX;
-  var descX   = tpl.txnDescX;
-  var debitX  = tpl.txnDebitX;
-  var creditX = tpl.txnCreditX;
-  // Fallback: if old single-column template, use txnAmtX for debit
-  if (debitX === undefined || debitX === null) debitX = tpl.txnAmtX;
-  var colTol  = 60; // pixels of tolerance for column matching
-
-  // Auto-categorization
-  function autoCat(desc, type) {
-    var dl = (desc || '').toLowerCase();
-    if (type === 'credit') {
-      if (/payroll|direct deposit|ach credit|salary|wages/.test(dl)) return 'Payroll Deposit';
-      if (/interest/.test(dl))                                        return 'Interest Income';
-      if (/grant/.test(dl))                                           return 'Grant';
-      if (/donation|contrib/.test(dl))                               return 'Donation';
-      return 'Other Income';
-    }
-    if (/payroll|paycheck|adp|paychex/.test(dl))                     return 'Payroll';
-    if (/rent|lease/.test(dl))                                        return 'Rent';
-    if (/utility|electric|gas|water|pge|con ed/.test(dl))            return 'Utilities';
-    if (/insurance/.test(dl))                                         return 'Insurance';
-    if (/service charge|monthly fee|bank fee|maintenance fee/.test(dl)) return 'Bank Fees';
-    if (/amazon|walmart|target|costco/.test(dl))                     return 'Supplies';
-    if (/verizon|at&t|t-mobile|comcast|spectrum/.test(dl))          return 'Utilities';
-    if (/google|microsoft|adobe|zoom|slack|dropbox/.test(dl))       return 'Software';
-    if (/transfer|zelle|venmo|paypal/.test(dl))                     return 'Transfer';
-    if (/atm|cash withdrawal/.test(dl))                              return 'Cash';
-    if (/loan|mortgage/.test(dl))                                    return 'Loan Payment';
-    if (/tax|irs/.test(dl))                                          return 'Taxes';
-    if (/travel|hotel|airline|uber|lyft/.test(dl))                  return 'Travel';
-    if (/restaurant|café|coffee|starbucks|doordash/.test(dl))       return 'Meals';
-    return 'Uncategorized';
-  }
-
-  // Skip lines
-  var SKIP = /beginning balance|ending balance|opening balance|closing balance|total deposit|total withdrawal|total debit|total credit|account summary|statement period|available balance|service charge total|subtotal|page \d|^date$|^description$|^details$|^transaction$|^withdrawals?$|^deposits?$|^debits?$|^credits?$|^balance$|^amount$|^type$|previous balance|new balance|forward balance|carried forward/i;
-
+  // ── Helpers ───────────────────────────────────────────────────────────────
   var AMT_RE = /[\$\(]?\d{1,3}(?:,\d{3})*\.\d{2}\)?/g;
 
   function parseAmt(s) {
@@ -1015,175 +1039,250 @@ function _bankApplyTemplate(lines, tpl, fileName) {
 
   function parseDate(s) {
     if (!s) return null;
-    var m = s.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+    var m = String(s).match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
     if (m) {
       var yr = m[3] ? (m[3].length === 2 ? '20'+m[3] : m[3]) : new Date().getFullYear();
       return m[1].padStart(2,'0')+'/'+m[2].padStart(2,'0')+'/'+yr;
     }
     var months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-    var m2 = s.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{1,2}),?\s+(\d{4})/i);
+    var m2 = String(s).match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{1,2}),?\s+(\d{4})/i);
     if (m2 && months[m2[1].toLowerCase().slice(0,3)]) {
       return months[m2[1].toLowerCase().slice(0,3)].toString().padStart(2,'0')+'/'+m2[2].padStart(2,'0')+'/'+m2[3];
     }
     return null;
   }
 
-  // If we have column positions from template, use them
-  if (dateX !== undefined && descX !== undefined && (debitX !== null && debitX !== undefined)) {
-    var seen = {};
-    lines.forEach(function(line) {
-      if (SKIP.test(line.text)) return;
-
-      var dateItem   = line.items.find(function(it){ return Math.abs(it.x - dateX)  < colTol; });
-      var descItem   = line.items.find(function(it){ return Math.abs(it.x - descX)  < colTol; });
-      var debitItem  = line.items.find(function(it){ return Math.abs(it.x - debitX) < colTol; });
-      var creditItem = (creditX !== null && creditX !== undefined)
-        ? line.items.find(function(it){ return Math.abs(it.x - creditX) < colTol; })
-        : null;
-
-      if (!dateItem) return;
-      if (!debitItem && !creditItem) return;
-
-      var date = parseDate(dateItem.str);
-      if (!date) return;
-
-      // Two-column layout: debit = expense, credit = income
-      var amt  = null;
-      var type = 'debit';
-      var da   = debitItem  ? parseAmt(debitItem.str)  : null;
-      var ca   = creditItem ? parseAmt(creditItem.str) : null;
-
-      if (da !== null && Math.abs(da) > 0 && ca !== null && Math.abs(ca) > 0) {
-        // Both columns have a value — debit (expense) wins
-        amt = Math.abs(da); type = 'debit';
-      } else if (da !== null && Math.abs(da) > 0) {
-        amt = Math.abs(da); type = 'debit';
-      } else if (ca !== null && Math.abs(ca) > 0) {
-        amt = Math.abs(ca); type = 'credit';
-      }
-
-      if (!amt || amt === 0) return;
-
-      var desc = descItem
-        ? descItem.str
-        : line.text.replace(dateItem.str,'')
-            .replace(debitItem  ? debitItem.str  : '','')
-            .replace(creditItem ? creditItem.str : '','').trim();
-      desc = desc.replace(/\s{2,}/g,' ').trim();
-      if (!desc) desc = 'Transaction';
-
-      var key = date + '|' + amt.toFixed(2) + '|' + desc.slice(0,15);
-      if (seen[key]) return;
-      seen[key] = true;
-
-      txns.push({
-        id: uid(), date: date, description: desc,
-        amount: amt, type: type,
-        category: autoCat(desc, type),
-        sourceFile: fileName, approved: false
-      });
-    });
-  } else {
-    // Fallback: scan every line for amount + nearest date
-    var dateLine = {};
-    lines.forEach(function(line, i) {
-      dateLine[i] = parseDate(line.text);
-    });
-
-    var seen = {};
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i];
-      if (SKIP.test(line.text)) continue;
-
-      AMT_RE.lastIndex = 0;
-      var amts = [];
-      var am;
-      while ((am = AMT_RE.exec(line.text)) !== null) amts.push(am[0]);
-      if (!amts.length) continue;
-
-      var txnDate = null;
-      var descParts = [];
-
-      var selfDate = parseDate(line.text);
-      if (selfDate) {
-        txnDate = selfDate;
-        var afterDate = line.text.replace(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/, '').trim();
-        afterDate = afterDate.replace(AMT_RE, '').trim();
-        if (afterDate.length > 1) descParts.push(afterDate);
-      } else {
-        for (var j = i-1; j >= Math.max(0, i-6); j--) {
-          if (dateLine[j]) { txnDate = dateLine[j]; break; }
-        }
-        var cleanLine = line.text.replace(AMT_RE, '').trim();
-        if (cleanLine.length > 1) descParts.push(cleanLine);
-      }
-
-      if (!txnDate) continue;
-
-      var amt = parseAmt(amts[0]);
-      if (amt === null || amt === 0) continue;
-
-      // Determine type using column X position hint if available,
-      // otherwise fall back to sign (negative = debit, positive = credit).
-      // Note: most bank PDFs show debits as positive numbers with no sign,
-      // so sign-only detection is unreliable — that's why template mapping matters.
-      var type;
-      var amtMatch = AMT_RE.exec(line.text); // re-exec to get match index
-      AMT_RE.lastIndex = 0;
-      // Find x position of the amount token in this line's items
-      var amtStr = amts[0];
-      var amtItem = line.items.find(function(it){ return it.str === amtStr || it.str.replace(/[$,\s]/g,'') === amtStr.replace(/[$,\s]/g,''); });
-      if (amtItem && debitX !== null && debitX !== undefined && creditX !== null && creditX !== undefined) {
-        // Both columns known — pick whichever is closer
-        var dDist = Math.abs(amtItem.x - debitX);
-        var cDist = Math.abs(amtItem.x - creditX);
-        type = dDist <= cDist ? 'debit' : 'credit';
-      } else if (amtItem && debitX !== null && debitX !== undefined) {
-        type = Math.abs(amtItem.x - debitX) < colTol ? 'debit' : 'credit';
-      } else {
-        // No column hints — use sign; negatives and parentheticals are debits
-        type = amt < 0 ? 'debit' : 'credit';
-      }
-      var absAmt = Math.abs(amt);
-
-      var key = txnDate + '|' + absAmt.toFixed(2) + '|' + desc.slice(0,15);
-      if (seen[key]) continue;
-      seen[key] = true;
-
-      txns.push({
-        id: uid(), date: txnDate, description: desc,
-        amount: absAmt, type: type,
-        category: autoCat(desc, type),
-        sourceFile: fileName, approved: false
-      });
-    }
+  function toDateObj(dateStr) {
+    if (!dateStr) return null;
+    var p = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!p) return null;
+    // Use new Date(year, month-1, day) to avoid UTC offset shifting the date
+    return new Date(parseInt(p[3]), parseInt(p[1])-1, parseInt(p[2]));
   }
+
+  function autoCat(desc, type) {
+    var dl = (desc || '').toLowerCase();
+    if (type === 'credit') {
+      if (/payroll|direct deposit|ach credit|salary|wages/.test(dl)) return 'Payroll Deposit';
+      if (/interest/.test(dl))   return 'Interest Income';
+      if (/grant/.test(dl))      return 'Grant';
+      if (/donation|contrib/.test(dl)) return 'Donation';
+      return 'Other Income';
+    }
+    if (/payroll|paycheck|adp|paychex/.test(dl))                     return 'Payroll';
+    if (/rent|lease/.test(dl))                                        return 'Rent';
+    if (/utility|electric|gas|water|pge|con ed/.test(dl))            return 'Utilities';
+    if (/insurance/.test(dl))                                         return 'Insurance';
+    if (/service charge|monthly fee|bank fee|maintenance fee/.test(dl)) return 'Bank Fees';
+    if (/amazon|walmart|target|costco/.test(dl))                     return 'Supplies';
+    if (/verizon|at&t|t-mobile|comcast|spectrum/.test(dl))          return 'Utilities';
+    if (/google|microsoft|adobe|zoom|slack|dropbox|telofin/.test(dl)) return 'Software';
+    if (/transfer|zelle|venmo|paypal/.test(dl))                     return 'Transfer';
+    if (/atm|cash withdrawal/.test(dl))                              return 'Cash';
+    if (/loan|mortgage/.test(dl))                                    return 'Loan Payment';
+    if (/tax|irs/.test(dl))                                          return 'Taxes';
+    if (/travel|hotel|airline|uber|lyft/.test(dl))                  return 'Travel';
+    if (/restaurant|caf|coffee|starbucks|doordash/.test(dl))       return 'Meals';
+    return 'Uncategorized';
+  }
+
+  // ── Step 1: Extract period date range from template clicks ────────────────
+  // Walk all lines, find items near where the user clicked start/end dates.
+  // This gives us the exact date range for this statement.
+  var periodStart = null; // Date object
+  var periodEnd   = null;
+
+  function extractDateNear(targetX, targetY) {
+    var best = null, bestDist = Infinity;
+    lines.forEach(function(line) {
+      line.items.forEach(function(it) {
+        var d = parseDate(it.str);
+        if (!d) return;
+        // Distance in both X and Y — prefer items close to the clicked spot
+        var dist = Math.abs(it.x - targetX) + Math.abs(it.y - targetY) * 0.5;
+        if (dist < bestDist) { bestDist = dist; best = d; }
+      });
+      // Also try combined text on that line (e.g. "03/01/2025 to 03/31/2025")
+      if (targetY !== null && Math.abs((line.items[0]||{}).y - targetY) < 20) {
+        var allDates = line.text.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/g);
+        if (allDates && allDates.length >= 2 && !best) {
+          best = parseDate(allDates[0]);
+          if (!periodEnd) periodEnd = toDateObj(parseDate(allDates[allDates.length-1]));
+        }
+      }
+    });
+    return best ? toDateObj(best) : null;
+  }
+
+  // Scan ALL lines for the statement period line (two dates where d1 < d2)
+  // e.g. "Statement Period: 03/01/2025 to 03/31/2025"
+  lines.forEach(function(line) {
+    if (periodStart && periodEnd) return;
+    var DATE_RE = /\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b/g;
+    var allDates = [], m;
+    while ((m = DATE_RE.exec(line.text)) !== null) allDates.push(m[0]);
+    if (allDates.length < 2) return;
+    var candidates = [];
+    allDates.forEach(function(ds) {
+      var d = toDateObj(parseDate(ds));
+      if (d) candidates.push(d);
+    });
+    if (candidates.length < 2) return;
+    candidates.sort(function(a,b){ return a-b; });
+    var d1 = candidates[0], d2 = candidates[candidates.length-1];
+    var diffDays = (d2 - d1) / (1000*60*60*24);
+    if (diffDays > 1 && diffDays < 400) {
+      periodStart = d1; periodEnd = d2;
+      console.log('[bank] Period found:', d1.toLocaleDateString(), '->', d2.toLocaleDateString(), '| line:', line.text.slice(0,60));
+    }
+  });
+
+  console.log('[bank] Period:', periodStart, '->', periodEnd);
+
+  // ── Step 2: Smart date-anchor extraction ──────────────────────────────────
+  // For each line: find a date. If it falls within the period, it's a transaction.
+  // Then: everything between the date and the numbers is the description.
+  // Numbers: sorted left to right, last one is running balance (skip it).
+  // Of the remaining: if two numbers, left=deposits/credit, right=withdrawals/debit.
+  //                   if one number, use X position relative to deposit/withdrawal
+  //                   column hints to determine type.
+
+  var SKIP = /beginning balance|ending balance|opening balance|closing balance|total deposit|total withdrawal|total debit|total credit|account summary|statement period|available balance|service charge total|subtotal|page \d|^date$|^description$|^details$|^transaction$|^withdrawals?$|^deposits?$|^debits?$|^credits?$|^balance$|^amount$|^type$|previous balance|new balance|forward balance|carried forward/i;
+
+  // Get X positions of deposit and withdrawal columns from template clicks
+  // creditX = deposits (money in), debitX = withdrawals (money out)
+  var depositColX    = tpl.txnCreditX;
+  var withdrawalColX = tpl.txnDebitX;
+  if (withdrawalColX === undefined || withdrawalColX === null) withdrawalColX = tpl.txnAmtX;
+
+  var seen = {};
+
+  lines.forEach(function(line) {
+    if (SKIP.test(line.text)) return;
+    if (!line.items || !line.items.length) return;
+
+    // ── Find a date item on this line ────────────────────────────────────────
+    var dateItem = null;
+    var dateStr  = null;
+    for (var i = 0; i < line.items.length; i++) {
+      var d = parseDate(line.items[i].str);
+      if (d) {
+        // Validate against period range
+        if (periodStart && periodEnd) {
+          var dObj = toDateObj(d);
+          if (!dObj || dObj < periodStart || dObj > periodEnd) continue;
+        }
+        dateItem = line.items[i];
+        dateStr  = d;
+        break;
+      }
+    }
+    if (!dateItem || !dateStr) return;
+
+    // ── Find all number items on this line, sorted left to right ─────────────
+    var numItems = line.items.filter(function(it) {
+      if (it === dateItem) return false;
+      AMT_RE.lastIndex = 0;
+      return AMT_RE.test(it.str);
+    }).sort(function(a,b){ return a.x - b.x; });
+
+    if (!numItems.length) return;
+
+    // ── Drop the rightmost number — it's the running balance ─────────────────
+    var balanceItem = numItems[numItems.length - 1];
+    var amtItems    = numItems.slice(0, numItems.length - 1);
+
+    // If only one number total, it could be the only transaction amount (no balance column)
+    // Use it as-is
+    if (!amtItems.length) amtItems = numItems;
+
+    // ── Determine amount and type ─────────────────────────────────────────────
+    var amt  = null;
+    var type = 'debit';
+
+    if (amtItems.length >= 2) {
+      // Two amount columns: left = deposits (credit), right = withdrawals (debit)
+      var leftAmt  = parseAmt(amtItems[0].str);
+      var rightAmt = parseAmt(amtItems[amtItems.length-1].str);
+      var leftOk   = leftAmt  !== null && Math.abs(leftAmt)  > 0;
+      var rightOk  = rightAmt !== null && Math.abs(rightAmt) > 0;
+      if (leftOk && !rightOk)  { amt = Math.abs(leftAmt);  type = 'credit'; }
+      else if (rightOk && !leftOk) { amt = Math.abs(rightAmt); type = 'debit';  }
+      else if (leftOk && rightOk)  {
+        // Both populated — use column hints if available
+        if (depositColX !== null && depositColX !== undefined) {
+          var dDist = Math.abs(amtItems[0].x - depositColX);
+          var wDist = Math.abs(amtItems[amtItems.length-1].x - depositColX);
+          amt  = dDist < wDist ? Math.abs(leftAmt) : Math.abs(rightAmt);
+          type = dDist < wDist ? 'credit' : 'debit';
+        } else {
+          amt = Math.abs(leftAmt); type = 'credit'; // default: left = deposit
+        }
+      }
+    } else {
+      // Single amount — use column X hints to determine type
+      var sAmt = parseAmt(amtItems[0].str);
+      if (sAmt === null || sAmt === 0) return;
+      amt = Math.abs(sAmt);
+      if (depositColX !== null && depositColX !== undefined &&
+          withdrawalColX !== null && withdrawalColX !== undefined) {
+        var toDep = Math.abs(amtItems[0].x - depositColX);
+        var toWit = Math.abs(amtItems[0].x - withdrawalColX);
+        type = toDep <= toWit ? 'credit' : 'debit';
+      } else if (sAmt < 0) {
+        type = 'debit';
+      }
+    }
+
+    if (!amt || amt === 0) return;
+
+    // ── Build description: everything between date and first number ───────────
+    var desc = '';
+    var dateIdx = line.items.indexOf(dateItem);
+    var firstNumIdx = line.items.indexOf(amtItems[0]);
+    var descItems = line.items.slice(dateIdx + 1, firstNumIdx > dateIdx ? firstNumIdx : line.items.length);
+    desc = descItems.map(function(it){ return it.str; }).join(' ').trim();
+    if (!desc) {
+      // Fallback: strip date and all numbers from line text
+      desc = line.text;
+      desc = desc.replace(dateItem.str, '');
+      numItems.forEach(function(it){ desc = desc.replace(it.str, ''); });
+      desc = desc.replace(/\s{2,}/g,' ').trim();
+    }
+    if (!desc) desc = 'Transaction';
+
+    // ── Dedup and push ────────────────────────────────────────────────────────
+    var key = dateStr + '|' + amt.toFixed(2) + '|' + desc.slice(0,20);
+    if (seen[key]) return;
+    seen[key] = true;
+
+    txns.push({
+      id: uid(), date: dateStr, description: desc,
+      amount: amt, type: type,
+      category: autoCat(desc, type),
+      sourceFile: fileName, approved: false
+    });
+  });
 
   txns.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
-
-  // Diagnostic — always log so we can see what happened
-  console.log('[bank] Template columns — dateX:', dateX, 'descX:', descX, 'debitX:', debitX, 'creditX:', creditX);
-  console.log('[bank] Lines scanned:', lines.length, '| Transactions found:', txns.length);
-  if (txns.length) {
-    console.log('[bank] Types:', txns.map(function(t){ return t.type + ':' + t.amount; }).join(', '));
-  } else {
-    console.warn('[bank] Zero transactions extracted. First 15 lines:');
-    lines.slice(0, 15).forEach(function(l, i){ console.log('  line', i, JSON.stringify(l.text), '| items:', l.items.map(function(it){ return Math.round(it.x) + ':' + it.str; }).join(', ')); });
-  }
-
+  console.log('[bank] Smart extractor found:', txns.length, 'transactions');
+  if (txns.length) console.log('[bank] Types:', txns.map(function(t){ return t.type+':'+t.amount; }).join(', '));
   return txns;
 }
 
 // ── ADD TO PENDING ────────────────────────────────────────────
-function _bankAddPending(c, txns, bankName, fileName) {
+function _bankAddPending(c, txns, bankName, fileName, balanceNote) {
   if (!c.bankTransactions) c.bankTransactions = [];
   txns.forEach(function(t) { c.bankTransactions.push(t); });
+  if (balanceNote) { if (!c._bankBalanceNotes) c._bankBalanceNotes=[]; c._bankBalanceNotes.unshift(balanceNote); if (c._bankBalanceNotes.length>5) c._bankBalanceNotes.pop(); }
 }
 
 // ── TEMPLATE MAPPER ───────────────────────────────────────────
 async function _bankStartMapper(file, c, existingTpl) {
   _BANK_PDF_FILE     = file;
   _BANK_MAP_STEP     = 0;
+  // Clear stale balance notes from previous imports
+  if (c && c._bankBalanceNotes) c._bankBalanceNotes = [];
   _BANK_MAP_TEMPLATE = existingTpl ? JSON.parse(JSON.stringify(existingTpl)) : {
     bankName: '', keywords: [], createdAt: new Date().toISOString(), usageCount: 0,
     openingBalX: null, openingBalY: null,
@@ -1271,9 +1370,15 @@ function _bankInjectMapperModal() {
   if (canvas) {
     canvas.addEventListener('click', function(e) {
       var rect = canvas.getBoundingClientRect();
-      var x = (e.clientX - rect.left) / _BANK_SCALE;
-      var y = (e.clientY - rect.top)  / _BANK_SCALE;
-      _bankMapClick(x, y, e.clientX - rect.left, e.clientY - rect.top);
+      // Convert CSS click position to PDF user-space coordinates.
+      // rect gives CSS pixels. PDF points = CSS px / _BANK_SCALE
+      // (canvas.style.width = vp.width = PDF width * _BANK_SCALE, so CSS px / _BANK_SCALE = PDF pts)
+      var cssX = e.clientX - rect.left;
+      var cssY = e.clientY - rect.top;
+      var x = cssX / _BANK_SCALE;
+      var y = cssY / _BANK_SCALE;
+      console.log('[bank] Click CSS:', Math.round(cssX), Math.round(cssY), '-> PDF:', Math.round(x), Math.round(y), '| scale:', _BANK_SCALE, 'dpr:', window.devicePixelRatio||1);
+      _bankMapClick(x, y, cssX, cssY);
     });
   }
 }
@@ -1285,9 +1390,13 @@ async function _bankRenderPage(pageNum) {
   var vp     = page.getViewport({ scale: _BANK_SCALE });
   var canvas = g('bank-pdf-canvas'); if (!canvas) return;
   _BANK_CANVAS = canvas;
-  canvas.width  = vp.width;
-  canvas.height = vp.height;
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width  = vp.width  * dpr;
+  canvas.height = vp.height * dpr;
+  canvas.style.width  = vp.width  + 'px';
+  canvas.style.height = vp.height + 'px';
   var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   await page.render({ canvasContext: ctx, viewport: vp }).promise;
   var lbl = g('bank-map-page-label');
   if (lbl) lbl.textContent = 'Page ' + pageNum + ' of ' + _BANK_PDF_DOC.numPages;
@@ -1532,6 +1641,7 @@ async function bankMapperFinish() {
   });
   if (existIdx >= 0) c.bankTemplates[existIdx] = _BANK_MAP_TEMPLATE;
   else c.bankTemplates.push(_BANK_MAP_TEMPLATE);
+  console.log('[bank] Template saved — dateX:', Math.round(_BANK_MAP_TEMPLATE.txnDateX||0), 'descX:', Math.round(_BANK_MAP_TEMPLATE.txnDescX||0), 'debitX:', Math.round(_BANK_MAP_TEMPLATE.txnDebitX||0), 'creditX:', Math.round(_BANK_MAP_TEMPLATE.txnCreditX||0));
 
   // Save file and template refs before closing modal
   var _file = _BANK_PDF_FILE;
@@ -1542,10 +1652,27 @@ async function bankMapperFinish() {
   _bankShowProgress('Extracting transactions…');
   try {
     var lines = await _bankExtractLines(_file);
-    var txns  = _bankApplyTemplate(lines, _tpl, _file.name);
+    var txns  = _bankApplyTemplate(lines, _tpl, _file.name, true);
     _bankShowProgress('');
     if (txns.length) {
-      _bankAddPending(c, txns, _tpl.bankName, _file.name);
+      // Balance validation
+      var _bals2 = _bankExtractBalances(lines);
+      var openingBal = _bals2.opening, closingBal = _bals2.closing;
+      var totalCredits = 0, totalDebits = 0;
+      txns.forEach(function(t){ if (t.type==='credit') totalCredits+=t.amount; else totalDebits+=t.amount; });
+      var calcClosing   = openingBal !== null ? Math.round((openingBal + totalCredits - totalDebits)*100)/100 : null;
+      var actualClosing = closingBal !== null ? Math.round(closingBal*100)/100 : null;
+      var balOk   = calcClosing !== null && actualClosing !== null && Math.abs(calcClosing - actualClosing) < 0.02;
+      var balDiff = calcClosing !== null && actualClosing !== null ? Math.abs(calcClosing - actualClosing) : null;
+      console.log('[bank] Balance check — opening:', openingBal, 'calc closing:', calcClosing, 'actual closing:', actualClosing, 'ok:', balOk);
+      var balanceNote = null;
+      if (openingBal !== null && closingBal !== null) {
+        var fmtAmt = function(n){ return '$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+        balanceNote = balOk
+          ? { ok:true,  msg:'Balance verified — ' + txns.length + ' transactions reconcile to closing balance of ' + fmtAmt(actualClosing) }
+          : { ok:false, msg:'Balance mismatch — expected ' + fmtAmt(actualClosing) + ', calculated ' + fmtAmt(calcClosing) + ' (' + fmtAmt(balDiff) + ' off). Check for missing or duplicate transactions.' };
+      }
+      _bankAddPending(c, txns, _tpl.bankName, _file.name, balanceNote);
       sv();
       renderBank(c);
       var btn = document.querySelector('[data-panel="bank"]');
