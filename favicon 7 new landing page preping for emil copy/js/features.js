@@ -377,9 +377,9 @@ function renderGL(c){
   var accts=c.accounts||[];
   var txns=[];
   function addTxns(items,amtKey,sign,panel){(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat)||('CAT:'+(r.cat||'Uncategorized'));txns.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
-  if(c.type==='np'){addTxns(c.income||[],'recv',1,'Income');addTxns(c.expenses||[],'amt',-1,'Expense');}
-  else if(c.type==='sb'){addTxns(c.revenue||[],'act',1,'Revenue');addTxns(c.expenses||[],'amt',-1,'Expense');}
-  else{addTxns(c.income||[],'amt',1,'Income');addTxns(c.expenses||[],'amt',-1,'Expense');}
+  if(c.type==='np'){addTxns(c.income||[],'recv',1,'Income');addTxns(c.expenses||[],'amt',1,'Expense');}
+  else if(c.type==='sb'){addTxns(c.revenue||[],'act',1,'Revenue');addTxns(c.expenses||[],'amt',1,'Expense');}
+  else{addTxns(c.income||[],'amt',1,'Income');addTxns(c.expenses||[],'amt',1,'Expense');}
   (c.journalEntries||[]).forEach(function(e){
     if(e.debitCode)txns.push({code:e.debitCode,date:e.date||'',desc:e.memo||'JE',amt:Number(e.amt||0),panel:'Journal entry'});
     if(e.creditCode)txns.push({code:e.creditCode,date:e.date||'',desc:e.memo||'JE',amt:-Number(e.amt||0),panel:'Journal entry'});
