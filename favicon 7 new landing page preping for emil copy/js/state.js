@@ -152,15 +152,21 @@ function postToLedger(c,debitCode,creditCode,amt,memo,sourceType,sourceId){
   var n=Number(amt||0);
   if(!isFinite(n)||n===0)return null;
   if(!c.ledgerEntries)c.ledgerEntries=[];
-  // COA TYPE GUARD: warn if debit target is a Liability/Equity/Income or credit target is Asset/Expense
-  // This catches reversed entries early. We warn to console (non-blocking) but still post so no data is lost.
+  // COA TYPE GUARD: warn if debit/credit targets look reversed.
+  // Expenses and payments legitimately credit Asset accounts (cash out) and
+  // income legitimately debits Asset accounts (cash in), so those are excluded.
+  // Only warn on genuinely suspicious patterns.
   if(c.accounts){
     var _drAcct=(c.accounts||[]).find(function(a){return a.code===debitCode;});
     var _crAcct=(c.accounts||[]).find(function(a){return a.code===creditCode;});
-    if(_drAcct&&_acctNormalSide(_drAcct.type)==='cr'){
+    var _expenseType=sourceType==='expense'||sourceType==='payment'||sourceType==='reimbursement';
+    var _incomeType=sourceType==='income'||sourceType==='revenue'||sourceType==='invoice';
+    // Debiting a credit-normal account is only suspicious if it's not an income/receipt entry
+    if(_drAcct&&_acctNormalSide(_drAcct.type)==='cr'&&!_incomeType){
       console.warn('[COA guard] Debiting a credit-normal account:',debitCode,_drAcct.name,'type:',_drAcct.type,'memo:',memo);
     }
-    if(_crAcct&&_acctNormalSide(_crAcct.type)==='dr'){
+    // Crediting a debit-normal account is only suspicious if it's not an expense/payment entry
+    if(_crAcct&&_acctNormalSide(_crAcct.type)==='dr'&&!_expenseType){
       console.warn('[COA guard] Crediting a debit-normal account:',creditCode,_crAcct.name,'type:',_crAcct.type,'memo:',memo);
     }
   }
