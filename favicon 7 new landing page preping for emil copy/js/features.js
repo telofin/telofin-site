@@ -2097,15 +2097,22 @@ function _schedBHtml(){
     var total=(d.donations||[]).reduce(function(s,dn){return s+Number(dn.amt||0);},0);
     return{name:d.name||'Unknown',email:d.email||'',total:total};
   }).filter(function(d){return d.total>=THRESHOLD;});
-  // Include income entries above threshold not already in donor records
+  // Include income entries above threshold not already in donor records.
+  // Exclude grant-linked income (grantId set) — grants are institutional funders,
+  // not individual contributors, and their donations are already tracked via donor records.
   var incDonors={};
-  (c.income||[]).filter(function(r){return!r.deleted&&!r.voided;}).forEach(function(r){
+  var donorNames=donors.map(function(d){return(d.name||'').toLowerCase().trim();});
+  (c.income||[]).filter(function(r){
+    return !r.deleted&&!r.voided&&!r.grantId;
+  }).forEach(function(r){
     var k=r.name||'Unknown';
     if(!incDonors[k])incDonors[k]=0;
     incDonors[k]+=Number(r.recv||r.proj||0);
   });
   Object.keys(incDonors).forEach(function(name){
-    if(!donors.find(function(d){return d.name===name;})&&incDonors[name]>=THRESHOLD)
+    var nameLower=(name||'').toLowerCase().trim();
+    var alreadyCounted=donorNames.indexOf(nameLower)>=0;
+    if(!alreadyCounted&&incDonors[name]>=THRESHOLD)
       donors.push({name:name,email:'',total:incDonors[name]});
   });
   donors.sort(function(a,b){return b.total-a.total;});
@@ -4129,5 +4136,229 @@ function renderCalendar(cc){
     +'<div style="display:grid;grid-template-columns:1fr 320px;gap:1rem;align-items:start">'
     +'<div class="card" style="padding:0;overflow:hidden">'+grid+'</div>'
     +upcomingHTML
+    +'</div>';
+}
+
+// ── GRANT CLOSE-OUT REPORT ───────────────────────────────────────────────────
+function renderGrantCloseoutRpt(){
+  var c=gc();if(!c)return;var el=g('rpt-grantcloseout');if(!el)return;
+  if(c.type!=='np'){el.innerHTML='<div class="rpt-sec"><div class="rpt-ttl">Grant Close-Out Report</div><div style="color:var(--muted);font-size:12px">This report is only available for nonprofit organizations.</div></div>';return;}
+  var grants=c.grants||[];
+  if(!grants.length){el.innerHTML='<div class="rpt-sec"><div class="rpt-ttl">Grant Close-Out Report</div><div style="color:var(--muted);font-size:12px">No grants found.</div></div>';return;}
+
+  // Grant selector
+  var selId=el.dataset.grantId||grants[0].id;
+  var gr=grants.find(function(x){return x.id===selId;})||grants[0];
+  var selHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">'
+    +'<span style="font-size:12px;color:var(--muted)">Grant:</span>'
+    +'<div class="sw"><select style="font-size:12px" onchange="var el=g(\'rpt-grantcloseout\');el.dataset.grantId=this.value;renderGrantCloseoutRpt()">'
+    +grants.map(function(g2){return'<option value="'+g2.id+'"'+(g2.id===gr.id?' selected':'')+'>'+escHtml(g2.name)+'</option>';}).join('')
+    +'</select></div>'
+    +'<button class="xbtn p" onclick="doPDF(\'grantcloseout\')" style="margin-left:auto">Export PDF</button>'
+    +'</div>';
+
+  var gExp=(c.expenses||[]).filter(function(e){return!e.deleted&&!e.voided&&!e.isReversal&&e.grantId===gr.id;});
+  var gInc=(c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&r.grantId===gr.id;});
+  var awarded=Number(gr.awarded||0);
+  var totalRecv=gInc.reduce(function(s,r){return s+Number(r.recv||0);},0);
+  var totalSpent=gExp.reduce(function(s,e){var pct=e.grantPct!=null?Number(e.grantPct)/100:1;return s+Number(e.amt||0)*pct;},0);
+  var balance=totalRecv-totalSpent;
+
+  // Group by fiscal year
+  function getFY(dateStr){
+    if(!dateStr)return'Unknown';
+    var d=parseDate(dateStr);if(!d)return'Unknown';
+    var fye=c.fiscalYearEnd||'12/31';
+    if(typeof getFiscalYear==='function')return getFiscalYear(fye,d).label;
+    return'FY '+d.getFullYear();
+  }
+  var fyMap={};
+  gInc.forEach(function(r){var fy=getFY(r.date);if(!fyMap[fy])fyMap[fy]={income:[],expenses:[]};fyMap[fy].income.push(r);});
+  gExp.forEach(function(e){var fy=getFY(e.date);if(!fyMap[fy])fyMap[fy]={income:[],expenses:[]};fyMap[fy].expenses.push(e);});
+  var fyKeys=Object.keys(fyMap).filter(function(k){return k!=='Unknown';}).sort();
+  if(fyMap['Unknown'])fyKeys.push('Unknown');
+  var multiYear=fyKeys.length>1;
+
+  // Requirements checklist
+  var reqs=gr.requirements||[];
+  var reqHtml='';
+  if(reqs.length){
+    reqHtml='<div class="rpt-sec" style="margin-top:1rem"><div class="rpt-ttl" style="font-size:13px;margin-bottom:.5rem">Close-Out Requirements</div>'
+      +reqs.map(function(r){return'<div style="display:flex;align-items:center;gap:8px;padding:.35rem 0;border-bottom:1px solid var(--soft)">'
+        +'<span style="font-size:15px">'+(r.done?'☑':'☐')+'</span>'
+        +'<span style="font-size:12px;'+(r.done?'':'color:var(--amber)')+'">'+escHtml(r.label)+'</span>'
+        +(r.done?'':'<span style="font-size:10px;color:var(--amber);margin-left:auto">Pending</span>')
+        +'</div>';}).join('')
+      +'</div>';
+  }
+
+  // Summary tiles
+  var tilesHtml='<div class="metrics" style="margin-bottom:1rem">'
+    +'<div class="metric"><div class="m-lbl">Awarded</div><div class="m-val vg">'+fmt(awarded)+'</div></div>'
+    +'<div class="metric"><div class="m-lbl">Total received</div><div class="m-val vb">'+fmt(totalRecv)+'</div></div>'
+    +'<div class="metric"><div class="m-lbl">Total spent</div><div class="m-val vr">'+fmt(totalSpent)+'</div></div>'
+    +'<div class="metric"><div class="m-lbl">Balance</div><div class="m-val '+(balance>=0?'vg':'vr')+'">'+fmt(balance)+'</div></div>'
+    +'</div>';
+
+  // Per-FY sections or single section
+  function fySection(fyLabel,items){
+    var incItems=items.income||[];var expItems=items.expenses||[];
+    var fyRecv=incItems.reduce(function(s,r){return s+Number(r.recv||0);},0);
+    var fySpent=expItems.reduce(function(s,e){var pct=e.grantPct!=null?Number(e.grantPct)/100:1;return s+Number(e.amt||0)*pct;},0);
+    var incRows=incItems.length?incItems.map(function(r){
+      return'<tr><td>'+escHtml(r.name||'—')+'</td><td>'+escHtml(r.cat||'—')+'</td><td class="vg">'+fmt(r.recv)+'</td><td style="color:var(--muted)">'+(r.date||'—')+'</td><td>'+SB(r.status||'')+'</td></tr>';
+    }).join(''):'<tr><td colspan="5" style="color:var(--muted);font-size:11px;padding:.75rem">No income entries for this period.</td></tr>';
+    var expRows=expItems.length?expItems.map(function(e){
+      var pct=e.grantPct!=null?Number(e.grantPct):100;var allocAmt=Number(e.amt||0)*(pct/100);
+      return'<tr><td>'+escHtml(e.desc||'—')+'</td><td>'+escHtml(e.cat||'—')+'</td><td class="vr">'+(pct!==100?fmt(allocAmt)+'<span style="font-size:10px;color:var(--muted);margin-left:4px">('+pct+'% of '+fmt(e.amt)+')</span>':fmt(e.amt))+'</td><td style="color:var(--muted)">'+(e.date||'—')+'</td><td>'+(e.reconciled?'<span class="badge b-green" style="font-size:10px">✓ Reconciled</span>':'<span class="badge b-amber" style="font-size:10px">Unreconciled</span>')+'</td></tr>';
+    }).join(''):'<tr><td colspan="5" style="color:var(--muted);font-size:11px;padding:.75rem">No expenses for this period.</td></tr>';
+    return'<div class="card" style="margin-bottom:1rem">'
+      +(multiYear?'<div class="c-title" style="margin-bottom:.75rem;font-size:13px">'+escHtml(fyLabel)+'</div>':'')
+      +'<div style="font-size:12px;font-weight:500;margin-bottom:.4rem;color:var(--muted)">Income received</div>'
+      +'<table style="margin-bottom:.75rem"><thead><tr><th>Source</th><th>Category</th><th>Received</th><th>Date</th><th>Status</th></tr></thead><tbody>'+incRows+'</tbody>'
+      +(incItems.length?'<tfoot><tr><td colspan="2" style="font-weight:600;font-size:12px">Total received</td><td class="vg" style="font-weight:600">'+fmt(fyRecv)+'</td><td colspan="2"></td></tr></tfoot>':'')
+      +'</table>'
+      +'<div style="font-size:12px;font-weight:500;margin-bottom:.4rem;color:var(--muted)">Expenses charged to grant</div>'
+      +'<table><thead><tr><th>Description</th><th>Category</th><th>Amount</th><th>Date</th><th>Reconciled</th></tr></thead><tbody>'+expRows+'</tbody>'
+      +(expItems.length?'<tfoot><tr><td colspan="2" style="font-weight:600;font-size:12px">Total spent</td><td class="vr" style="font-weight:600">'+fmt(fySpent)+'</td><td colspan="2"></td></tr></tfoot>':'')
+      +'</table>'
+      +(multiYear?'<div class="rpt-row" style="margin-top:.5rem;border-top:1px solid var(--border);padding-top:.5rem"><span style="font-size:11px;font-weight:500">'+fyLabel+' net</span><span class="'+(fyRecv-fySpent>=0?'vg':'vr')+'" style="font-weight:600">'+fmt(fyRecv-fySpent)+'</span></div>':'')
+      +'</div>';
+  }
+
+  var fySections=(fyKeys.length?fyKeys:['All']).map(function(fy){
+    return fySection(fy,fyMap[fy]||{income:gInc,expenses:gExp});
+  }).join('');
+
+  var statusBadge=gr.reconciled?'<span class="badge b-green" style="font-size:11px">✓ Reconciled</span>':'';
+
+  el.innerHTML='<div class="rpt-sec">'
+    +selHtml
+    +'<div class="rpt-ttl">Grant Close-Out Report</div>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:.25rem">'
+    +'<span style="font-size:14px;font-weight:500">'+escHtml(gr.name)+'</span>'
+    +SB(gr.status||'')+statusBadge
+    +'</div>'
+    +(gr.funder?'<div style="font-size:12px;color:var(--muted);margin-bottom:.1rem">Funder: '+escHtml(gr.funder)+'</div>':'')
+    +(gr.deadline?'<div style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Reporting deadline: '+gr.deadline+'</div>':'<div style="margin-bottom:.75rem"></div>')
+    +'<div style="font-size:10px;color:var(--muted);font-style:italic;margin-bottom:1rem">Internal use only — not transmitted to any funder</div>'
+    +tilesHtml
+    +reqHtml
+    +'<div style="margin-top:1rem">'+fySections+'</div>'
+    +(balance>0?'<div class="card" style="background:var(--amber-bg,#fffbea);border:1px solid var(--amber);margin-top:.5rem"><div style="font-size:12px;font-weight:500;color:var(--amber)">⚠ Unspent balance: '+fmt(balance)+'</div><div style="font-size:11px;color:var(--muted);margin-top:3px">Confirm with funder whether unspent funds must be returned or may be carried forward.</div></div>':'')
+    +'</div>';
+}
+
+// ── GRANT STATUS REPORT ──────────────────────────────────────────────────────
+function renderGrantStatusRpt(){
+  var c=gc();if(!c)return;var el=g('rpt-grantstatus');if(!el)return;
+  if(c.type!=='np'){el.innerHTML='<div class="rpt-sec"><div class="rpt-ttl">Grant Status Report</div><div style="color:var(--muted);font-size:12px">This report is only available for nonprofit organizations.</div></div>';return;}
+  var grants=c.grants||[];
+  if(!grants.length){el.innerHTML='<div class="rpt-sec"><div class="rpt-ttl">Grant Status Report</div><div style="color:var(--muted);font-size:12px">No grants found.</div></div>';return;}
+
+  var selId=el.dataset.grantId||grants[0].id;
+  var gr=grants.find(function(x){return x.id===selId;})||grants[0];
+  var selHtml='<div style="display:flex;align-items:center;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">'
+    +'<span style="font-size:12px;color:var(--muted)">Grant:</span>'
+    +'<div class="sw"><select style="font-size:12px" onchange="var el=g(\'rpt-grantstatus\');el.dataset.grantId=this.value;renderGrantStatusRpt()">'
+    +grants.map(function(g2){return'<option value="'+g2.id+'"'+(g2.id===gr.id?' selected':'')+'>'+escHtml(g2.name)+'</option>';}).join('')
+    +'</select></div>'
+    +'<button class="xbtn p" onclick="doPDF(\'grantstatus\')" style="margin-left:auto">Export PDF</button>'
+    +'</div>';
+
+  var gExp=(c.expenses||[]).filter(function(e){return!e.deleted&&!e.voided&&!e.isReversal&&e.grantId===gr.id;});
+  var gInc=(c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&r.grantId===gr.id;});
+  var awarded=Number(gr.awarded||0);
+  var totalRecv=gInc.reduce(function(s,r){return s+Number(r.recv||0);},0);
+  var totalSpent=gExp.reduce(function(s,e){var pct=e.grantPct!=null?Number(e.grantPct)/100:1;return s+Number(e.amt||0)*pct;},0);
+  var remaining=awarded-totalSpent;
+  var drawPct=awarded>0?Math.round((totalSpent/awarded)*100):0;
+  var recvPct=awarded>0?Math.round((totalRecv/awarded)*100):0;
+
+  // Spending by category
+  var byCat={};
+  gExp.forEach(function(e){
+    var cat=e.cat||'Uncategorized';
+    var pct=e.grantPct!=null?Number(e.grantPct)/100:1;
+    var amt=Number(e.amt||0)*pct;
+    if(!byCat[cat])byCat[cat]=0;
+    byCat[cat]+=amt;
+  });
+  var catRows=Object.keys(byCat).sort(function(a,b){return byCat[b]-byCat[a];}).map(function(cat){
+    var pct=totalSpent>0?Math.round((byCat[cat]/totalSpent)*100):0;
+    return'<div class="rpt-row"><span>'+escHtml(cat)+'</span><span style="display:flex;gap:12px;align-items:center">'
+      +'<span style="font-size:11px;color:var(--muted)">'+pct+'% of spend</span>'
+      +'<span class="vr">'+fmt(byCat[cat])+'</span></span></div>';
+  }).join('');
+
+  // FY breakdown for YoY
+  function getFY(dateStr){
+    if(!dateStr)return'Unknown';
+    var d=parseDate(dateStr);if(!d)return'Unknown';
+    var fye=c.fiscalYearEnd||'12/31';
+    if(typeof getFiscalYear==='function')return getFiscalYear(fye,d).label;
+    return'FY '+d.getFullYear();
+  }
+  var fyMap={};
+  gInc.forEach(function(r){var fy=getFY(r.date);if(!fyMap[fy])fyMap[fy]={recv:0,spent:0};fyMap[fy].recv+=Number(r.recv||0);});
+  gExp.forEach(function(e){var fy=getFY(e.date);if(!fyMap[fy])fyMap[fy]={recv:0,spent:0};var pct=e.grantPct!=null?Number(e.grantPct)/100:1;fyMap[fy].spent+=Number(e.amt||0)*pct;});
+  var fyKeys=Object.keys(fyMap).filter(function(k){return k!=='Unknown';}).sort();
+  var yoyHtml='';
+  if(fyKeys.length>1){
+    yoyHtml='<div class="card" style="margin-bottom:1rem"><div class="c-title" style="margin-bottom:.75rem;font-size:13px">Year-over-Year</div>'
+      +'<table><thead><tr><th>Fiscal Year</th><th>Received</th><th>Spent</th><th>Net</th></tr></thead><tbody>'
+      +fyKeys.map(function(fy){var d=fyMap[fy];var net=d.recv-d.spent;return'<tr>'
+        +'<td style="font-weight:500">'+escHtml(fy)+'</td>'
+        +'<td class="vg">'+fmt(d.recv)+'</td>'
+        +'<td class="vr">'+fmt(d.spent)+'</td>'
+        +'<td class="'+(net>=0?'vg':'vr')+'">'+fmt(net)+'</td>'
+        +'</tr>';}).join('')
+      +'</tbody></table></div>';
+  }
+
+  // Compliance gaps
+  var gaps=[];
+  var unreconExp=gExp.filter(function(e){return!e.reconciled;}).length;
+  var unreconInc=gInc.filter(function(r){return r.reconciled!==true;}).length;
+  if(unreconExp>0)gaps.push({sev:'amber',msg:unreconExp+' unreconciled expense'+(unreconExp===1?'':'s')});
+  if(unreconInc>0)gaps.push({sev:'amber',msg:unreconInc+' unreconciled income'+(unreconInc===1?'':'s')});
+  if(remaining<0)gaps.push({sev:'red',msg:'Over-budget by '+fmt(Math.abs(remaining))});
+  if(gr.deadline){var dl=parseDate(gr.deadline);if(dl){var daysLeft=Math.round((dl-new Date())/(1000*60*60*24));if(daysLeft<30&&daysLeft>=0)gaps.push({sev:'amber',msg:'Reporting deadline in '+daysLeft+' day'+(daysLeft===1?'':'s')});if(daysLeft<0)gaps.push({sev:'red',msg:'Reporting deadline passed '+Math.abs(daysLeft)+' day'+(Math.abs(daysLeft)===1?'':'s')+' ago'});}}
+  var reqs=gr.requirements||[];
+  var pendingReqs=reqs.filter(function(r){return!r.done;});
+  if(pendingReqs.length)gaps.push({sev:'amber',msg:pendingReqs.length+' close-out requirement'+(pendingReqs.length===1?'':'s')+' pending'});
+  var gapsHtml=gaps.length
+    ?'<div class="card" style="margin-bottom:1rem"><div class="c-title" style="margin-bottom:.5rem;font-size:13px">Compliance flags</div>'
+      +gaps.map(function(g2){var col=g2.sev==='red'?'var(--red)':'var(--amber)';return'<div style="display:flex;gap:6px;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--soft);font-size:12px"><span style="color:'+col+'">●</span><span>'+g2.msg+'</span></div>';}).join('')+'</div>'
+    :'<div class="card" style="margin-bottom:1rem;background:var(--green-bg,#f0faf4);border:1px solid var(--green)"><div style="font-size:12px;color:var(--green);font-weight:500">✓ No compliance gaps</div></div>';
+
+  el.innerHTML='<div class="rpt-sec">'
+    +selHtml
+    +'<div class="rpt-ttl">Grant Status Report</div>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:.25rem">'
+    +'<span style="font-size:14px;font-weight:500">'+escHtml(gr.name)+'</span>'+SB(gr.status||'')
+    +'</div>'
+    +(gr.funder?'<div style="font-size:12px;color:var(--muted);margin-bottom:.1rem">Funder: '+escHtml(gr.funder)+'</div>':'')
+    +(gr.deadline?'<div style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Reporting deadline: '+gr.deadline+'</div>':'<div style="margin-bottom:.75rem"></div>')
+    +'<div class="metrics" style="margin-bottom:1rem">'
+    +'<div class="metric"><div class="m-lbl">Awarded</div><div class="m-val vg">'+fmt(awarded)+'</div></div>'
+    +'<div class="metric"><div class="m-lbl">Received</div><div class="m-val vb">'+fmt(totalRecv)+' <span style="font-size:11px;color:var(--muted)">('+recvPct+'%)</span></div></div>'
+    +'<div class="metric"><div class="m-lbl">Spent</div><div class="m-val vr">'+fmt(totalSpent)+' <span style="font-size:11px;color:var(--muted)">('+drawPct+'%)</span></div></div>'
+    +'<div class="metric"><div class="m-lbl">Remaining</div><div class="m-val '+(remaining>=0?'vb':'vr')+'">'+fmt(remaining)+'</div></div>'
+    +'</div>'
+    +'<div class="card" style="margin-bottom:1rem"><div class="c-title" style="margin-bottom:.5rem;font-size:13px">Drawdown progress</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px"><span>Spent</span><span>'+drawPct+'%</span></div>'
+    +'<div class="pbar" style="height:10px;margin-bottom:.75rem"><div class="pfill" style="width:'+Math.min(drawPct,100)+'%;background:'+(drawPct>90?'var(--red)':drawPct>70?'var(--amber)':'var(--green)')+'"></div></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px"><span>Received</span><span>'+recvPct+'%</span></div>'
+    +'<div class="pbar" style="height:10px"><div class="pfill" style="width:'+Math.min(recvPct,100)+'%;background:var(--blue)"></div></div>'
+    +'</div>'
+    +gapsHtml
+    +(catRows?'<div class="card" style="margin-bottom:1rem"><div class="c-title" style="margin-bottom:.5rem;font-size:13px">Spending by category</div>'+catRows+'</div>':'')
+    +yoyHtml
+    +(reqs.length?'<div class="card"><div class="c-title" style="margin-bottom:.5rem;font-size:13px">Close-out requirements</div>'
+      +reqs.map(function(r){return'<div style="display:flex;align-items:center;gap:8px;padding:.3rem 0;border-bottom:1px solid var(--soft);font-size:12px">'
+        +'<span>'+(r.done?'☑':'☐')+'</span><span style="'+(r.done?'':'color:var(--amber)')+'">'+escHtml(r.label)+'</span>'
+        +(r.done?'':'<span style="font-size:10px;color:var(--amber);margin-left:auto">Pending</span>')
+        +'</div>';}).join('')+'</div>':'')
     +'</div>';
 }
