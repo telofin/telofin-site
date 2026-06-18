@@ -66,6 +66,7 @@ function showRunReportMenu(btn,panelType){
     {label:'P&amp;L',icon:'📊',fn:'clearRptFilter();runItemReport(\'\',\'\',\'\',\'pl\')'},
     {label:'Balance Sheet',icon:'⚖️',fn:'clearRptFilter();runItemReport(\'\',\'\',\'\',\'bsheet\')'}
   ];
+  if(panelType==='grants'&&isNP){items.unshift({label:'Grant Close-Out Report',icon:'📄',fn:'runItemReport(\'\',\'\',\'\',\'grantcloseout\')'},{label:'Grant Status Report',icon:'📊',fn:'runItemReport(\'\',\'\',\'\',\'grantstatus\')'});}
   var menuHtml='<div id="run-rpt-menu" style="position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:190px;overflow:hidden;animation:fadeIn .12s ease">'
     +items.map(function(it){return'<div class="rpt-menu-item" onclick="'+it.fn+';var m=g(\'run-rpt-menu\');if(m)m.parentNode.removeChild(m)">'+it.icon+' '+it.label+'</div>';}).join('')
     +'</div>';
@@ -494,7 +495,7 @@ function renderGrants(cc){
     return'';
   }
 
-  p.innerHTML=FB()+XB('grants')+'<div class="g-sel-row"><div class="sw"><select style="max-width:220px;font-size:13px;padding:8px 28px 8px 12px" onchange="AG=this.value;renderGrants()">'+opts+'</select></div><button class="add-btn" onclick="EI=-1;openM(\'m-grant\')">+ Add grant</button><button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:14px;color:var(--text)" onclick="editGrant(\''+AG+'\')" title="Edit this grant">&#9998;</button></div>'
+  p.innerHTML=FB()+XB('grants')+'<div class="g-sel-row"><div class="sw"><select style="max-width:220px;font-size:13px;padding:8px 28px 8px 12px" onchange="AG=this.value;renderGrants()">'+opts+'</select></div><button class="add-btn" onclick="EI=-1;window._gReqTemp=[{id:uid(),label:'Submit final report to funder',done:false},{id:uid(),label:'Collect and file all receipts',done:false},{id:uid(),label:'Verify match requirement met',done:false},{id:uid(),label:'Send thank-you letter to funder',done:false},{id:uid(),label:'Confirm all funds spent per restrictions',done:false}];_renderGrantReqList(window._gReqTemp);openM(\'m-grant\')">+ Add grant</button><button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:14px;color:var(--text)" onclick="editGrant(\''+AG+'\')" title="Edit this grant">&#9998;</button></div>'
   +'<div class="metrics"><div class="metric"><div class="m-lbl">Awarded</div><div class="m-val vg">'+fmt(awarded)+'</div></div><div class="metric"><div class="m-lbl">Received</div><div class="m-val vb">'+fmt(incRecv)+'</div></div><div class="metric"><div class="m-lbl">Spent</div><div class="m-val vr">'+fmt(spent)+'</div></div><div class="metric"><div class="m-lbl">Remaining</div><div class="m-val '+(rem>=0?'vb':'vr')+'">'+fmt(rem)+'</div></div></div>'
   +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font-size:13px;font-weight:500">'+escHtml(gr.name)+'</span>'+SB(gr.status||'Applied')+(gr.reconciled?'<span class="badge b-green" title="Grant reconciled">✓ Reconciled</span>':'')+'</div><button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:4px 9px;font-size:14px;color:var(--text);flex-shrink:0" onclick="editGrant(\''+AG+'\')" title="Edit this grant">&#9998;</button></div>'
   +(gr.funder?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Funder: <span style="color:var(--text)">'+gr.funder+'</span></div>':'')
@@ -523,11 +524,13 @@ function renderGrants(cc){
     if(daysLeftApp!==null&&daysLeftApp<0&&gr.status==='Prospecting'||gr.status==='Applied')gaps.push({sev:'red',msg:'Application deadline passed '+Math.abs(daysLeftApp||0)+' day'+(Math.abs(daysLeftApp||0)===1?'':'s')+' ago'});
     if(daysLeft!==null&&daysLeft<30&&daysLeft>=0)gaps.push({sev:'amber',msg:'Reporting deadline in '+daysLeft+' day'+(daysLeft===1?'':'s')});
     if(daysLeft!==null&&daysLeft<0)gaps.push({sev:'red',msg:'Reporting deadline passed '+Math.abs(daysLeft)+' day'+(Math.abs(daysLeft)===1?'':'s')+' ago'});
+    if(!gr.reconciled){
     var unreconExp=gExp.filter(function(e){return!e.reconciled;}).length;
     var unreconInc=gInc.filter(function(r){return r.reconciled!==true;}).length;
     var unrecon=unreconExp+unreconInc;
     if(unrecon>0)gaps.push({sev:'amber',msg:(unreconExp>0?unreconExp+' unreconciled expense'+(unreconExp===1?'':'s'):'')+(unreconExp>0&&unreconInc>0?', ':'')+(unreconInc>0?unreconInc+' unreconciled income'+(unreconInc===1?'':'s'):'')});
     if(gr.status==='Awarded'&&spent===0)gaps.push({sev:'amber',msg:'Awarded but no drawdown started'});
+    }
     if(incRecv===0&&awarded>0&&(gr.status==='Awarded'||gr.status==='In Progress'))gaps.push({sev:'amber',msg:'No income received — link payment via Income tab with this grant selected'});
     if(!gaps.length)return'<div style="font-size:12px;color:var(--green);margin-top:.75rem;padding:.5rem 0">✓ No compliance gaps</div>';
     var sevColor={red:'var(--red)',amber:'var(--amber)'};
@@ -538,9 +541,14 @@ function renderGrants(cc){
     var _allExp=gExp.length>0&&gExp.every(function(e){return e.reconciled;});
     var _allInc=gInc.length>0&&gInc.every(function(r){return r.reconciled===true;});
     var _hasItems=gExp.length>0||gInc.length>0;
+    var _reqs=gr.requirements||[];
+    var _allReqs=_reqs.length===0||_reqs.every(function(r){return r.done;});
+    var _pendingReqs=_reqs.filter(function(r){return!r.done;});
     if(gr.reconciled){
       return '<div style="background:var(--green-bg,#f0faf4);border:1px solid var(--green);border-radius:8px;padding:.6rem 1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--green);font-weight:500">✓ Grant reconciled</span><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--green);color:var(--green)" onclick="unmarkGrantReconciled(\''+AG+'\')" title="Undo reconciled status">Undo</button></div>';
-    } else if(_hasItems&&_allExp&&_allInc){
+    } else if(_hasItems&&_allExp&&_allInc&&_reqs.length>0&&!_allReqs){
+      return '<div style="background:var(--amber-bg,#fffbea);border:1px solid var(--amber);border-radius:8px;padding:.6rem 1rem;margin-bottom:.75rem"><div style="font-size:12px;color:var(--amber);font-weight:500;margin-bottom:4px">✓ All transactions reconciled — complete requirements to close out</div><div style="font-size:11px;color:var(--muted)">Remaining: '+_pendingReqs.map(function(r){return escHtml(r.label);}).join(', ')+'</div></div>';
+    } else if(_hasItems&&_allExp&&_allInc&&_allReqs){
       return '<div style="background:var(--green-bg,#f0faf4);border:1px solid var(--green);border-radius:8px;padding:.6rem 1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--green);font-weight:500">✓ All items reconciled — ready to close out</span><button class="sv-btn" style="font-size:11px;padding:4px 12px" onclick="markGrantReconciled(\''+AG+'\')" title="Mark this grant as fully reconciled">Mark Grant Reconciled</button></div>';
     }
     return '';
@@ -616,9 +624,35 @@ function inlineSetExpAcct(oi, val) {
 
 function tgRecon(i){var c=gc();if(!c||!c.expenses[i])return;var cur=c.expenses[i].reconciled;if(!cur&&!confirm('Mark this transaction as reconciled?'))return;if(cur&&!confirm('Unmark this transaction as reconciled?'))return;c.expenses[i].reconciled=!cur;if(!c.expenses[i].reconciled&&AG){var _gr=c.grants&&c.grants.find(function(x){return x.id===AG;});if(_gr&&_gr.reconciled)_gr.reconciled=false;}sv();renderGrants();renderNpExp(c);}
 function tgReconInc(i){var c=gc();if(!c||!c.income[i])return;c.income[i].reconciled=!c.income[i].reconciled;if(!c.income[i].reconciled&&AG){var _gr=c.grants&&c.grants.find(function(x){return x.id===AG;});if(_gr&&_gr.reconciled)_gr.reconciled=false;}sv();renderGrants();renderNpInc(c);}
-function markGrantReconciled(id){var c=gc();if(!c)return;var gr=c.grants&&c.grants.find(function(x){return x.id===id;});if(!gr)return;gr.reconciled=true;sv();renderGrants();}
+function _renderGrantReqList(reqs){
+  var el=g('g-req-list');if(!el)return;
+  if(!reqs.length){el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px 0">No requirements added yet.</div>';return;}
+  el.innerHTML=reqs.map(function(r,i){
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+      +'<input type="checkbox" id="greq-'+i+'" '+(r.done?'checked':'')
+      +' onchange="var c=gc();if(c&&AG){var gr=c.grants.find(function(x){return x.id===AG;});if(gr&&gr.requirements&&gr.requirements['+i+'])gr.requirements['+i+'].done=this.checked;sv();renderGrants();}">'
+      +'<span style="font-size:12px;flex:1">'+escHtml(r.label)+'</span>'
+      +'<button class="add-btn" style="font-size:10px;padding:2px 7px;background:none;border:1px solid var(--border);color:var(--muted)" '
+      +'onclick="_removeGrantReq('+i+')">✕</button>'
+      +'</div>';
+  }).join('');
+}
+function _addGrantReq(){
+  var inp=g('g-req-new');if(!inp||!inp.value.trim())return;
+  var label=inp.value.trim();inp.value='';
+  // Store temp reqs in a window var until saveGrant commits them
+  window._gReqTemp=window._gReqTemp||[];
+  window._gReqTemp.push({id:uid(),label:label,done:false});
+  _renderGrantReqList(window._gReqTemp);
+}
+function _removeGrantReq(i){
+  window._gReqTemp=window._gReqTemp||[];
+  window._gReqTemp.splice(i,1);
+  _renderGrantReqList(window._gReqTemp);
+}
+function markGrantReconciled(id){var c=gc();if(!c)return;var gr=c.grants&&c.grants.find(function(x){return x.id===id;});if(!gr)return;var reqs=gr.requirements||[];var unmetReqs=reqs.filter(function(r){return!r.done;});if(unmetReqs.length){alert('Please check off all close-out requirements before marking this grant reconciled.\n\nOutstanding:\n'+unmetReqs.map(function(r){return'  • '+r.label;}).join('\n'));return;}gr.reconciled=true;sv();renderGrants();}
 function unmarkGrantReconciled(id){var c=gc();if(!c)return;var gr=c.grants&&c.grants.find(function(x){return x.id===id;});if(!gr)return;gr.reconciled=false;sv();renderGrants();}
-function editGrant(id){var c=gc();if(!c)return;var gr=c.grants.find(function(x){return x.id===id;});if(!gr)return;EI=c.grants.indexOf(gr);g('g-n').value=gr.name||'';g('g-f').value=gr.funder||'';g('g-a').value=gr.awarded||'';g('g-st').value=gr.status||'Applied';g('g-dl').value=gr.deadline||'';g('g-m').value=gr.match||'';var gmr=g('g-mr');if(gmr)gmr.value=gr.matchRequired||'';g('g-r').value=gr.restrict||'';var gappdl=g('g-appdl');if(gappdl)gappdl.value=gr.appDeadline||'';var gportal=g('g-portal');if(gportal)gportal.value=gr.portalUrl||'';openM('m-grant');}
+function editGrant(id){var c=gc();if(!c)return;var gr=c.grants.find(function(x){return x.id===id;});if(!gr)return;EI=c.grants.indexOf(gr);g('g-n').value=gr.name||'';g('g-f').value=gr.funder||'';g('g-a').value=gr.awarded||'';g('g-st').value=gr.status||'Applied';g('g-dl').value=gr.deadline||'';g('g-m').value=gr.match||'';var gmr=g('g-mr');if(gmr)gmr.value=gr.matchRequired||'';g('g-r').value=gr.restrict||'';var gappdl=g('g-appdl');if(gappdl)gappdl.value=gr.appDeadline||'';var gportal=g('g-portal');if(gportal)gportal.value=gr.portalUrl||'';window._gReqTemp=(gr.requirements||[]).map(function(r){return{id:r.id||uid(),label:r.label,done:r.done||false};});_renderGrantReqList(window._gReqTemp);openM('m-grant');}
 
 function openGrantIncomeModal(grantId,mode){
   // mode: 'add' = new income pre-filled from grant, 'link' = blank modal with grant pre-selected
@@ -1415,6 +1449,8 @@ function renderReports(){
     +(c.type==='np'?'<optgroup label="── Nonprofit ──"></optgroup>':'')
     +(c.type==='np'?'<option value="donors">Donor Report (LYBUNT)</option>':'')
     +(c.type==='np'?'<option value="grants">Grant Summary</option>':'')
+    +(c.type==='np'?'<option value="grantcloseout">Grant Close-Out Report</option>':'')
+    +(c.type==='np'?'<option value="grantstatus">Grant Status Report</option>':'')
     +(c.type==='np'?'<option value="functional">Functional Expenses (990)</option>':'')
     +(c.type==='np'?'<option value="fundpl">Fund P&L</option>':'')
     +(c.type==='np'?'<option value="budgetbyfund">Budget vs Actual by Fund</option>':'')
@@ -1585,6 +1621,8 @@ function renderReports(){
     +'<div id="rpt-esttax"      style="display:none"></div>'
     +'<div id="rpt-loans"       style="display:none"></div>'
     +'<div id="rpt-consolidated" style="display:none"></div>'
+    +'<div id="rpt-grantcloseout" style="display:none"></div>'
+    +'<div id="rpt-grantstatus"   style="display:none"></div>'
 
     // ── Executive Summary panel ───────────────────────────────────────────
     +'<div id="rpt-executive"    style="display:none"></div>';
@@ -1617,7 +1655,8 @@ function switchRpt(type){
   ['rpt-pl','rpt-grants','rpt-budget','rpt-category','rpt-1099','rpt-budgetmulti',
    'rpt-budgetexport','rpt-budgettwoyr','rpt-plcompare','rpt-functional','rpt-expdetail','rpt-incdetail','rpt-vendor','rpt-donors',
    'rpt-projpl','rpt-cashflow','rpt-bsheet','rpt-executive','rpt-fundpl','rpt-budgetbyfund',
-   'rpt-mileage','rpt-assets','rpt-esttax','rpt-loans','rpt-consolidated'
+   'rpt-mileage','rpt-assets','rpt-esttax','rpt-loans','rpt-consolidated',
+   'rpt-grantcloseout','rpt-grantstatus'
   ].forEach(function(id){var el=g(id);if(el)el.style.display='none';});
 
   // Always show the persistent header
@@ -1655,7 +1694,8 @@ function switchRpt(type){
     'mileage':renderMileageRpt,
     'assets':renderAssetsRpt,
     'esttax':renderEstTaxRpt,
-    'loans':renderLoansRpt,'consolidated':renderConsolidatedPL
+    'loans':renderLoansRpt,'consolidated':renderConsolidatedPL,
+    'grantcloseout':renderGrantCloseoutRpt,'grantstatus':renderGrantStatusRpt
   };
   if(fns[type])fns[type]();
 }
@@ -3913,7 +3953,7 @@ function buildDynMods(type){
   if(type==='np'){
     h+='<div class="overlay" id="m-fund"><div class="modal"><button class="cx" onclick="closeM(\'m-fund\')">&#215;</button><div class="m-title">Add / edit fund</div><div class="fl"><label>Fund name *</label><input type="text" id="fund-name" placeholder="e.g. General Operating, Smith Grant Restricted"></div><div class="fl"><label>Fund type</label><select id="fund-type"><option value="Unrestricted">Unrestricted</option><option value="Restricted">Temporarily Restricted</option><option value="Permanently Restricted">Permanently Restricted</option><option value="Capital">Capital / Building</option><option value="Endowment">Endowment</option></select></div><div class="fl"><label>Description (optional)</label><input type="text" id="fund-desc" placeholder="e.g. Day-to-day operations with no donor restrictions"></div><button class="sv-btn" onclick="saveFund()">Save fund</button></div></div>';
     h+='<div class="overlay" id="m-release"><div class="modal"><button class="cx" onclick="closeM(\'m-release\')">&#215;</button><div class="m-title">Record restriction release</div><div class="fl"><label>Restricted fund *</label><div class="sw" style="width:100%"><select id="rel-fund" style="width:100%"></select></div></div><div class="fr"><div><label>Amount released ($)</label><input type="number" id="rel-amt" placeholder="0" oninput="fmtAmt(this)"></div><div><label>Date (MM/DD/YYYY)</label><input type="text" id="rel-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fl"><label>Note / purpose</label><input type="text" id="rel-note" placeholder="e.g. Program activities completed per grant terms"></div><button class="sv-btn" onclick="saveRelease()">Save release</button></div></div>';
-    h+='<div class="overlay" id="m-grant"><div class="modal"><button class="cx" onclick="closeM(\'m-grant\')">&#215;</button><div class="m-title">Grant details</div><div class="fl"><label>Grant name *</label><input type="text" id="g-n" placeholder="Smith Family Foundation Grant"></div><div class="fr"><div><label>Funder</label><input type="text" id="g-f"></div><div><label>Status</label><select id="g-st"><option>Prospecting</option><option>Applied</option><option>Awarded</option><option>In Progress</option><option>Reporting</option><option>Closed</option><option>Denied</option></select></div></div><div class="fr"><div><label>Amount awarded ($)</label><input type="number" id="g-a" oninput="fmtAmt(this)"></div><div><label>Application deadline</label><input type="text" id="g-appdl" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fr"><div><label>Reporting deadline</label><input type="text" id="g-dl" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Grant portal URL</label><input type="text" id="g-portal" placeholder="https://apply.foundation.org"></div></div><div class="fl"><label>Match requirement</label><input type="text" id="g-m" placeholder="e.g. 1:1 match"></div><div class="fl"><label>Match amount required ($)</label><input type="number" id="g-mr" placeholder="0" oninput="fmtAmt(this)"></div><div class="fl"><label>Restrictions</label><textarea id="g-r" placeholder="What can and cannot this grant be spent on?"></textarea></div><button class="sv-btn" onclick="saveGrant()">Save grant</button></div></div>';
+    h+='<div class="overlay" id="m-grant"><div class="modal"><button class="cx" onclick="closeM(\'m-grant\')">&#215;</button><div class="m-title">Grant details</div><div class="fl"><label>Grant name *</label><input type="text" id="g-n" placeholder="Smith Family Foundation Grant"></div><div class="fr"><div><label>Funder</label><input type="text" id="g-f"></div><div><label>Status</label><select id="g-st"><option>Prospecting</option><option>Applied</option><option>Awarded</option><option>In Progress</option><option>Reporting</option><option>Closed</option><option>Denied</option></select></div></div><div class="fr"><div><label>Amount awarded ($)</label><input type="number" id="g-a" oninput="fmtAmt(this)"></div><div><label>Application deadline</label><input type="text" id="g-appdl" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fr"><div><label>Reporting deadline</label><input type="text" id="g-dl" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Grant portal URL</label><input type="text" id="g-portal" placeholder="https://apply.foundation.org"></div></div><div class="fl"><label>Match requirement</label><input type="text" id="g-m" placeholder="e.g. 1:1 match"></div><div class="fl"><label>Match amount required ($)</label><input type="number" id="g-mr" placeholder="0" oninput="fmtAmt(this)"></div><div class="fl"><label>Restrictions</label><textarea id="g-r" placeholder="What can and cannot this grant be spent on?"></textarea></div><div class=\"fl\"><label>Close-out requirements <span style=\"font-size:10px;color:var(--muted);font-weight:400\">— must all be checked to mark grant reconciled</span></label><div id=\"g-req-list\" style=\"margin-bottom:6px\"></div><div style=\"display:flex;gap:6px\"><input type=\"text\" id=\"g-req-new\" placeholder=\"e.g. Submit final report\" style=\"flex:1;font-size:12px\" onkeydown=\"if(event.key===\\'Enter\\'){event.preventDefault();_addGrantReq();}\"><button class=\"add-btn\" style=\"font-size:11px;padding:4px 10px;flex-shrink:0\" onclick=\"_addGrantReq()\">+ Add</button></div></div><button class=\"sv-btn\" onclick=\"saveGrant()\">Save grant</button></div></div>';
     h+=billModal;h+=ccModal;
     h+='<div class="overlay" id="m-inc"><div class="modal"><button class="cx" onclick="closeM(\'m-inc\')">&#215;</button><div class="m-title">Add income</div>'+ia+'<div class="fl"><label>Source name (optional)</label><input type="text" id="i-n" placeholder="e.g. Spring Gala"></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="i-c" style="width:100%"></select></div></div><div><label>Status</label><select id="i-s"><option>Prospecting</option><option>Applied</option><option>Awarded</option><option>Received</option></select></div></div><div class="fr"><div><label>Projected ($)</label><input type="number" id="i-p" oninput="fmtAmt(this)"></div><div><label>Received ($)</label><input type="number" id="i-r" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Date (MM/DD/YYYY)</label><input type="text" id="i-dt" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Fund</label><div class="sw" style="width:100%"><select id="i-fund" style="width:100%"><option value="">— None —</option></select></div></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Deposit to account</label><div class=\"sw\" style=\"width:100%\"><select id=\"i-bank\" style=\"width:100%\"></select></div></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"i-proj\" style=\"width:100%\"></select></div></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Grant (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"i-gid\" style=\"width:100%\"></select></div></div>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveInc()">Save</button><button class="add-btn" style="flex:1" onclick="saveIncAndNew()">Save &amp; new</button><button class="add-btn" id="del-inc-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;income&quot;)">🗑 Delete</button></div></div></div>';
     h+='<div class="overlay" id="m-exp"><div class="modal"><button class="cx" onclick="closeM(\'m-exp\')">&#215;</button><div class="m-title">Add expense</div>'+ca+'<div class="fl"><label>Description</label><input type="text" id="e-d" placeholder="Program supplies"></div><div style="display:none"><select id="e-c"></select></div><div class="fr"><div><label>990 Part IX Line <span style="font-size:10px;color:var(--muted)">(optional)</span></label><div class="sw" style="width:100%"><select id="e-990line" style="width:100%" onchange="exp990LineChange(this)"><option value="">— Select line —</option><option value="L1">Line 1 — Grants to domestic orgs</option><option value="L2">Line 2 — Grants to domestic individuals</option><option value="L3">Line 3 — Grants to foreign orgs/individuals</option><option value="L5">Line 5 — Compensation of officers</option><option value="L6">Line 6 — Compensation not above</option><option value="L7">Line 7 — Other salaries &amp; wages</option><option value="L8">Line 8 — Pension plan contributions</option><option value="L9">Line 9 — Other employee benefits</option><option value="L10">Line 10 — Payroll taxes</option><option value="L11a">Line 11a — Management fees</option><option value="L11b">Line 11b — Legal fees</option><option value="L11c">Line 11c — Accounting fees</option><option value="L11d">Line 11d — Lobbying fees</option><option value="L11e">Line 11e — Professional fundraising</option><option value="L11g">Line 11g — Other fees for services</option><option value="L12">Line 12 — Advertising &amp; promotion</option><option value="L13">Line 13 — Office expenses</option><option value="L14">Line 14 — Information technology</option><option value="L15">Line 15 — Royalties</option><option value="L16a">Line 16a — Occupancy</option><option value="L17">Line 17 — Travel</option><option value="L19">Line 19 — Conferences &amp; meetings</option><option value="L20">Line 20 — Interest</option><option value="L22">Line 22 — Depreciation</option><option value="L23">Line 23 — Insurance</option><option value="L24">Line 24 — Other expenses</option><option value="custom">+ Add custom…</option></select></div></div><div><label>Amount ($)</label><input type="number" id="e-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Date (MM/DD/YYYY)</label><input type="text" id="e-dt" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Paid from account <span style=\\\"color:var(--red)\\\">*</span></label><div class=\"sw\" style=\"width:100%\"><select id=\"e-bank\" style=\"width:100%\"></select></div></div>'+'<div class=\"fr\"><div><label>Fund</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-f\" style=\"width:100%\"><option value=\"\">— None —</option></select></div></div><div><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-proj\" style=\"width:100%\"></select></div></div></div>'+'<div class=\"fr\" style=\"align-items:flex-end;margin-bottom:.5rem\"><div style=\"flex:2\"><label>Grant allocation (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-gid\" style=\"width:100%\"><option value=\"\">-- No grant --</option></select></div></div><div style=\"flex:1\"><label style=\"font-size:11px\">% toward grant</label><input type=\"number\" id=\"e-gpct\" min=\"0\" max=\"100\" placeholder=\"100\" style=\"width:100%\"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Check / Ref # (optional)</label><input type=\"text\" id=\"e-ref\" placeholder=\"e.g. 1472 or ACH\"></div>'+'<div class=\"fr\"><div class=\"fl\" style=\"margin-bottom:0\"><label>1099 contractor?</label><select id=\"e-1099\"><option value=\"\">No</option><option value=\"yes\">Yes</option></select></div><div class=\"fl\" style=\"margin-bottom:0\"><label>Vendor name</label><input type=\"text\" id=\"e-vendor\" placeholder=\"e.g. John Smith Consulting\\"></div><div class=\\"fl\\" style=\\"margin-bottom:0\"><label>EIN / TIN <span style=\\"font-size:10px;color:var(--muted)\">for 1099</span></label><input type=\\"text\" id=\\"e-tin\" placeholder="12-3456789"></div></div<div class=\\\"fr\\\"><div class=\\\"fl\\\" style=\\\"margin-bottom:0\\\"><label>Functional <span style=\\\"font-size:10px;color:var(--muted)\\\">(990)</span></label><select id=\\\"e-func\\\"><option value=\\\"\\\">&#x2014; Select &#x2014;</option><option value=\\\"program\\\">Program services</option><option value=\\\"management\\\">Mgmt &amp; general</option><option value=\\\"fundraising\\\">Fundraising</option></select></div><div class=\\\"fl\\\" style=\\\"margin-bottom:0\\\"><label>Receipt URL (optional)</label><input type=\\\"url\\\" id=\\\"e-url\\\" placeholder=\\\"https://drive.google.com/...\\\"></div></div>>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveExp()">Save</button><button class="add-btn" style="flex:1" onclick="saveExpAndNew()">Save &amp; new</button><button class="add-btn" id="del-exp-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;expenses&quot;)">🗑 Delete</button></div></div></div>';
@@ -3955,8 +3995,11 @@ function saveGrant(){
     portalUrl:g('g-portal')&&g('g-portal').value.trim()||'',
     match:g('g-m').value,
     matchRequired:Number(g('g-mr')&&g('g-mr').value||0)||0,
-    restrict:g('g-r').value
+    restrict:g('g-r').value,
+    requirements:window._gReqTemp||((_rGEI>=0&&c.grants[_rGEI].requirements)||[]),
+    reconciled:_rGEI>=0?c.grants[_rGEI].reconciled:false
   };
+  window._gReqTemp=null;
   // Auto-post income when status becomes Awarded/In Progress with an amount
   var awardedStatuses=['Awarded','In Progress'];
   var wasAwarded=prevGrant&&awardedStatuses.indexOf(prevGrant.status)>=0;
