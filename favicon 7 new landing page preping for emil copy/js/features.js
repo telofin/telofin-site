@@ -403,7 +403,7 @@ function renderGL(c){
 
   // Only show COA accounts in the filter dropdown (not virtual CAT: codes)
   var selOpts='<option value="">All accounts</option>'+accts.map(function(a){return'<option value="'+a.code+'"'+(GL_ACCT===a.code?' selected':'')+'>'+a.code+' '+a.name+'</option>';}).join('');
-  var totalTxns=0,grandTotal=0;
+  var totalTxns=0,grandTotal=0,totalDebits=0,totalCredits=0;
 
   var sections=acctCodes.map(function(code){
     var isCat=code.indexOf('CAT:')=== 0;
@@ -419,6 +419,7 @@ function renderGL(c){
       +'<td style="font-size:11px;color:var(--muted)">'+fmt(running)+'</td></tr>';
     }).join('');
     totalTxns+=items.length;grandTotal+=running;
+    items.forEach(function(t){var isInc=t.panel==='Income'||t.panel==='Revenue';if(isInc)totalCredits+=Math.abs(t.amt);else totalDebits+=Math.abs(t.amt);});
     return'<div class="card" style="margin-bottom:1rem">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">'
     +'<div>'+(acct.code?'<span style="font-size:12px;font-weight:500;color:var(--muted)">'+acct.code+'</span> ':'')+' <span style="font-size:14px;font-weight:500">'+acct.name+'</span>'+(acct.type?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">'+acct.type+'</span>':'')+(isCat?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">Untagged</span>':'')+'</div>'
@@ -431,7 +432,7 @@ function renderGL(c){
   +'<span style="font-size:12px;color:var(--muted)">Account:</span>'
   +'<div class="sw"><select onchange="GL_ACCT=this.value||null;renderGL(gc())">'+selOpts+'</select></div>'
   +(GL_ACCT?'<button class="add-btn" onclick="GL_ACCT=null;renderGL(gc())">✕ All accounts</button>':'')+'</div>'
-  +'<div class="metrics"><div class="metric"><div class="m-lbl">Accounts with activity</div><div class="m-val vb">'+acctCodes.length+'</div></div><div class="metric"><div class="m-lbl">Total transactions</div><div class="m-val">'+totalTxns+'</div></div><div class="metric"><div class="m-lbl">Net balance</div><div class="m-val '+(grandTotal>=0?'vg':'vr')+'">'+fmt(grandTotal)+'</div></div></div>'
+  +'<div class="metrics"><div class="metric"><div class="m-lbl">Accounts with activity</div><div class="m-val vb">'+acctCodes.length+'</div></div><div class="metric"><div class="m-lbl">Total transactions</div><div class="m-val">'+totalTxns+'</div></div><div class="metric"><div class="m-lbl">Total debits</div><div class="m-val vg">'+fmt(totalDebits)+'</div></div><div class="metric"><div class="m-lbl">Total credits</div><div class="m-val vr">'+fmt(totalCredits)+'</div></div></div>'
   +sections;
 }
 
