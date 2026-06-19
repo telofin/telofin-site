@@ -1393,8 +1393,10 @@ function renderReports(){
   var _basis=RPT_BASIS||(c.basisType||'cash');
   var iT=0,eT=0,iC={},eC={};
   if(c.type==='np'){
+    // Grant income is recognized through c.income[] entries (linked via grantId) when disbursements
+    // are received — NOT from gr.awarded, which is a commitment/pledge, not recognized revenue.
+    // A prior version double-counted by also adding the full awarded amount here; removed.
     (c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal&&inFY(r.date||r.recv&&r.date);}).forEach(function(r){var a=_basis==='accrual'?Number(r.proj||0):Number(r.recv||0);iT+=a;var k=acctLabel(r.acctCode,r.cat);if(!iC[k])iC[k]=0;iC[k]+=a;});
-    (c.grants||[]).filter(function(gr){return!RPT_FY||RPT_FY==='current'||inFY(gr.deadline);}).forEach(function(gr){iT+=Number(gr.awarded||0);var k='4030 Grant revenue';if(!iC[k])iC[k]=0;iC[k]+=Number(gr.awarded||0);});
     (c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal&&inFY(r.date);}).forEach(function(r){eT+=Number(r.amt||0);var k=acctLabel(r.acctCode,r.cat);if(!eC[k])eC[k]=0;eC[k]+=Number(r.amt||0);});
   }else if(c.type==='sb'){
     (c.revenue||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal&&inFY(r.date);}).forEach(function(r){var a=_basis==='accrual'?Number(r.proj||0):Number(r.act||0);iT+=a;var k=acctLabel(r.acctCode,r.cat);if(!iC[k])iC[k]=0;iC[k]+=a;});
@@ -1569,6 +1571,9 @@ function renderReports(){
     // ── P&L panel ────────────────────────────────────────────────────────
     +'<div id="rpt-pl" style="display:none">'
       +_rptDisclaimer('Figures reflect the selected fiscal year and basis (cash/accrual).')
+      +((iT===0&&eT===0&&RPT_FY==='current'&&(((c.income||[]).length)||((c.expenses||[]).length)))
+        ?'<div style="margin-bottom:1rem;padding:.6rem .875rem;background:var(--amber-bg,#fffbea);border:1px solid var(--amber);border-radius:8px;font-size:12px;color:var(--amber)">No activity in the current fiscal year ('+_fyRange.start.getFullYear()+'–'+_fyRange.end.getFullYear()+'), but this client has transactions on file. Use the <strong>Year</strong> selector above to view a prior fiscal year.</div>'
+        :'')
       +'<div class="rpt-sec"><div class="rpt-ttl">'+il(c.type)+'</div>'
         +(iR||'<div style="color:var(--muted);font-size:12px;padding:.5rem 0">No data yet.</div>')
         +'<div class="rpt-total"><span>Total '+il(c.type).toLowerCase()+'</span><span class="vg">'+fmt(iT)+'</span></div>'
@@ -2665,7 +2670,12 @@ function renderBSheetRpt(){
       +lbsRptSec('Liabilities',lbs.liabilities,lbs.totalLiab,'vr')
       +lbsRptSec('Equity',lbs.equity,lbs.totalEquity,'vb')
       +'<div class="rpt-sec"><div class="rpt-ttl">Current period net income</div>'
-      +lbs.incomeAccts.concat(lbs.expenseAccts).map(function(r){return rptRow(r.code+' '+r.name,r.balance,r.balance<0?'vr':'vg');}).join('')
+      +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:.5rem 0 .25rem">Income</div>'
+      +(lbs.incomeAccts.length?lbs.incomeAccts.map(function(r){return rptRow(r.code+' '+r.name,r.balance,'vg');}).join(''):'<div style="color:var(--muted);font-size:12px;padding:.25rem 0">No income accounts.</div>')
+      +rptTotal('Total income',lbs.totalIncome,'vg')
+      +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:1rem 0 .25rem">Expenses</div>'
+      +(lbs.expenseAccts.length?lbs.expenseAccts.map(function(r){return rptRow(r.code+' '+r.name,r.balance,'vr');}).join(''):'<div style="color:var(--muted);font-size:12px;padding:.25rem 0">No expense accounts.</div>')
+      +rptTotal('Total expenses',lbs.totalExpense,'vr')
       +rptTotal('Net income (not yet closed to equity)',lbs.netIncome,lbs.netIncome>=0?'vg':'vr')
       +'</div>';
   }
@@ -3127,8 +3137,7 @@ function renderFundPLRpt(){
     var fname=f.name;
     var iT=allInc.filter(function(r){return(r.fund||'')=== fname;}).reduce(function(s,r){return s+basisInc(c,r);},0);
     var eT=allExp.filter(function(e){return(e.fund||'')=== fname;}).reduce(function(s,e){return s+Number(e.amt||0);},0);
-    // Also include grant income for unassigned
-    if(fname===''){var grantT=(c.grants||[]).reduce(function(s,gr){return s+Number(gr.awarded||0);},0);iT+=grantT;}
+    // Grant income is recognized through c.income[] entries (linked via grantId), already counted above
     fundData[fname]={f:f,iT:iT,eT:eT,net:iT-eT};
   });
   var html='<div class="rpt-sec"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div class="rpt-ttl" style="margin-bottom:0">Fund P&L</div></div>';
@@ -3362,7 +3371,7 @@ function renderPLCompareRpt(){
     var addExp=function(k,v){eC[k]=(eC[k]||0)+v;};
     if(c.type==='np'){
       (c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}).forEach(function(r){var d=r.date?new Date(r.date):null;if(fyFilter&&d&&(d<fyFilter.start||d>fyFilter.end))return;addInc(r.cat||'Other',basisInc(c,r));});
-      (c.grants||[]).forEach(function(gr){addInc('Grant revenue',Number(gr.awarded||0));});
+      // Grant income comes through c.income[] entries above — gr.awarded is a commitment, not recognized revenue
       (c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}).forEach(function(r){var d=r.date?new Date(r.date):null;if(fyFilter&&d&&(d<fyFilter.start||d>fyFilter.end))return;addExp(r.cat||'Other',Number(r.amt||0));});
     }else if(c.type==='sb'){
       (c.revenue||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}).forEach(function(r){var d=r.date?new Date(r.date):null;if(fyFilter&&d&&(d<fyFilter.start||d>fyFilter.end))return;addInc(r.cat||'Other',basisInc(c,r));});
@@ -4712,7 +4721,7 @@ function renderConsolidatedPL(){
     var iT=0,eT=0,iC={},eC={};
     if(c.type==='np'){
       (c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal&&inFY(r.date);}).forEach(function(r){var a=_basis==='accrual'?Number(r.proj||0):Number(r.recv||0);iT+=a;iC[r.cat||'Other']=(iC[r.cat||'Other']||0)+a;});
-      (c.grants||[]).forEach(function(gr){iT+=Number(gr.awarded||0);iC['Grant revenue']=(iC['Grant revenue']||0)+Number(gr.awarded||0);});
+      // Grant income comes through c.income[] entries above — gr.awarded is a commitment, not recognized revenue
       (c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal&&inFY(r.date);}).forEach(function(r){eT+=Number(r.amt||0);eC[r.cat||'Other']=(eC[r.cat||'Other']||0)+Number(r.amt||0);});
     }else if(c.type==='sb'){
       (c.revenue||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal&&inFY(r.date);}).forEach(function(r){var a=_basis==='accrual'?Number(r.proj||0):Number(r.act||0);iT+=a;iC[r.cat||'Other']=(iC[r.cat||'Other']||0)+a;});
