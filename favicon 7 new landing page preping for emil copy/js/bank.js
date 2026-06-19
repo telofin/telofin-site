@@ -446,6 +446,15 @@ function bankSaveNewParty(txnId) {
   var modal = document.getElementById('bank-party-modal');
   if (modal) modal.parentNode.removeChild(modal);
   renderBank(gc());
+  // Refresh the Donors tab if a donor was created/updated, and the Grants tab if a grantor was created
+  if (type === 'donor' && typeof renderDonors === 'function') {
+    var _pDonors = g('p-donors');
+    if (_pDonors && _pDonors.classList.contains('active')) renderDonors(gc());
+  }
+  if (type === 'grantor' && typeof renderGrants === 'function') {
+    var _pGrants = g('p-grants');
+    if (_pGrants && _pGrants.classList.contains('active')) renderGrants(gc());
+  }
   _bankToast(name + ' added as ' + type + '.');
 }
 
