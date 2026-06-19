@@ -431,6 +431,10 @@ function markDirty(){
 
 function renderAll(force){
   var c=gc();if(!c)return;
+  // Always keep ledger current — migrateToLedger is idempotent via dedup
+  if(typeof migrateToLedger==='function'){
+    try{migrateToLedger(c);}catch(e){console.warn('[clarity] migrateToLedger error:',e);}
+  }
   function safe(fn,name){
     // Skip if dirty tracking is active and this panel isn't dirty
     if(!force&&_dirtyPanels!==null&&!_dirtyPanels.has(name))return;

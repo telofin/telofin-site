@@ -192,7 +192,31 @@ function renderBank(c) {
     + '</div>'
 
     // Templates section
-    + '<div class="card">'
+    // ── Posted transactions ──────────────────────────────────────
+    + (approved.length ? '<div class="card">'
+      + '<details><summary style="cursor:pointer;font-size:14px;font-weight:600;list-style:none;display:flex;align-items:center;justify-content:space-between;padding:.1rem 0">'
+      + '<span>&#10003; Posted transactions (' + approved.length + ')</span>'
+      + '<span style="font-size:11px;color:var(--muted);font-weight:400">click to expand</span></summary>'
+      + '<div style="font-size:11px;color:var(--muted);margin:.5rem 0">Click a description or amount to open and edit that transaction.</div>'
+      + '<table style="margin-top:.5rem"><thead><tr>'
+      + '<th style="width:11%">Date</th><th style="width:32%">Description</th>'
+      + '<th style="width:13%">Type</th><th style="width:16%">Category</th>'
+      + '<th style="width:14%;text-align:right">Amount</th><th style="width:14%">Account</th>'
+      + '</tr></thead><tbody>'
+      + approved.slice().reverse().map(function(t){
+          return '<tr style="opacity:.85">'
+            + '<td style="font-size:11px;color:var(--muted)">' + escHtml(t.date||'—') + '</td>'
+            + '<td style="font-size:12px;max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--np)" onclick="bankGoToPostedItem(\'' + t.id + '\')" title="Open this transaction">' + escHtml(t.description||'—') + '</td>'
+            + '<td><span class="badge ' + (t.type==='credit'?'b-green':'b-amber') + '">' + (t.type==='credit'?'Income':'Expense') + '</span></td>'
+            + '<td style="font-size:11px;color:var(--muted)">' + escHtml(t.category||'—') + '</td>'
+            + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap;cursor:pointer" class="' + (t.type==='credit'?'vg':'vr') + '" onclick="bankGoToPostedItem(\'' + t.id + '\')" title="Open this transaction">' + (t.type==='credit'?'+':'−') + fmt(t.amount) + '</td>'
+            + '<td style="font-size:11px;color:var(--muted)">' + escHtml(t.acctCode||'—') + '</td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody></table></details></div>' : '')
+
+    // Templates section
+    + '<div class="card" style="margin-top:1rem">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">'
     + '<div style="font-size:14px;font-weight:600">Bank Layouts</div>'
     + '</div>'
@@ -838,6 +862,35 @@ async function bankHandlePDF(file) {
 }
 
 // ── RUN A KNOWN TEMPLATE AGAINST A PDF ───────────────────────
+function bankGoToPostedItem(bankTxnId) {
+  var c = gc(); if (!c) return;
+  var type = null, idx = -1;
+
+  idx = (c.income||[]).findIndex(function(r){ return r.bankTxnId === bankTxnId; });
+  if (idx >= 0) type = 'income';
+
+  if (type === null) {
+    idx = (c.expenses||[]).findIndex(function(e){ return e.bankTxnId === bankTxnId; });
+    if (idx >= 0) type = 'expenses';
+  }
+  if (type === null) {
+    idx = (c.revenue||[]).findIndex(function(r){ return r.bankTxnId === bankTxnId; });
+    if (idx >= 0) type = 'revenue';
+  }
+
+  if (type === null || idx < 0) {
+    _bankToast('Could not find that transaction — it may have been deleted.');
+    return;
+  }
+
+  var panelMap = { income: 'funding', expenses: c.type==='np' ? 'npexp' : (c.type==='sb' ? 'sbexp' : 'peexp'), revenue: 'revenue' };
+  var panelKey = panelMap[type] || type;
+  var btn = document.querySelector('[data-panel="' + panelKey + '"]');
+  if (btn) switchTab({ target: btn }, panelKey);
+
+  setTimeout(function(){ editItem(type, idx); }, 80);
+}
+
 function _bankExtractBalances(lines) {
   var opening = null, closing = null;
   lines.forEach(function(line) {

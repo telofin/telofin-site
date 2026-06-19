@@ -484,6 +484,29 @@ function _pdfParseBank(lines) {
       amt = parseAmt(amtMatches[0].str);
       type = (amt !== null && amt < 0) ? 'debit' : 'credit';
       if (amt !== null) amt = Math.abs(amt);
+    } else if (amtMatches.length >= 3) {
+      // Three-column layout: deposits | withdrawals | balance (or similar)
+      // Skip the last column (running balance) — use first two only
+      var a1 = parseAmt(amtMatches[0].str);
+      var a2 = parseAmt(amtMatches[1].str);
+      var a1ok = a1 !== null && Math.abs(a1) > 0;
+      var a2ok = a2 !== null && Math.abs(a2) > 0;
+      if (a1ok && !a2ok) {
+        // Only deposits column has a value — it's a credit (money in)
+        amt = Math.abs(a1);
+        type = 'credit';
+      } else if (!a1ok && a2ok) {
+        // Only withdrawals column has a value — it's a debit (money out)
+        amt = Math.abs(a2);
+        type = 'debit';
+      } else if (a1ok && a2ok) {
+        // Both have values — use position: left = deposits, right = withdrawals
+        if (amtMatches[0].idx < amtMatches[1].idx) {
+          amt = Math.abs(a1); type = 'credit';
+        } else {
+          amt = Math.abs(a2); type = 'debit';
+        }
+      }
     } else if (amtMatches.length === 2) {
       // Likely debit | credit columns — one will be empty/zero
       var a1 = parseAmt(amtMatches[0].str);
