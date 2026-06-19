@@ -199,9 +199,9 @@ function renderBank(c) {
       + '<span style="font-size:11px;color:var(--muted);font-weight:400">click to expand</span></summary>'
       + '<div style="font-size:11px;color:var(--muted);margin:.5rem 0">Click a description or amount to open and edit that transaction.</div>'
       + '<table style="margin-top:.5rem"><thead><tr>'
-      + '<th style="width:11%">Date</th><th style="width:32%">Description</th>'
-      + '<th style="width:13%">Type</th><th style="width:16%">Category</th>'
-      + '<th style="width:14%;text-align:right">Amount</th><th style="width:14%">Account</th>'
+      + '<th style="width:10%">Date</th><th style="width:27%">Description</th>'
+      + '<th style="width:12%">Type</th><th style="width:14%">Category</th>'
+      + '<th style="width:13%;text-align:right">Amount</th><th style="width:12%">Account</th><th style="width:12%"></th>'
       + '</tr></thead><tbody>'
       + approved.slice().reverse().map(function(t){
           return '<tr style="opacity:.85">'
@@ -211,6 +211,7 @@ function renderBank(c) {
             + '<td style="font-size:11px;color:var(--muted)">' + escHtml(t.category||'—') + '</td>'
             + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap;cursor:pointer" class="' + (t.type==='credit'?'vg':'vr') + '" onclick="bankGoToPostedItem(\'' + t.id + '\')" title="Open this transaction">' + (t.type==='credit'?'+':'−') + fmt(t.amount) + '</td>'
             + '<td style="font-size:11px;color:var(--muted)">' + escHtml(t.acctCode||'—') + '</td>'
+            + '<td><button class="add-btn" style="font-size:10px;padding:2px 8px;background:none;border:1px solid var(--border);color:var(--muted);white-space:nowrap" onclick="bankUndoPost(\'' + t.id + '\')" title="Undo this post and move it back to the pending queue">&#8634; Undo</button></td>'
             + '</tr>';
         }).join('')
       + '</tbody></table></details></div>' : '')
@@ -498,6 +499,48 @@ function _bankForcePushIncome(){
   }
   sv();renderBank(_p.c);
   window._bankPendingDupInc=null;
+}
+
+function bankUndoPost(bankTxnId) {
+  var c = gc(); if (!c) return;
+  var t = (c.bankTransactions || []).find(function(x){ return x.id === bankTxnId; });
+  if (!t) { _bankToast('Could not find that transaction.'); return; }
+  if (!t.approved) { _bankToast('This transaction was never posted.'); return; }
+
+  if (!confirm('Undo this post?\n\n"' + (t.description||'Transaction') + '" — ' + fmt(t.amount) + '\n\nThis will remove it from your books and put it back in the pending queue to review again.')) return;
+
+  // Remove the posted item from whichever array it landed in
+  var removed = false;
+  if (c.income) {
+    var iIdx = c.income.findIndex(function(r){ return r.bankTxnId === bankTxnId; });
+    if (iIdx >= 0) { c.income.splice(iIdx, 1); removed = true; }
+  }
+  if (!removed && c.expenses) {
+    var eIdx = c.expenses.findIndex(function(e){ return e.bankTxnId === bankTxnId; });
+    if (eIdx >= 0) { c.expenses.splice(eIdx, 1); removed = true; }
+  }
+  if (!removed && c.revenue) {
+    var rIdx = c.revenue.findIndex(function(r){ return r.bankTxnId === bankTxnId; });
+    if (rIdx >= 0) { c.revenue.splice(rIdx, 1); removed = true; }
+  }
+
+  // Clean up any donation record auto-created from this bank transaction
+  if (c.donors) {
+    c.donors.forEach(function(d){
+      if (!d.donations) return;
+      var dIdx = d.donations.findIndex(function(dn){ return dn.bankTxnId === bankTxnId; });
+      if (dIdx >= 0) d.donations.splice(dIdx, 1);
+    });
+  }
+
+  // Reset the bank transaction back to pending
+  t.approved = false;
+  t.postedAt = null;
+
+  sv();
+  renderAll();
+  renderBank(c);
+  _bankToast(removed ? 'Post undone — back in the pending queue.' : 'Post undone, but the original entry could not be located (it may have been edited or deleted separately).');
 }
 
 function bankApproveOne(id) {
