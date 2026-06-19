@@ -2094,6 +2094,13 @@ var _f990SchBPublic=false;
 function _schedBHtml(){
   var c=gc();if(!c)return'';
   var THRESHOLD=5000;
+  // Collect every bankTxnId already represented in a donor's donation records —
+  // these are the same dollar event as some c.income[] entry and must not be
+  // counted again under the income entry's raw description.
+  var donorLinkedBankTxnIds={};
+  (c.donors||[]).forEach(function(d){
+    (d.donations||[]).forEach(function(dn){ if(dn.bankTxnId) donorLinkedBankTxnIds[dn.bankTxnId]=true; });
+  });
   var donors=(c.donors||[]).map(function(d){
     var total=(d.donations||[]).reduce(function(s,dn){return s+Number(dn.amt||0);},0);
     return{name:d.name||'Unknown',email:d.email||'',total:total};
@@ -2101,10 +2108,12 @@ function _schedBHtml(){
   // Include income entries above threshold not already in donor records.
   // Exclude grant-linked income (grantId set) — grants are institutional funders,
   // not individual contributors, and their donations are already tracked via donor records.
+  // Exclude any income entry whose bankTxnId is already linked to a donor's donation record —
+  // same money, already counted above, regardless of whether the names match.
   var incDonors={};
   var donorNames=donors.map(function(d){return(d.name||'').toLowerCase().trim();});
   (c.income||[]).filter(function(r){
-    return !r.deleted&&!r.voided&&!r.grantId;
+    return !r.deleted&&!r.voided&&!r.grantId&&!(r.bankTxnId&&donorLinkedBankTxnIds[r.bankTxnId]);
   }).forEach(function(r){
     var k=r.name||'Unknown';
     if(!incDonors[k])incDonors[k]=0;
