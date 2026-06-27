@@ -15,6 +15,7 @@
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-T3HQNG77G9"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T3HQNG77G9');</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -93,7 +94,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .wn-lbl{font-size:10px;font-weight:500;color:var(--np);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
 .wn-list{font-size:12px;color:var(--text);line-height:1.9;list-style:none}
 .wn-list li{padding-left:1rem;position:relative}
-.wn-list li::before{content:'✓';position:absolute;left:0;color:var(--np);font-size:10px;top:2px}
+.wn-list li::before{content:'\f00c';font:var(--fa-font-solid);position:absolute;left:0;color:var(--np);font-size:10px;top:2px}
 .wn-note{font-size:11px;color:var(--muted);margin-top:.5rem;font-style:italic}
 .mode-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.5rem}
 .mode-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent;user-select:none}
@@ -309,7 +310,7 @@ tr:hover td{background:var(--bg)}
     </div>
     <input type="email" id="auth-email" placeholder="your@email.com" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;margin-bottom:.75rem;outline:none">
     <button id="auth-magic-btn" onclick="sendMagicLink()" style="width:100%;padding:12px;background:var(--np);color:#fff;border:none;border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer">Send magic link</button>
-    <div id="auth-ok" style="display:none;margin-top:1rem;padding:1rem;background:var(--np-bg);border-radius:8px;font-size:13px;color:var(--np)">✓ Check your email — a login link is on its way!</div>
+    <div id="auth-ok" style="display:none;margin-top:1rem;padding:1rem;background:var(--np-bg);border-radius:8px;font-size:13px;color:var(--np)"><i class="fas fa-check"></i> Check your email — a login link is on its way!</div>
     <div style="margin-top:1.25rem;font-size:11px;color:var(--muted);line-height:1.6">Your data is stored securely and never shared. No credit card required.</div>
   </div>
 </div>
@@ -332,9 +333,9 @@ tr:hover td{background:var(--bg)}
     <div class="sb-foot">
       <div style="font-weight:500;color:var(--text)">Clarity by Telofin™</div>
       <div id="sb-data-msg">Data is saved locally in your browser and, when signed in, securely synced to the cloud for access across devices.</div>
-      <button class="lnk" onclick="openInstall()">📱 Add to home screen</button>
+      <button class="lnk" onclick="openInstall()"><i class="fas fa-mobile-screen"></i> Add to home screen</button>
       <button class="lnk" onclick="openM('m-contact')">Contact us</button>
-      <button class="lnk green" onclick="openFB()">💬 What do you wish we had?</button>
+      <button class="lnk green" onclick="openFB()"><i class="fas fa-comment"></i> What do you wish we had?</button>
       <button class="lnk" onclick="clearSampleData()">Clear sample data</button>
       <div style="margin:.75rem 0;padding:.875rem;background:var(--text);border-radius:8px;cursor:pointer" onclick="openM('m-upgrade')">
         <div style="font-size:11px;font-weight:500;color:#fff">Clarity Teams coming soon</div>
@@ -342,7 +343,7 @@ tr:hover td{background:var(--bg)}
       </div>
       <div id="sb-sync-msg" style="display:none;font-size:12px;color:var(--np);margin-top:4px"></div>
       <button id="sb-signin-btn" class="lnk green" onclick="showAuthScreen()" style="margin-top:4px;font-size:12px">Sign in to sync devices</button>
-      <div style="margin-top:6px;font-size:10px;display:flex;align-items:center;justify-content:space-between">© 2026 Telofin™<button id="dark-toggle" onclick="toggleDark()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:13px;color:var(--muted);font-family:'DM Sans',sans-serif" title="Toggle dark mode">🌙</button></div>
+      <div style="margin-top:6px;font-size:10px;display:flex;align-items:center;justify-content:space-between">© 2026 Telofin™<button id="dark-toggle" onclick="toggleDark()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:13px;color:var(--muted);font-family:'DM Sans',sans-serif" title="Toggle dark mode"><i class="fas fa-moon"></i></button></div>
       <div class="disclaim" id="sb-disclaim">Data is saved locally in your browser and, when signed in, securely synced to the cloud for access across devices.</div>
       <div style="font-size:10px;color:var(--muted);margin-top:.5rem">
         <a href="/privacy.html" target="_blank" style="color:var(--muted);text-decoration:underline">Privacy Policy</a> · 
@@ -351,7 +352,7 @@ tr:hover td{background:var(--bg)}
     </div>
   </div>
   <div class="main">
-    <div class="mob-tip">💡 Tip: rotate your phone to landscape for the best experience with tables.</div>
+    <div class="mob-tip"><i class="fas fa-lightbulb"></i> Tip: rotate your phone to landscape for the best experience with tables.</div>
     <div class="mob-bar">
       <a href="https://telofin.com" class="mob-btn">← Site</a>
       <select class="mob-sel" id="mob-cl-sel" onchange="openClient(this.value)"></select>
@@ -369,8 +370,8 @@ tr:hover td{background:var(--bg)}
         <div class="wn-box">
           <div class="wn-lbl">What's inside</div>
           <ul class="wn-list">
-            <li>⭐ <strong>NEW</strong> — 🏦 Bank statement import — drop in a PDF, Clarity learns the layout</li>
-            <li>⭐ <strong>NEW</strong> — 💳 Credit card tracking — import statements, review charges, post payments</li>
+            <li><i class="fas fa-star"></i> <strong>NEW</strong> — <i class="fas fa-building-columns"></i> Bank statement import — drop in a PDF, Clarity learns the layout</li>
+            <li><i class="fas fa-star"></i> <strong>NEW</strong> — <i class="fas fa-credit-card"></i> Credit card tracking — import statements, review charges, post payments</li>
             <li>Reconciliation — match your statement, close the month</li>
             <li>Grant tracking, fund allocation, donor management</li>
             <li>Budget vs actual — by category, by fund, by grant</li>
@@ -446,9 +447,9 @@ tr:hover td{background:var(--bg)}
           </div>
           <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
             <button class="add-btn" onclick="refreshData()">↻ Refresh</button>
-            <button class="add-btn" onclick="manualSync()" style="background:var(--np);color:#fff;border-color:var(--np)">☁ Save to cloud</button>
+            <button class="add-btn" onclick="manualSync()" style="background:var(--np);color:#fff;border-color:var(--np)"><i class="fas fa-cloud"></i> Save to cloud</button>
             <button id="mob-pin-btn" class="add-btn" onclick="pinCurrentClient()" style="display:none"></button>
-            <button id="wc-bookmark-btn" class="add-btn" onclick="if(typeof wcBookmark==='function')wcBookmark()" title="Bookmark current position">🔖</button>
+            <button id="wc-bookmark-btn" class="add-btn" onclick="if(typeof wcBookmark==='function')wcBookmark()" title="Bookmark current position"><i class="fas fa-bookmark"></i></button>
             <button class="add-btn" onclick="showAddClient()">+ New client</button>
             <button class="add-btn" onclick="(function(){var c=gc();if(c){var k='fye-checked-'+c.id+'-'+new Date().getFullYear();try{localStorage.removeItem(k);}catch(e){}checkFYEExpiry(c);}})()" title="Review unreconciled transactions at fiscal year end">FYE review</button>
             <button class="add-btn" onclick="clearSampleData()" style="color:var(--red);border-color:var(--red-bg)">Clear data</button>
@@ -472,7 +473,7 @@ tr:hover td{background:var(--bg)}
             <input id="global-search-inp" type="text" placeholder="Search across all tabs…" autocomplete="off"
               style="width:100%;padding:7px 36px 7px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:DM Sans,sans-serif;outline:none;"
               oninput="globalSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';globalSearch('');this.blur();}">
-            <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none">⌕</span>
+            <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none"><i class="fas fa-magnifying-glass"></i></span>
           </div>
           <div id="global-search-results" style="display:none;position:absolute;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:360px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12);width:calc(100% - 2rem);left:1rem;"></div>
         </div>
@@ -507,7 +508,7 @@ tr:hover td{background:var(--bg)}
     <div class="fl"><label>Your name (optional)</label><input type="text" id="fb-n" placeholder="Jane Smith"></div>
     <div class="fl"><label>Your email (optional)</label><input type="text" id="fb-e" placeholder="jane@example.com"></div>
     <div class="fl"><label>Your feedback</label><textarea id="fb-m" placeholder="I wish Clarity by Telofin™ had..." style="min-height:100px"></textarea></div>
-    <div id="fb-ok" style="font-size:12px;color:var(--green);margin-top:8px;display:none">Thank you! We really appreciate it. 💚</div>
+    <div id="fb-ok" style="font-size:12px;color:var(--green);margin-top:8px;display:none">Thank you! We really appreciate it. <i class="fas fa-heart"></i></div>
     <button class="sv-btn" onclick="sendFB()">Send feedback</button>
   </div>
 </div>
@@ -618,7 +619,7 @@ tr:hover td{background:var(--bg)}
         <option value="pe">Personal</option>
       </select>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem">⚠ Changing client type will switch the available tabs and features.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem"><i class="fas fa-triangle-exclamation"></i> Changing client type will switch the available tabs and features.</div>
     <div class="fl" style="margin-bottom:.75rem"><label>EIN (Tax ID) <span style="font-size:11px;color:var(--muted)">— required on donor acknowledgment letters for gifts ≥ $250</span></label><input type="text" id="rn-ein" placeholder="e.g. 12-3456789" style="max-width:200px"></div>
     <div id="rn-nptype-row" class="fl" style="margin-bottom:.75rem">
       <label>501(c) type</label>
@@ -634,7 +635,7 @@ tr:hover td{background:var(--bg)}
       </select></div>
     </div>
     <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--soft);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
-      <button style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);font-family:'DM Sans',sans-serif;text-decoration:underline;padding:0" onclick="closeM('m-rename');setTimeout(function(){if(typeof showOnboarding==='function')showOnboarding(CID);},200)" title="Import historical data from your previous accounting software">📦 Import historical data</button>
+      <button style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);font-family:'DM Sans',sans-serif;text-decoration:underline;padding:0" onclick="closeM('m-rename');setTimeout(function(){if(typeof showOnboarding==='function')showOnboarding(CID);},200)" title="Import historical data from your previous accounting software"><i class="fas fa-box"></i> Import historical data</button>
       <button class="sv-btn" onclick="saveName()">Save</button>
     </div>
   </div>
@@ -659,11 +660,11 @@ tr:hover td{background:var(--bg)}
     </div>
     <div id="imp-bank-row" style="display:none;margin-bottom:10px"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Post to bank account</label><div class="sw"><select id="imp-bank" style="width:100%"></select></div></div>
     <div id="imp-cc-row" style="display:none;margin-bottom:10px"><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Credit card *</label><div class="sw"><select id="imp-cc-id" style="width:100%"></select></div><div style="font-size:11px;color:var(--muted);margin-top:4px">Charges post as expenses by category → P&amp;L and GL automatically</div></div>
-    <div style="margin-bottom:10px"><a id="tpl-link" href="/expenses-template.xlsx" download style="font-size:12px;color:var(--np);text-decoration:underline;cursor:pointer">⬇ Download Expenses template</a></div>
+    <div style="margin-bottom:10px"><a id="tpl-link" href="/expenses-template.xlsx" download style="font-size:12px;color:var(--np);text-decoration:underline;cursor:pointer"><i class="fas fa-arrow-down"></i> Download Expenses template</a></div>
     <div id="bank-import-note" style="display:none;font-size:12px;color:var(--muted);margin-bottom:8px;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.6">Upload your bank CSV. Columns needed: <strong>date, description, amount</strong> (negative = debit). Transactions are auto-matched to your COA accounts. Loan payments auto-split interest vs principal.</div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
-      <button id="imp-tab-csv" onclick="impSwitchFormat('csv')" style="padding:5px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500">📊 Excel / CSV</button>
-      <button id="imp-tab-pdf" onclick="impSwitchFormat('pdf')" style="padding:5px 14px;border:1px solid var(--border);border-radius:7px;background:none;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text)">📄 PDF Statement</button>
+      <button id="imp-tab-csv" onclick="impSwitchFormat('csv')" style="padding:5px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500"><i class="fas fa-chart-column"></i> Excel / CSV</button>
+      <button id="imp-tab-pdf" onclick="impSwitchFormat('pdf')" style="padding:5px 14px;border:1px solid var(--border);border-radius:7px;background:none;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text)"><i class="fas fa-file"></i> PDF Statement</button>
     </div>
     <div id="imp-csv-section">
       <div class="fl"><label>File (.xlsx or .csv)</label><input type="file" id="imp-file" accept=".xlsx,.csv" style="padding:6px;font-size:12px"></div>
@@ -676,7 +677,7 @@ tr:hover td{background:var(--bg)}
       <button class="sv-btn" id="imp-go-btn" onclick="doImport()">Preview import</button>
     </div>
     <div id="imp-pdf-section" style="display:none">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.6">Upload a PDF to save it to your document vault for reference. To import transactions from a bank statement, use the <strong>🏦 Bank</strong> tab.</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.6">Upload a PDF to save it to your document vault for reference. To import transactions from a bank statement, use the <strong><i class="fas fa-building-columns"></i> Bank</strong> tab.</div>
       <div class="fl"><label>PDF file</label><input type="file" id="imp-pdf-file" accept=".pdf" style="padding:6px;font-size:12px" onchange="impSavePDFToVault(this)"></div>
     </div>
   </div>
@@ -723,7 +724,7 @@ tr:hover td{background:var(--bg)}
     <div class="fr"><div class="fl" style="margin-bottom:0"><label>In-kind donation?</label><select id="dnt-inkind" onchange="toggleInkindFMV()"><option value="No">No — cash/check</option><option value="Yes">Yes — goods or services</option></select></div><div class="fl" style="margin-bottom:0"><label>Quid pro quo?</label><select id="dnt-hasqpq" onchange="toggleQpq()"><option value="No">No</option><option value="Yes">Yes — donor received something</option></select></div></div>
     <div id="dnt-fmv-row" style="display:none">
       <div class="fr"><div class="fl" style="margin-bottom:0"><label>Item description <span style="color:var(--red)">*</span></label><input type="text" id="dnt-item-desc" placeholder="e.g. Signed Eagles jersey"></div><div class="fl" style="margin-bottom:0"><label>Fair market value ($) <span style="color:var(--red)">*</span></label><input type="number" id="dnt-fmv" placeholder="0.00" oninput="fmtAmt(this);updateAuctionCalc()"></div></div>
-      <div id="dnt-8283-warn" style="display:none;font-size:11px;color:var(--amber);padding:.4rem .75rem;background:var(--amber-bg,#fffbeb);border-radius:7px;margin-top:.25rem">⚠ Non-cash gifts over $500 require the donor to file <strong>Form 8283</strong>. Over $5,000 requires a qualified appraisal.</div>
+      <div id="dnt-8283-warn" style="display:none;font-size:11px;color:var(--amber);padding:.4rem .75rem;background:var(--amber-bg,#fffbeb);border-radius:7px;margin-top:.25rem"><i class="fas fa-triangle-exclamation"></i> Non-cash gifts over $500 require the donor to file <strong>Form 8283</strong>. Over $5,000 requires a qualified appraisal.</div>
       <div class="fr" id="dnt-auction-row" style="margin-top:.5rem"><div class="fl" style="margin-bottom:0"><label>Used in auction?</label><select id="dnt-auctioned" onchange="toggleAuction()"><option value="No">No</option><option value="Yes">Yes</option></select></div></div>
       <div id="dnt-auction-fields" style="display:none">
         <div class="fr"><div class="fl" style="margin-bottom:0"><label>Auction date</label><input type="text" id="dnt-auction-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl" style="margin-bottom:0"><label>Sale price ($)</label><input type="number" id="dnt-auction-sale" placeholder="0.00" oninput="fmtAmt(this);updateAuctionCalc()"></div></div>
@@ -740,6 +741,21 @@ tr:hover td{background:var(--bg)}
     </div>
   </div>
 </div>
+<div class="overlay" id="m-bill">
+  <div class="modal">
+    <button class="cx" onclick="closeM('m-bill')">&#215;</button>
+    <div class="m-title" id="m-bill-title">Enter bill</div>
+    <div class="fl" style="margin-bottom:.5rem"><label>Vendor <span style="color:var(--red)">*</span></label><input type="text" id="bill-vendor" placeholder="e.g. Home Depot"></div>
+    <div class="fl" style="margin-bottom:.5rem"><label>Description</label><input type="text" id="bill-desc" placeholder="e.g. Repairs and maintenance"></div>
+    <div class="fr"><div class="fl" style="margin-bottom:0"><label>Amount ($) <span style="color:var(--red)">*</span></label><input type="number" id="bill-amt" placeholder="0.00" oninput="fmtAmt(this)"></div><div class="fl" style="margin-bottom:0"><label>Expense account <span style="color:var(--red)">*</span></label><select id="bill-acct"></select></div></div>
+    <div class="fr"><div class="fl" style="margin-bottom:0"><label>Bill date (MM/DD/YYYY)</label><input type="text" id="bill-recv" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl" style="margin-bottom:0"><label>Due date (MM/DD/YYYY)</label><input type="text" id="bill-due" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>
+    <input type="hidden" id="bill-cat">
+    <div class="fl" style="margin-bottom:.5rem"><label>Notes</label><input type="text" id="bill-notes" placeholder="Optional"></div>
+    <div style="display:flex;gap:8px;margin-top:.5rem">
+      <button class="sv-btn" onclick="saveBill()">Save bill</button>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="m-ty-letter">
   <div class="modal" style="max-width:560px">
     <button class="cx" onclick="closeM('m-ty-letter')">&#215;</button>
@@ -747,10 +763,10 @@ tr:hover td{background:var(--bg)}
     <p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Edit the letter below, then copy or print.</p>
     <textarea id="ty-letter-body" style="min-height:260px;font-size:13px;line-height:1.8"></textarea>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <button class="sv-btn" onclick="copyTYLetter()">📋 Copy to clipboard</button>
-      <button class="sv-btn" style="background:var(--np)" onclick="printTYLetter()">🖨 Print / Save PDF</button>
+      <button class="sv-btn" onclick="copyTYLetter()"><i class="fas fa-clipboard"></i> Copy to clipboard</button>
+      <button class="sv-btn" style="background:var(--np)" onclick="printTYLetter()"><i class="fas fa-print"></i> Print / Save PDF</button>
     </div>
-    <div id="ty-copy-ok" style="font-size:12px;color:var(--green);margin-top:6px;display:none">Copied to clipboard! ✓</div>
+    <div id="ty-copy-ok" style="font-size:12px;color:var(--green);margin-top:6px;display:none">Copied to clipboard! <i class="fas fa-check"></i></div>
   </div>
 </div>
 <div id="dyn-mods"></div>
@@ -777,7 +793,7 @@ tr:hover td{background:var(--bg)}
   <div class="modal" style="max-width:480px">
     <button class="cx" onclick="closeM('m-upgrade')">&#215;</button>
     <div style="text-align:center;margin-bottom:1.25rem">
-      <div style="font-size:28px;margin-bottom:.5rem">⚡</div>
+      <div style="font-size:28px;margin-bottom:.5rem"><i class="fas fa-bolt"></i></div>
       <div class="m-title" style="text-align:center;margin-bottom:.25rem">Clarity Pro — coming soon</div>
       <div id="upgrade-reason" style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:.25rem"></div>
       <div style="font-size:13px;color:var(--muted);line-height:1.6">Clarity is <strong>free while we grow</strong>. When Pro launches, here's how it breaks down.</div>
@@ -786,25 +802,25 @@ tr:hover td{background:var(--bg)}
       <div style="background:var(--bg);border-radius:10px;padding:1rem">
         <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Free forever</div>
         <div style="font-size:12px;line-height:2;color:var(--text)">
-          ✓ 2 clients<br>
-          ✓ Income &amp; expenses<br>
-          ✓ Budget tracking<br>
-          ✓ Reports &amp; P&amp;L<br>
-          ✓ Cloud sync<br>
-          ✓ Journal &amp; actions
+          <i class="fas fa-check"></i> 2 clients<br>
+          <i class="fas fa-check"></i> Income &amp; expenses<br>
+          <i class="fas fa-check"></i> Budget tracking<br>
+          <i class="fas fa-check"></i> Reports &amp; P&amp;L<br>
+          <i class="fas fa-check"></i> Cloud sync<br>
+          <i class="fas fa-check"></i> Journal &amp; actions
         </div>
       </div>
       <div style="background:var(--np-bg);border:1px solid rgba(15,110,86,.2);border-radius:10px;padding:1rem">
-        <div style="font-size:11px;font-weight:500;color:var(--np);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Pro ⚡</div>
+        <div style="font-size:11px;font-weight:500;color:var(--np);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Pro <i class="fas fa-bolt"></i></div>
         <div style="font-size:12px;line-height:2;color:var(--text)">
-          ✓ Unlimited clients<br>
-          ✓ A/R &amp; invoicing<br>
-          ✓ Balance sheet<br>
-          ✓ Journal entries<br>
-          ✓ Reconciliation<br>
-          ✓ Grant compliance<br>
-          ✓ Multi-year budgets<br>
-          ✓ Import / export all
+          <i class="fas fa-check"></i> Unlimited clients<br>
+          <i class="fas fa-check"></i> A/R &amp; invoicing<br>
+          <i class="fas fa-check"></i> Balance sheet<br>
+          <i class="fas fa-check"></i> Journal entries<br>
+          <i class="fas fa-check"></i> Reconciliation<br>
+          <i class="fas fa-check"></i> Grant compliance<br>
+          <i class="fas fa-check"></i> Multi-year budgets<br>
+          <i class="fas fa-check"></i> Import / export all
         </div>
       </div>
     </div>
@@ -885,7 +901,7 @@ tr:hover td{background:var(--bg)}
 <!-- ALL JAVASCRIPT — loaded from external file for maintainability -->
 <!-- Load order: XLSX (CDN, above) and Supabase must be loaded before modules -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/auth.js"></script>
 <script src="js/state.js"></script>
@@ -910,7 +926,7 @@ tr:hover td{background:var(--bg)}
     <button class="cx" onclick="closeM('m-help')">&#215;</button>
     <div class="m-title">Help &amp; Guidance</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem" id="help-tabs">
-      <button class="sv-btn" id="ht-insights" onclick="showHelpTab('insights')" style="font-size:11px;padding:4px 12px">⚡ What Needs Attention</button>
+      <button class="sv-btn" id="ht-insights" onclick="showHelpTab('insights')" style="font-size:11px;padding:4px 12px"><i class="fas fa-bolt"></i> What Needs Attention</button>
       <button class="add-btn" id="ht-basics" onclick="showHelpTab('basics')" style="font-size:11px;padding:4px 12px">Bookkeeping Basics</button>
       <button class="add-btn" id="ht-month" onclick="showHelpTab('month')" style="font-size:11px;padding:4px 12px">Month-End Checklist</button>
       <button class="add-btn" id="ht-year" onclick="showHelpTab('year')" style="font-size:11px;padding:4px 12px">Year-End Checklist</button>
@@ -981,7 +997,7 @@ tr:hover td{background:var(--bg)}
       <div id="ob-coa-note" style="font-size:11px;color:var(--muted);padding:.5rem .75rem;background:var(--soft);border-radius:7px;line-height:1.6"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
         <button class="add-btn" onclick="obBack(3)">← Back</button>
-        <button class="sv-btn" onclick="obFinish()">Get started ✓</button>
+        <button class="sv-btn" onclick="obFinish()">Get started <i class="fas fa-check"></i></button>
       </div>
     </div>
   </div>
@@ -1085,12 +1101,12 @@ function toggleDark(){
   var isDark=document.body.classList.toggle('dark');
   try{localStorage.setItem('clarity-dark',isDark?'1':'0');}catch(e){}
   var btn=document.getElementById('dark-toggle');
-  if(btn)btn.textContent=isDark?'☀️':'🌙';
+  if(btn)btn.innerHTML=isDark?'<i class="fas fa-sun"></i>':'<i class="fas fa-moon"></i>';
 }
 // Set correct icon on load
 (function(){
   var btn=document.getElementById('dark-toggle');
-  if(btn)btn.textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+  if(btn)btn.innerHTML=document.body.classList.contains('dark')?'<i class="fas fa-sun"></i>':'<i class="fas fa-moon"></i>';
 })();
 </script>
 <!-- Persistent disclaimer footer -->
@@ -1105,7 +1121,7 @@ function toggleDark(){
 <!-- Friendly heads-up modal -- shown once after first sign-in -->
 <div class="overlay" id="m-disclaimer" style="z-index:9999">
   <div class="modal" style="max-width:440px">
-    <div class="m-title">Hey, quick heads up 👋</div>
+    <div class="m-title">Hey, quick heads up <i class="fas fa-hand"></i></div>
     <div style="font-size:13px;line-height:1.8;color:var(--text);margin-bottom:1.25rem">
       <p style="margin:0 0 .75rem">Clarity does your bookkeeping beautifully — but it’s not a CPA. Think of it like a really smart spreadsheet that keeps your books organized.</p>
       <p style="margin:0 0 .75rem">Before you file taxes, submit a grant report, or hand anything to an auditor, have your accountant take a look. The numbers are only as good as what you put in.</p>

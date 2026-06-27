@@ -13,6 +13,7 @@
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-T3HQNG77G9"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T3HQNG77G9');</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -113,7 +114,7 @@ nav{background:var(--surface);border-bottom:1px solid var(--border);padding:.875
 .mode-card p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1rem}
 .mode-list{list-style:none;padding:0}
 .mode-list li{font-size:12.5px;color:var(--muted);padding:3px 0;display:flex;align-items:baseline;gap:7px}
-.mode-list li::before{content:'✓';color:var(--np);font-size:11px;font-weight:700;flex-shrink:0}
+.mode-list li::before{content:'\f00c';font:var(--fa-font-solid);color:var(--np);font-size:11px;flex-shrink:0}
 
 /* ── PRICING ── */
 .pricing{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:4.5rem 2rem}
@@ -129,7 +130,7 @@ nav{background:var(--surface);border-bottom:1px solid var(--border);padding:.875
 .pricing-list{list-style:none;padding:0;margin-bottom:1.75rem}
 .pricing-list li{font-size:13px;color:var(--text);padding:5px 0;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--border)}
 .pricing-list li:last-child{border-bottom:none}
-.pricing-list li::before{content:'✓';color:var(--np);font-size:11px;font-weight:700;flex-shrink:0}
+.pricing-list li::before{content:'\f00c';font:var(--fa-font-solid);color:var(--np);font-size:11px;flex-shrink:0}
 .pricing-list li.muted-item{color:var(--muted)}
 .pricing-list li.muted-item::before{content:'—';color:var(--faint)}
 .pricing-btn{display:block;text-align:center;padding:12px 20px;border-radius:9px;font-size:14px;font-weight:500;text-decoration:none;transition:all .15s;font-family:'DM Sans',sans-serif;cursor:pointer;border:none;width:100%}
@@ -239,13 +240,13 @@ footer a:hover{color:var(--text)}
 <!-- ── TRUST BAR ── -->
 <div class="trust-bar">
   <div class="trust-inner">
-    <div class="trust-item"><span class="ti">✓</span> No account needed to start</div>
+    <div class="trust-item"><span class="ti"><i class="fas fa-check"></i></span> No account needed to start</div>
     <div class="trust-divider"></div>
-    <div class="trust-item"><span class="ti">✓</span> Works on any device</div>
+    <div class="trust-item"><span class="ti"><i class="fas fa-check"></i></span> Works on any device</div>
     <div class="trust-divider"></div>
-    <div class="trust-item"><span class="ti">✓</span> Your data is always yours</div>
+    <div class="trust-item"><span class="ti"><i class="fas fa-check"></i></span> Your data is always yours</div>
     <div class="trust-divider"></div>
-    <div class="trust-item"><span class="ti">✓</span> Built by a bookkeeper, not a startup</div>
+    <div class="trust-item"><span class="ti"><i class="fas fa-check"></i></span> Built by a bookkeeper, not a startup</div>
   </div>
 </div>
 
@@ -363,12 +364,12 @@ footer a:hover{color:var(--text)}
       <p style="font-size:14px;color:var(--muted);line-height:1.7">Manage nonprofit and business clients side by side — no switching between tools, no rebuilding the same spreadsheet for every engagement. The structure is already there.</p>
     </div>
     <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.65rem">
-      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600">✓</span> Nonprofit and business clients side by side</li>
-      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600">✓</span> Per-client time tracking &amp; billing log</li>
-      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600">✓</span> Session timer with exportable time log</li>
-      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600">✓</span> Welcome-back card — pick up exactly where you left off</li>
-      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600">✓</span> Client-level Clarity Score</li>
-      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600">✓</span> Full report suite for every client type</li>
+      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600"><i class="fas fa-check"></i></span> Nonprofit and business clients side by side</li>
+      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600"><i class="fas fa-check"></i></span> Per-client time tracking &amp; billing log</li>
+      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600"><i class="fas fa-check"></i></span> Session timer with exportable time log</li>
+      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600"><i class="fas fa-check"></i></span> Welcome-back card — pick up exactly where you left off</li>
+      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600"><i class="fas fa-check"></i></span> Client-level Clarity Score</li>
+      <li style="font-size:13px;display:flex;align-items:flex-start;gap:.6rem"><span style="color:var(--np);font-weight:600"><i class="fas fa-check"></i></span> Full report suite for every client type</li>
     </ul>
   </div>
 </div>
@@ -527,10 +528,11 @@ footer a:hover{color:var(--text)}
       <option value="Text message">Text message</option>
     </select>
     <button class="demo-submit" onclick="submitDemo()">Request a demo →</button>
+    <div id="demo-error" style="display:none;font-size:13px;color:#ff8a8a;text-align:center;margin-top:4px"></div>
   </div>
 
   <div id="demo-ok">
-    ✓ Got it — we'll be in touch soon.<br>
+    <i class="fas fa-check"></i> Got it — we'll be in touch soon.<br>
     <span style="font-size:13px;color:rgba(255,255,255,.45)">In the meantime, feel free to start right now — no account needed.</span><br><br>
     <a href="/app.html" style="color:#9FE1CB;font-size:14px;font-weight:500">Launch Clarity by Telofin™ →</a>
   </div>
@@ -569,11 +571,24 @@ function submitDemo() {
   var phone   = document.getElementById('df-phone').value.trim();
   var type    = document.getElementById('df-type').value;
   var contact = document.getElementById('df-contact').value;
+  var errEl   = document.getElementById('demo-error');
 
-  if (!name)  { document.getElementById('df-name').focus();  return; }
-  if (!email || !email.includes('@')) { document.getElementById('df-email').focus(); return; }
-  if (!type)  { document.getElementById('df-type').focus();  return; }
-  if (!contact) { document.getElementById('df-contact').focus(); return; }
+  function showError(msg, fieldId) {
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    var f = document.getElementById(fieldId);
+    if (f) { f.focus(); f.style.boxShadow = '0 0 0 3px rgba(255,80,80,.5)'; }
+  }
+
+  if (errEl) { errEl.style.display = 'none'; }
+  ['df-name','df-email','df-type','df-contact'].forEach(function(id){
+    var f = document.getElementById(id);
+    if (f) f.style.boxShadow = '';
+  });
+
+  if (!name)  { showError('Please enter your name.', 'df-name'); return; }
+  if (!email || !email.includes('@')) { showError('Please enter a valid email address.', 'df-email'); return; }
+  if (!type)  { showError('Please select your organization type.', 'df-type'); return; }
+  if (!contact) { showError('Please select how we should reach you.', 'df-contact'); return; }
 
   var btn = document.querySelector('.demo-submit');
   btn.textContent = 'Sending…';
@@ -592,12 +607,18 @@ function submitDemo() {
     })
   })
   .then(function(res){
+    if (!res.ok) { throw new Error('Request failed with status ' + res.status); }
     document.getElementById('demo-form').style.display = 'none';
     document.getElementById('demo-ok').style.display = 'block';
   })
-  .catch(function(){
-    document.getElementById('demo-form').style.display = 'none';
-    document.getElementById('demo-ok').style.display = 'block';
+  .catch(function(err){
+    console.error('Demo request submission failed:', err);
+    btn.textContent = 'Request a Demo';
+    btn.disabled = false;
+    if (errEl) {
+      errEl.textContent = 'Something went wrong sending your request. Please try again, or email hello@telofin.com directly.';
+      errEl.style.display = 'block';
+    }
   });
 }
 </script>
