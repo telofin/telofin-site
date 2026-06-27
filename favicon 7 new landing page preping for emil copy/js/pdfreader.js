@@ -807,7 +807,7 @@ async function pdfHandleUpload(file, hintType) {
   var _el = document.getElementById('pdf-modal');
   var _body = document.getElementById('pdf-modal-body');
   if (_el && _body) {
-    _body.innerHTML = '<div style="text-align:center;padding:2rem;font-size:13px;color:var(--muted)">Reading ' + file.name + '…<br><br><span style="font-size:11px">This may take a few seconds</span></div>';
+    _body.innerHTML = '<div style="text-align:center;padding:2rem;font-size:13px;color:var(--muted)">Reading ' + escHtml(file.name) + '…<br><br><span style="font-size:11px">This may take a few seconds</span></div>';
     _el.classList.add('open');
   }
   _pdfShowStatus('Reading ' + file.name + '…');
@@ -877,12 +877,12 @@ function _pdfShowPicker(id) {
   pdfInjectModal();
   var el = document.getElementById('pdf-modal'); if (!el) return;
   var buckets = [
-    { key:'bank',     icon:'🏦', label:'Bank statement' },
-    { key:'cc',       icon:'💳', label:'Credit card statement' },
-    { key:'pl',       icon:'📊', label:'Profit & Loss report' },
-    { key:'bs',       icon:'📋', label:'Balance sheet' },
-    { key:'register', icon:'📒', label:'Account register' },
-    { key:'donation', icon:'💝', label:'Donation report' }
+    { key:'bank',     icon:'<i class="fas fa-building-columns"></i>', label:'Bank statement' },
+    { key:'cc',       icon:'<i class="fas fa-credit-card"></i>', label:'Credit card statement' },
+    { key:'pl',       icon:'<i class="fas fa-chart-column"></i>', label:'Profit & Loss report' },
+    { key:'bs',       icon:'<i class="fas fa-clipboard"></i>', label:'Balance sheet' },
+    { key:'register', icon:'<i class="fas fa-book"></i>', label:'Account register' },
+    { key:'donation', icon:'<i class="fas fa-gift"></i>', label:'Donation report' }
   ];
   document.getElementById('pdf-modal-body').innerHTML =
     '<div style="margin-bottom:1rem">'
@@ -975,7 +975,7 @@ function _pdfShowConfirm() {
       var match = _pdfFindPaymentMatch(t.amount, t.date);
       if (match) {
         matchAlerts += '<div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:.6rem .9rem;margin-bottom:.5rem;font-size:12px">'
-          +'💡 Payment of $'+Math.abs(t.amount).toFixed(2)+' on '+t.date
+          +'<i class="fas fa-lightbulb"></i> Payment of $'+Math.abs(t.amount).toFixed(2)+' on '+t.date
           +' may match <strong>'+escHtml(match.item.desc||'expense')+'</strong> in your books. '
           +'<span style="color:var(--muted)">Confirm during reconciliation.</span></div>';
       }
@@ -1153,7 +1153,7 @@ function pdfInjectModal() {
   div.innerHTML =
     '<div class="overlay" id="pdf-modal" onclick="if(event.target===this)pdfCancel()">'
     +'<div class="modal" style="max-width:640px">'
-    +'<div class="m-head"><span class="m-title">📄 Import from PDF</span>'
+    +'<div class="m-head"><span class="m-title"><i class="fas fa-file"></i> Import from PDF</span>'
     +'<button class="m-x" onclick="pdfCancel()">&#215;</button></div>'
     +'<div class="m-body" id="pdf-modal-body"></div>'
     +'</div></div>'

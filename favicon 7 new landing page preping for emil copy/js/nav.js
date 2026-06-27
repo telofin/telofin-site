@@ -66,26 +66,42 @@ function renderSB(){
     var ip=c.id===pin;
     return'<div class="client-item'+(c.id===CID?' active':'')+'" onclick="openClient(\''+c.id+'\')">'
       +'<div class="av '+avc(c.type)+'">'+ini(c.name)+'</div>'
-      +'<div class="cl-info"><div class="cl-name">'+c.name+(ip?' <span style="font-size:9px;color:var(--amber)">★</span>':'')+'</div><div class="cl-type">'+tl(c.type)+'</div></div>'
-      +'<button class="pin-btn'+(ip?' pinned':'')+'" onclick="togglePin(\''+c.id+'\',event)" title="'+(ip?'Remove default':'Set as default')+'">'+(ip?'★':'☆')+'</button></div>'
-      +(c.id===CID?'<div style="padding:2px 12px 6px;display:flex;flex-direction:column;gap:3px">'        +'<button onclick="event.stopPropagation();var t=document.querySelector(\'[data-panel=vault]\');if(t)switchTab({target:t},\'vault\')" style="width:100%;text-align:left;background:var(--soft);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif">📎 Document Vault</button>'        +'<button onclick="event.stopPropagation();if(typeof ttOpenFullLog===\'function\')ttOpenFullLog()" style="width:100%;text-align:left;background:var(--soft);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif">⏱ Time log'+(c.timeLog&&c.timeLog.length?' ('+c.timeLog.length+')':'')+' </button>'        +'</div>':'');
+      +'<div class="cl-info"><div class="cl-name">'+c.name+(ip?' <span style="font-size:9px;color:var(--amber)"><i class="fas fa-star"></i></span>':'')+'</div><div class="cl-type">'+tl(c.type)+'</div></div>'
+      +'<button class="pin-btn'+(ip?' pinned':'')+'" onclick="togglePin(\''+c.id+'\',event)" title="'+(ip?'Remove default':'Set as default')+'">'+(ip?'<i class="fas fa-star"></i>':'<i class="far fa-star"></i>')+'</button></div>'
+      +(c.id===CID?'<div style="padding:2px 12px 6px;display:flex;flex-direction:column;gap:3px">'        +'<button onclick="event.stopPropagation();var t=document.querySelector(\'[data-panel=vault]\');if(t)switchTab({target:t},\'vault\')" style="width:100%;text-align:left;background:var(--soft);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="fas fa-paperclip"></i> Document Vault</button>'        +'<button onclick="event.stopPropagation();if(typeof ttOpenFullLog===\'function\')ttOpenFullLog()" style="width:100%;text-align:left;background:var(--soft);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="far fa-clock"></i> Time log'+(c.timeLog&&c.timeLog.length?' ('+c.timeLog.length+')':'')+' </button>'        +'</div>':'');
   }).join('');
 }
 function renderMobSel(){
   var el=g('mob-cl-sel');if(!el)return;
   var pin=getPinned(),cl=D.clients.slice();
   if(pin)cl.sort(function(a,b){return a.id===pin?-1:b.id===pin?1:0;});
-  el.innerHTML=cl.map(function(c){return'<option value="'+c.id+'"'+(c.id===CID?' selected':'')+'>'+c.name+(c.id===pin?' ★':'')+'</option>';}).join('')||'<option>No clients</option>';
+  el.innerHTML=cl.map(function(c){return'<option value="'+escHtml(c.id)+'"'+(c.id===CID?' selected':'')+'>'+escHtml(c.name)+(c.id===pin?' ★':'')+'</option>';}).join('')||'<option>No clients</option>';
 }
 
 // ══════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════
 function getTabs(t){
-  if(t==='np')return[['grants','🏛 Grants'],['procurement','📋 Procurement'],['donors','🤝 Donors'],['funding','💰 Income'],['npexp','📤 Expenses'],['cc','💳 Credit Cards'],['reimbursements','🧾 Reimbursements'],['vendors','🏢 Vendors'],['budget','📊 Budget'],['recon','🔁 Reconciliation'],['coa','📒 Accounts'],['gl','📖 General Ledger'],['trialbal','⚖️ Trial Balance'],['funds','🗂 Funds'],['pettycash','💵 Petty Cash'],['openingbal','🔓 Opening Balances'],['f990','📄 Form 990'],['importrules','⚙️ Import Rules'],['flagged','🚩 Flagged'],['closedperiods','🔒 Closed Periods'],['vault','📎 Vault'],['reports','📈 Reports'],['trash','🗑 Deleted']];
-  if(t==='sb')return[['revenue','💰 Revenue'],['cashflow','💸 Cash Flow'],['sbexp','📤 Expenses'],['cc','💳 Credit Cards'],['reimbursements','🧾 Reimbursements'],['ar','📬 A/R & Invoicing'],['vendors','🏢 Vendors'],['customers','👥 Customers'],['jentries','✏️ Journal Entries'],['bsheet','🏦 Balance Sheet'],['recon','🔁 Reconciliation'],['budget','📊 Budget'],['coa','📒 Accounts'],['gl','📖 General Ledger'],['trialbal','⚖️ Trial Balance'],['salestax','🧾 Sales Tax'],['pettycash','💵 Petty Cash'],['openingbal','🔓 Opening Balances'],['importrules','⚙️ Import Rules'],['flagged','🚩 Flagged'],['closedperiods','🔒 Closed Periods'],['vault','📎 Vault'],['reports','📈 Reports'],['trash','🗑 Deleted']];
-  return[['peinc','💰 Income'],['peexp','📤 Expenses'],['vendors','🏢 Vendors'],['budget','📊 Budget'],['coa','📒 Accounts'],['gl','📖 General Ledger'],['trialbal','⚖️ Trial Balance'],['pettycash','💵 Petty Cash'],['importrules','⚙️ Import Rules'],['flagged','🚩 Flagged'],['closedperiods','🔒 Closed Periods'],['vault','📎 Vault'],['reports','📈 Reports'],['trash','🗑 Deleted']];
+  if(t==='np')return[['grants','Grants'],['procurement','Procurement'],['donors','Donors'],['funding','Income'],['npexp','Expenses'],['cc','Credit Cards'],['reimbursements','Reimbursements'],['vendors','Vendors'],['budget','Budget'],['recon','Reconciliation'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['funds','Funds'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['f990','Form 990'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
+  if(t==='sb')return[['revenue','Revenue'],['cashflow','Cash Flow'],['sbexp','Expenses'],['cc','Credit Cards'],['reimbursements','Reimbursements'],['ar','A/R & Invoicing'],['vendors','Vendors'],['customers','Customers'],['jentries','Journal Entries'],['bsheet','Balance Sheet'],['recon','Reconciliation'],['budget','Budget'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['salestax','Sales Tax'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
+  return[['peinc','Income'],['peexp','Expenses'],['vendors','Vendors'],['budget','Budget'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['pettycash','Petty Cash'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
 }
+
+// Icon lookup by tab id — kept separate from the label text so labels stay
+// plain text (required for <option> elements in the mobile tab selector,
+// which cannot render HTML/icon tags). Desktop tab buttons look up the icon
+// here and prepend it; the mobile dropdown just uses the plain label.
+var TAB_ICONS={
+  grants:'fa-landmark',procurement:'fa-clipboard',donors:'fa-handshake',funding:'fa-sack-dollar',
+  npexp:'fa-arrow-up-from-bracket',cc:'fa-credit-card',reimbursements:'fa-receipt',vendors:'fa-building',
+  budget:'fa-chart-column',recon:'fa-rotate',coa:'fa-book',gl:'fa-book-open',trialbal:'fa-scale-balanced',
+  funds:'fa-folder-open',pettycash:'fa-money-bill',openingbal:'fa-lock-open',f990:'fa-file',
+  importrules:'fa-gear',flagged:'fa-flag',closedperiods:'fa-lock',vault:'fa-paperclip',reports:'fa-chart-line',
+  trash:'fa-trash',revenue:'fa-sack-dollar',cashflow:'fa-money-bill-wave',sbexp:'fa-arrow-up-from-bracket',
+  ar:'fa-envelope-open-text',customers:'fa-users',jentries:'fa-pen',bsheet:'fa-building-columns',
+  salestax:'fa-receipt',peinc:'fa-sack-dollar',peexp:'fa-arrow-up-from-bracket',bank:'fa-building-columns',waypoint:'fa-anchor'
+};
+function _tabIconHtml(id){var ic=TAB_ICONS[id];return ic?'<i class="fas '+ic+'"></i> ':'';}
 
 // STABILITY FIX-2: Tab order now keyed by client ID instead of client type.
 // Previously 'to-np', 'to-sb', 'to-pe' — all clients of the same type shared
@@ -101,7 +117,7 @@ function buildDash(c){
   if(saved&&saved.length===tabs.length){var re=[];saved.forEach(function(s){tabs.forEach(function(t){if(t[0]===s)re.push(t);});});if(re.length===tabs.length)tabs=re;}
   // Always open to Waypoint regardless of last visited tab
   var lastTab='waypoint';
-  tEl.innerHTML='<span style="font-size:10px;color:var(--muted);padding:0 10px;align-self:center;white-space:nowrap;opacity:.7;pointer-events:none">&#x2194; drag to reorder</span>'+tabs.map(function(t){return'<button class="tab'+(t[0]===lastTab?' active':'')+'" data-panel="'+t[0]+'" onclick="switchTab(event,\''+t[0]+'\')">'+t[1]+'</button>';}).join('');
+  tEl.innerHTML='<span style="font-size:10px;color:var(--muted);padding:0 10px;align-self:center;white-space:nowrap;opacity:.7;pointer-events:none">&#x2194; drag to reorder</span>'+tabs.map(function(t){return'<button class="tab'+(t[0]===lastTab?' active':'')+'" data-panel="'+t[0]+'" onclick="switchTab(event,\''+t[0]+'\')">'+_tabIconHtml(t[0])+t[1]+'</button>';}).join('');
   pEl.innerHTML=tabs.map(function(t){return'<div class="panel'+(t[0]===lastTab?' active':'')+'" id="p-'+t[0]+'"></div>';}).join('');
   ms.innerHTML=tabs.map(function(t){return'<option value="'+t[0]+'"'+(t[0]===lastTab?' selected':'')+'>'+t[1]+'</option>';}).join('');
   buildDynMods(c.type);renderAll();renderHomeWidget();initDrag(c.type,tabs);
@@ -178,7 +194,7 @@ function globalSearch(q){
     if(e.deleted)return;
     var _em=(e.desc||'').toLowerCase().indexOf(lq)>=0||(e.cat||'').toLowerCase().indexOf(lq)>=0||(e.vendor1099||'').toLowerCase().indexOf(lq)>=0||(e.checkNum||'').toLowerCase().indexOf(lq)>=0||(e.fund||'').toLowerCase().indexOf(lq)>=0||(e.acctCode||'').toLowerCase().indexOf(lq)>=0||amtMatch(e.amt);
     if(_em){
-      results.push({tab:c.type==='np'?'npexp':c.type==='sb'?'sbexp':'peexp',label:e.desc||e.cat,sub:fmt(e.amt)+' · '+(e.date||'')+(e.cat?' · '+e.cat:'')+(e.checkNum?' · #'+e.checkNum:''),icon:'💸',action:'editItem(\'expenses\','+i+')'});
+      results.push({tab:c.type==='np'?'npexp':c.type==='sb'?'sbexp':'peexp',label:e.desc||e.cat,sub:fmt(e.amt)+' · '+(e.date||'')+(e.cat?' · '+e.cat:'')+(e.checkNum?' · #'+e.checkNum:''),icon:'<i class="fas fa-money-bill-wave"></i>',fn:'editItem',args:['expenses',i]});
     }
   });
 
@@ -191,14 +207,14 @@ function globalSearch(q){
     var rawAmt=r.recv!==undefined?r.recv:r.act!==undefined?r.act:r.amt;
     var amt=fmt(rawAmt);
     if(name.toLowerCase().indexOf(lq)>=0||(r.cat||'').toLowerCase().indexOf(lq)>=0||amtMatch(rawAmt)){
-      results.push({tab:incTab,label:name,sub:amt+(r.cat?' · '+r.cat:''),icon:'💰',action:'editItem(\''+(c.type==='sb'?'revenue':'income')+'\','+i+')'});
+      results.push({tab:incTab,label:name,sub:amt+(r.cat?' · '+r.cat:''),icon:'<i class="fas fa-sack-dollar"></i>',fn:'editItem',args:[c.type==='sb'?'revenue':'income',i]});
     }
   });
 
   // Search grants (NP)
   (c.grants||[]).forEach(function(gr,i){
     if((gr.name||'').toLowerCase().indexOf(lq)>=0||(gr.funder||'').toLowerCase().indexOf(lq)>=0||amtMatch(gr.awarded)){
-      results.push({tab:'grants',label:gr.name,sub:(gr.funder||'')+(gr.awarded?' · '+fmt(gr.awarded):''),icon:'🏛',action:'AG=\''+gr.id+'\';renderGrants()'});
+      results.push({tab:'grants',label:gr.name,sub:(gr.funder||'')+(gr.awarded?' · '+fmt(gr.awarded):''),icon:'<i class="fas fa-landmark"></i>',fn:'_srchOpenGrant',args:[gr.id]});
     }
   });
 
@@ -207,28 +223,28 @@ function globalSearch(q){
     var textMatch=(d.name||'').toLowerCase().indexOf(lq)>=0||(d.email||'').toLowerCase().indexOf(lq)>=0||(d.address||'').toLowerCase().indexOf(lq)>=0||(d.phone||'').toLowerCase().indexOf(lq)>=0||(d.notes||'').toLowerCase().indexOf(lq)>=0;
     var amtDonorMatch=isAmtQuery&&(d.donations||[]).some(function(dn){return amtMatch(dn.amt||dn.fmv);});
     if(textMatch||amtDonorMatch){
-      results.push({tab:'donors',label:d.name,sub:d.email||'',icon:'👤',action:'editDonor('+i+')'});
+      results.push({tab:'donors',label:d.name,sub:d.email||'',icon:'<i class="fas fa-user"></i>',fn:'editDonor',args:[i]});
     }
   });
 
   // Search invoices (SB)
   (c.invoices||[]).forEach(function(inv,i){
     if((inv.client||'').toLowerCase().indexOf(lq)>=0||(inv.desc||'').toLowerCase().indexOf(lq)>=0||(inv.num||'').toLowerCase().indexOf(lq)>=0||amtMatch(inv.amt)){
-      results.push({tab:'ar',label:(inv.num||'')+(inv.client?' — '+inv.client:''),sub:fmt(inv.amt)+' · '+inv.status,icon:'🧾',action:'editInv('+i+')'});
+      results.push({tab:'ar',label:(inv.num||'')+(inv.client?' — '+inv.client:''),sub:fmt(inv.amt)+' · '+inv.status,icon:'<i class="fas fa-receipt"></i>',fn:'editInv',args:[i]});
     }
   });
 
   // Search COA accounts
   (c.accounts||[]).forEach(function(a){
     if((a.name||'').toLowerCase().indexOf(lq)>=0||(a.code||'').toLowerCase().indexOf(lq)>=0){
-      results.push({tab:'coa',label:a.code+' '+a.name,sub:a.type,icon:'📋',action:'renderCOA(gc())'});
+      results.push({tab:'coa',label:a.code+' '+a.name,sub:a.type,icon:'<i class="fas fa-clipboard"></i>',fn:'renderCOA',args:[]});
     }
   });
 
   // Search budget items
   (c.budgetItems||[]).forEach(function(b){
     if((b.cat||'').toLowerCase().indexOf(lq)>=0||amtMatch(b.amt)){
-      results.push({tab:'budget',label:b.cat,sub:b.type+' · '+fmt(b.amt),icon:'📊',action:''});
+      results.push({tab:'budget',label:b.cat,sub:b.type+' · '+fmt(b.amt),icon:'<i class="fas fa-chart-column"></i>',fn:null,args:[]});
     }
   });
 
@@ -268,6 +284,25 @@ function globalSearch(q){
   });
 }
 
+// Search-result action helper — opens a grant by id and switches to the
+// Grants tab's detail view. Exists so the global-search dispatcher below
+// can call a real function by name instead of building and executing a
+// code string from result data.
+function _srchOpenGrant(grantId){AG=grantId;renderGrants();}
+
+// Whitelist of functions the global search dispatcher is allowed to call.
+// Search results never carry a code string to execute (see git history —
+// this used to be new Function(r.action)(), replaced because building and
+// running a JS string from data is a landmine even when today's data
+// happens to be safe: the very next new result type added by a future
+// developer could interpolate user text into that string without realizing
+// the risk). Dispatch now looks up a real function reference by name here
+// and calls it directly with structured args — nothing is ever eval'd.
+var _SRCH_ACTIONS={
+  editItem:editItem, editDonor:editDonor, editInv:editInv,
+  renderCOA:renderCOA, _srchOpenGrant:_srchOpenGrant
+};
+
 // Show search bar when a client is open
 function showGlobalSearch(){var w=g('global-search-wrap');if(w)w.style.display='block';}
 function hideGlobalSearch(){var w=g('global-search-wrap');if(w)w.style.display='none';var r=g('global-search-results');if(r)r.style.display='none';}
@@ -286,8 +321,15 @@ document.addEventListener('click',function(e){
   // Switch tab
   var tabBtn=document.querySelector('[data-panel="'+r.tab+'"]');
   if(tabBtn)switchTab({target:tabBtn},r.tab);
-  // Run action after render settles
-  if(r.action){setTimeout(function(){try{new Function(r.action)();}catch(e2){console.warn('Search action error:',e2);}},150);}
+  // Run action after render settles — looked up from the whitelist above,
+  // called directly with the result's structured args. No code is built
+  // from strings or eval'd at any point.
+  if(r.fn){
+    var fn=_SRCH_ACTIONS[r.fn];
+    if(typeof fn==='function'){
+      setTimeout(function(){try{fn.apply(null,r.args||[]);}catch(e2){console.warn('Search action error:',e2);}},150);
+    }
+  }
   // Close search
   var inp=g('global-search-inp');if(inp)inp.value='';
   wrap.style.display='none';
@@ -308,16 +350,16 @@ function goReportsTab(){
     switchRpt('executive');
   },50);
 }
-function refreshData(){processRecurring();renderAll();var c=gc();if(c)checkFYEExpiry(c);var b=document.querySelector('[onclick="refreshData()"]');if(b){b.textContent='✓ Done';setTimeout(function(){b.textContent='↻ Refresh';},1500);}}
+function refreshData(){processRecurring();renderAll();var c=gc();if(c)checkFYEExpiry(c);var b=document.querySelector('[onclick="refreshData()"]');if(b){b.textContent='Done';setTimeout(function(){b.textContent='Refresh';},1500);}}
 function manualSync(){
   if(!_user){alert('Sign in to sync to cloud.');return;}
   var b=document.querySelector('[onclick="manualSync()"]');
   if(b)b.textContent='Syncing…';
   sv();
   syncToSupabase().then(function(){
-    if(b){b.textContent='✓ Saved';setTimeout(function(){b.textContent='☁ Save to cloud';},2000);}
+    if(b){b.textContent='Saved';setTimeout(function(){b.textContent='Save to cloud';},2000);}
   }).catch(function(){
-    if(b){b.textContent='✗ Failed';setTimeout(function(){b.textContent='☁ Save to cloud';},2000);}
+    if(b){b.textContent='Failed';setTimeout(function(){b.textContent='Save to cloud';},2000);}
   });
 }
 

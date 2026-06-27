@@ -14,7 +14,7 @@
 //   - switchTab() is patched to capture last active tab
 //   - openClient() is patched to show welcome back card on return
 //   - Idle threshold from timetracking.js auto-sets bookmark flag
-//   - Manual 🔖 button calls wcBookmark() from the header area
+//   - Manual bookmark button calls wcBookmark() from the header area
 //
 // DATA SHAPE (_WC_SESSIONS[clientId]):
 //   {
@@ -187,12 +187,12 @@ function wcBookmark() {
 }
 
 function _wcShowBookmarkConfirm() {
-  // Brief toast — "Bookmarked ✓" — no friction
+  // Brief toast — "Bookmarked" — no friction
   var t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--surface);'
     + 'padding:8px 16px;border-radius:8px;font-size:12px;z-index:99999;font-family:\'DM Sans\',sans-serif;'
     + 'display:flex;align-items:center;gap:6px;box-shadow:0 2px 12px rgba(0,0,0,.15)';
-  t.innerHTML = '🔖 Bookmarked';
+  t.innerHTML = '<i class="fas fa-bookmark"></i> Bookmarked';
   document.body.appendChild(t);
   setTimeout(function(){ t.style.transition='opacity .4s'; t.style.opacity='0'; }, 1800);
   setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 2300);
@@ -219,14 +219,14 @@ function _wpWelcomeCardHTML(c) {
     // Left — context
     + '<div style="flex:1;min-width:0">'
     + '<div style="font-size:13px;font-weight:500;margin-bottom:.2rem">'
-    + '👋 Welcome back'+(timeAgo?' <span style="font-size:11px;color:var(--muted);font-weight:400">· '+timeAgo+'</span>':'')
+    + '<i class="fas fa-hand"></i> Welcome back'+(timeAgo?' <span style="font-size:11px;color:var(--muted);font-weight:400">· '+timeAgo+'</span>':'')
     + '</div>'
     + '<div style="font-size:12px;color:var(--muted)">'
     + 'Last working in <strong style="color:var(--text)">'+escHtml(tabLabel)+'</strong>'
     + (hasTxn
         ? ' &nbsp;·&nbsp; '+escHtml(sess.lastTxnDesc)+(sess.lastTxnAmt?' <span style="color:var(--green)">'+sess.lastTxnAmt+'</span>':'')
         : '')
-    + (sess.bookmarked ? ' &nbsp;<span style="font-size:10px">🔖</span>' : '')
+    + (sess.bookmarked ? ' &nbsp;<span style="font-size:10px"><i class="fas fa-bookmark"></i></span>' : '')
     + '</div>'
     + '</div>'
     // Right — actions
@@ -330,7 +330,7 @@ function wcBookmarkBtnHTML() {
     + 'padding:5px 10px;cursor:pointer;font-size:13px;color:var(--muted);'
     + 'font-family:\'DM Sans\',sans-serif;transition:color .15s,border-color .15s" '
     + 'onmouseover="this.style.color=\'var(--text)\';this.style.borderColor=\'var(--text)\'" '
-    + 'onmouseout="this.style.color=\'var(--muted)\';this.style.borderColor=\'var(--border)\'">🔖</button>';
+    + 'onmouseout="this.style.color=\'var(--muted)\';this.style.borderColor=\'var(--border)\'"><i class="fas fa-bookmark"></i></button>';
 }
 
-// 🔖 Bookmark button is in static HTML (app.html) — no injection needed.
+// Bookmark button is in static HTML (app.html) — no injection needed.

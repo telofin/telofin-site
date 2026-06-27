@@ -14,7 +14,7 @@ function sv(){
     if(e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014)){
       console.warn('[clarity] localStorage quota exceeded — data not saved locally. Cloud sync still active.');
       var qw=document.getElementById('quota-warning');
-      if(!qw){qw=document.createElement('div');qw.id='quota-warning';qw.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;z-index:99999;max-width:340px;text-align:center;line-height:1.5';qw.textContent='⚠ Storage limit reached. Your data is syncing to the cloud, but local backup is full. Sign in to ensure your data is safe.';document.body.appendChild(qw);setTimeout(function(){if(qw.parentNode)qw.parentNode.removeChild(qw);},7000);}
+      if(!qw){qw=document.createElement('div');qw.id='quota-warning';qw.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#c0392b;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;z-index:99999;max-width:340px;text-align:center;line-height:1.5';qw.innerHTML='<i class="fas fa-triangle-exclamation"></i> Storage limit reached. Your data is syncing to the cloud, but local backup is full. Sign in to ensure your data is safe.';document.body.appendChild(qw);setTimeout(function(){if(qw.parentNode)qw.parentNode.removeChild(qw);},7000);}
     }
   }
   if(_user){
@@ -92,7 +92,7 @@ function isDateLocked(c,dateStr){
 }
 // periodLockAlert(dateStr) — shows a standard alert and returns true (caller should abort save).
 function periodLockAlert(dateStr){
-  alert('⛔ Period locked\n\nTransactions dated on or before '+dateStr+' cannot be added or edited because this period has been closed.\n\nTo make changes, go to Settings → Closed Periods and remove or adjust the lock date.');
+  alert('Period locked\n\nTransactions dated on or before '+dateStr+' cannot be added or edited because this period has been closed.\n\nTo make changes, go to Settings → Closed Periods and remove or adjust the lock date.');
   return true;
 }
 function fmtAmt(el){var next=el.nextElementSibling;if(!next||!next.classList.contains('amt-fmt')){var d=document.createElement('div');d.className='amt-fmt';d.style.cssText='font-size:11px;color:var(--green);font-weight:500;margin-top:2px;min-height:14px';el.parentNode.insertBefore(d,el.nextSibling);next=d;}next.textContent=el.value?'$'+Number(el.value).toLocaleString():'';}
@@ -162,7 +162,8 @@ function postToLedger(c,debitCode,creditCode,amt,memo,sourceType,sourceId){
     var _expenseType=sourceType==='expense'||sourceType==='payment'||sourceType==='reimbursement';
     var _incomeType=sourceType==='income'||sourceType==='revenue'||sourceType==='invoice';
     // Debiting a credit-normal account is only suspicious if it's not an income/receipt entry
-    if(_drAcct&&_acctNormalSide(_drAcct.type)==='cr'&&!_incomeType){
+    // AND not a payment paying down a liability (e.g. paying a bill debits Accounts Payable).
+    if(_drAcct&&_acctNormalSide(_drAcct.type)==='cr'&&!_incomeType&&!(_expenseType&&(_drAcct.type+'').toLowerCase()==='liability')){
       console.warn('[COA guard] Debiting a credit-normal account:',debitCode,_drAcct.name,'type:',_drAcct.type,'memo:',memo);
     }
     // Crediting a debit-normal account is only suspicious if it's not an expense/payment entry
@@ -772,9 +773,9 @@ function openFYEModal(c,unreconExp,unreconInc,lastKey){
   if(errors.length)html+='<div style="background:var(--bg);border-radius:8px;padding:.5rem .75rem"><span class="badge b-red">Possible errors</span> <strong>'+errors.length+'</strong> — unreconciled expenses with no clear reason. <em>Review.</em></div>';
   html+='</div>';
   html+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem">';
-  html+='<button class="sv-btn" style="background:var(--green)" onclick="fyeAction(\'reconcile\',\''+lastKey+'\')">✓ Mark all as reconciled</button>';
+  html+='<button class="sv-btn" style="background:var(--green)" onclick="fyeAction(\'reconcile\',\''+lastKey+'\')"><i class="fas fa-check"></i> Mark all as reconciled</button>';
   html+='<button class="sv-btn" style="background:var(--amber)" onclick="fyeAction(\'carry\',\''+lastKey+'\')">→ Carry forward outstanding checks + deposits in transit</button>';
-  html+='<button class="sv-btn" style="background:var(--red)" onclick="fyeAction(\'delete\',\''+lastKey+'\')">✕ Delete all unreconciled</button>';
+  html+='<button class="sv-btn" style="background:var(--red)" onclick="fyeAction(\'delete\',\''+lastKey+'\')"><i class="fas fa-xmark"></i> Delete all unreconciled</button>';
   html+='</div>';
   html+='<button class="lnk" onclick="closeM(\'m-fye\')">Remind me later</button>';
   g('fye-body').innerHTML=html;
@@ -833,7 +834,7 @@ function updateMobPinBtn(){
   var btn=g('mob-pin-btn');if(!btn)return;
   var c=gc();if(!c){btn.style.display='none';return;}
   var ip=getPinned()===c.id;
-  btn.textContent=ip?'★ Default':'☆ Set as default';
+  btn.innerHTML=ip?'<i class="fas fa-star"></i> Default':'<i class="far fa-star"></i> Set as default';
   btn.style.color=ip?'var(--amber)':'';
   btn.style.borderColor=ip?'var(--amber-bg)':'';
   btn.style.display=window.innerWidth<=768?'inline-block':'none';

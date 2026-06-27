@@ -70,11 +70,39 @@ function signInWithGoogle(){
   sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:redirectTo}});
 }
 
+// Clears every piece of client financial data this app has ever written to
+// localStorage — the main dataset plus all the smaller per-client caches
+// (tab order, last-active-tab, month-end checklists, pinned client).
+// Called on sign-out so a shared/public computer doesn't keep a readable
+// copy of someone else's books after they've logged out. Session auth
+// (Supabase) is separate from this — signing out invalidates the server
+// session regardless, but that alone does NOT clear what's sitting in
+// localStorage, which is why this exists as its own explicit step.
+function clearLocalData(){
+  try{
+    var toRemove=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(!k)continue;
+      if(k===STORE||k==='clarity-pinned'||k==='clarity-sample-loaded'
+        ||k.indexOf('to-')===0||k.indexOf('last-tab-')===0||k.indexOf('checklist-')===0){
+        toRemove.push(k);
+      }
+    }
+    toRemove.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});
+  }catch(e){console.warn('[security] clearLocalData failed:',e);}
+  // Reset in-memory state too, so nothing lingers in the page until reload
+  try{D={clients:[]};CID=null;}catch(e){}
+}
+
 function signOut(){
   var sb=sbClient();if(!sb)return;
   sb.auth.signOut().then(function(){
     _user=null;
+    clearLocalData();
     updateAuthUI();
+    if(typeof renderAll==='function')renderAll();
+    if(typeof renderSB==='function')renderSB();
   });
 }
 
@@ -138,7 +166,7 @@ async function syncToSupabase(){
     if(syncMsg){
       var h=_lastSynced.getHours(),m=_lastSynced.getMinutes(),ampm=h>=12?'pm':'am';
       h=h%12||12;
-      syncMsg.textContent='Saved ✓ '+h+':'+(m<10?'0':'')+m+ampm;
+      syncMsg.textContent='Saved '+h+':'+(m<10?'0':'')+m+ampm;
     }
   }catch(e){
     console.log('[sync] error:',e);
@@ -146,12 +174,12 @@ async function syncToSupabase(){
       _syncRetryCount++;
       // Exponential backoff: 3s, 9s, 27s
       var delay=Math.pow(3,_syncRetryCount)*1000;
-      if(syncMsg)syncMsg.textContent='⚠ Sync error — retrying in '+(delay/1000)+'s (attempt '+_syncRetryCount+'/'+_MAX_SYNC_RETRIES+')…';
+      if(syncMsg)syncMsg.textContent='Sync error — retrying in '+(delay/1000)+'s (attempt '+_syncRetryCount+'/'+_MAX_SYNC_RETRIES+')…';
       clearTimeout(_syncRetryTimer);
       _syncRetryTimer=setTimeout(function(){try{syncToSupabase();}catch(e){}},delay);
     }else{
       _syncRetryCount=0;
-      if(syncMsg)syncMsg.textContent='⚠ Sync failed after '+_MAX_SYNC_RETRIES+' attempts — check connection';
+      if(syncMsg)syncMsg.textContent='Sync failed after '+_MAX_SYNC_RETRIES+' attempts — check connection';
       console.warn('[sync] gave up after',_MAX_SYNC_RETRIES,'retries');
     }
   }
@@ -165,7 +193,7 @@ async function loadFromSupabase(){
     if(res.error){
       console.error('[clarity] loadFromSupabase error:',res.error.message||res.error);
       var syncMsg=document.getElementById('sb-sync-msg');
-      if(syncMsg)syncMsg.textContent='⚠ Could not load cloud data — showing local copy';
+      if(syncMsg)syncMsg.textContent='Could not load cloud data — showing local copy';
       return false;
     }
     if(res.data&&res.data.data&&res.data.data.clients&&res.data.data.clients.length){
@@ -177,7 +205,7 @@ async function loadFromSupabase(){
   }catch(e){
     console.error('[clarity] loadFromSupabase exception:',e&&e.message||e);
     var syncMsg=document.getElementById('sb-sync-msg');
-    if(syncMsg)syncMsg.textContent='⚠ Could not reach cloud — showing local copy';
+    if(syncMsg)syncMsg.textContent='Could not reach cloud — showing local copy';
   }
   return false;
 }
@@ -195,11 +223,11 @@ async function checkSyncConflict(){
     var serverTime=new Date(res.data.updated_at);
     // Case A: we've synced before and server moved ahead of our last sync
     if(_lastSynced&&serverTime>_lastSynced){
-      return confirm('⚠ Your data was updated on another device since this session started.\n\nClick OK to save this version (overwrites the other), or Cancel to reload the page and get the latest.');
+      return confirm('Your data was updated on another device since this session started.\n\nClick OK to save this version (overwrites the other), or Cancel to reload the page and get the latest.');
     }
     // Case B: fresh tab — server moved ahead of what we loaded at startup
     if(!_lastSynced&&serverTime>_loadedServerTime){
-      return confirm('⚠ Your data was updated on another device after this tab was opened.\n\nClick OK to save this version (overwrites the other), or Cancel to reload the page and get the latest.');
+      return confirm('Your data was updated on another device after this tab was opened.\n\nClick OK to save this version (overwrites the other), or Cancel to reload the page and get the latest.');
     }
   }catch(e){}
   return true;
@@ -245,7 +273,12 @@ async function storageUpload(clientId,file,onProgress){
   if(!file)return{error:'No file provided'};
   if(file.size>10*1024*1024)return{error:'File must be under 10 MB'};
   var allowed=['application/pdf','image/jpeg','image/png','image/heic','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  if(allowed.indexOf(file.type)<0&&file.type!=='')console.warn('[vault] unusual mime type:',file.type);
+  // Some browsers report an empty file.type for certain file kinds (notably
+  // .heic on some platforms) — that empty-string case is allowed through,
+  // but anything with a type that's actively NOT on the list is rejected.
+  // Previously this only logged a console warning and let the upload
+  // through regardless, making the allowlist purely decorative.
+  if(file.type&&allowed.indexOf(file.type)<0)return{error:'File type not supported. Please upload a PDF, image, Excel, or Word file.'};
   // Build a unique path so re-uploads never collide
   var ext=file.name.split('.').pop().toLowerCase();
   var safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
@@ -303,7 +336,7 @@ function isSignedIn(){return!!_user;}
       +'box-shadow:0 2px 8px rgba(0,0,0,.2);'
       +'transition:transform .3s ease;transform:translateY(-100%)';
     _offlineBanner.innerHTML=
-      '<span style="font-size:14px">📶</span>'
+      '<span style="font-size:14px"><i class="fas fa-wifi"></i></span>'
       +'<span>You\'re offline — your work is saved locally and will sync when you\'re back.</span>';
     document.body.insertBefore(_offlineBanner,document.body.firstChild);
     // Slide in
@@ -320,7 +353,7 @@ function isSignedIn(){return!!_user;}
     var b=_offlineBanner;
     b.style.background='var(--green,#1D9E75)';
     b.innerHTML=
-      '<span style="font-size:14px">✓</span>'
+      '<span style="font-size:14px"><i class="fas fa-check"></i></span>'
       +'<span>Back online — syncing your data now.</span>';
     // Trigger sync if signed in
     if(typeof syncToSupabase==='function'&&typeof _user!=='undefined'&&_user){

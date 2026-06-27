@@ -34,65 +34,65 @@ var _WP_DRAG_SRC  = null;
 // ── DEFAULT TILE SETS ─────────────────────────────────────────
 var _WP_DEFAULTS = {
   np: [
-    { id:'wp-grants',    type:'status', panel:'grants',         label:'Grants',          icon:'🏛',  wide:false },
-    { id:'wp-donors',    type:'status', panel:'donors',         label:'Donors',          icon:'👥',  wide:false },
-    { id:'wp-income',    type:'status', panel:'funding',        label:'Income',          icon:'💰',  wide:false },
-    { id:'wp-expenses',  type:'status', panel:'npexp',          label:'Expenses',        icon:'💸',  wide:false },
-    { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'🚩',  wide:false },
-    { id:'wp-recon',     type:'status', panel:'recon',          label:'Reconciliation',  icon:'✅',  wide:false },
-    { id:'wp-time',      type:'status', panel:'time',           label:'Time',            icon:'⏱',  wide:false },
-    { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'🧾',  wide:false },
-    { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'➕',  wide:false },
-    { id:'wp-addinc',    type:'action', action:"openM('m-inc')", label:'+ Add Income',   icon:'➕',  wide:false }
+    { id:'wp-grants',    type:'status', panel:'grants',         label:'Grants',          icon:'<i class="fas fa-landmark"></i>',  wide:false },
+    { id:'wp-donors',    type:'status', panel:'donors',         label:'Donors',          icon:'<i class="fas fa-users"></i>',  wide:false },
+    { id:'wp-income',    type:'status', panel:'funding',        label:'Income',          icon:'<i class="fas fa-sack-dollar"></i>',  wide:false },
+    { id:'wp-expenses',  type:'status', panel:'npexp',          label:'Expenses',        icon:'<i class="fas fa-money-bill-wave"></i>',  wide:false },
+    { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'<i class="fas fa-flag"></i>',  wide:false },
+    { id:'wp-recon',     type:'status', panel:'recon',          label:'Reconciliation',  icon:'<i class="fas fa-circle-check"></i>',  wide:false },
+    { id:'wp-time',      type:'status', panel:'time',           label:'Time',            icon:'<i class="far fa-clock"></i>',  wide:false },
+    { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'<i class="fas fa-receipt"></i>',  wide:false },
+    { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'<i class="fas fa-plus"></i>',  wide:false },
+    { id:'wp-addinc',    type:'action', action:"openM('m-inc')", label:'+ Add Income',   icon:'<i class="fas fa-plus"></i>',  wide:false }
   ],
   sb: [
-    { id:'wp-revenue',   type:'status', panel:'revenue',        label:'Revenue',         icon:'📈',  wide:false },
-    { id:'wp-expenses',  type:'status', panel:'sbexp',          label:'Expenses',        icon:'💸',  wide:false },
-    { id:'wp-ar',        type:'status', panel:'ar',             label:'Invoices',        icon:'📄',  wide:false },
-    { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'🚩',  wide:false },
-    { id:'wp-recon',     type:'status', panel:'recon',          label:'Reconciliation',  icon:'✅',  wide:false },
-    { id:'wp-time',      type:'status', panel:'time',           label:'Time',            icon:'⏱',  wide:false },
-    { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'🧾',  wide:false },
-    { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'➕',  wide:false },
-    { id:'wp-addrev',    type:'action', action:"openM('m-rev')", label:'+ Add Revenue',  icon:'➕',  wide:false }
+    { id:'wp-revenue',   type:'status', panel:'revenue',        label:'Revenue',         icon:'<i class="fas fa-chart-line"></i>',  wide:false },
+    { id:'wp-expenses',  type:'status', panel:'sbexp',          label:'Expenses',        icon:'<i class="fas fa-money-bill-wave"></i>',  wide:false },
+    { id:'wp-ar',        type:'status', panel:'ar',             label:'Invoices',        icon:'<i class="fas fa-file"></i>',  wide:false },
+    { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'<i class="fas fa-flag"></i>',  wide:false },
+    { id:'wp-recon',     type:'status', panel:'recon',          label:'Reconciliation',  icon:'<i class="fas fa-circle-check"></i>',  wide:false },
+    { id:'wp-time',      type:'status', panel:'time',           label:'Time',            icon:'<i class="far fa-clock"></i>',  wide:false },
+    { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'<i class="fas fa-receipt"></i>',  wide:false },
+    { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'<i class="fas fa-plus"></i>',  wide:false },
+    { id:'wp-addrev',    type:'action', action:"openM('m-rev')", label:'+ Add Revenue',  icon:'<i class="fas fa-plus"></i>',  wide:false }
   ],
   pe: [
-    { id:'wp-income',    type:'status', panel:'peinc',          label:'Income',          icon:'💰',  wide:false },
-    { id:'wp-expenses',  type:'status', panel:'peexp',          label:'Expenses',        icon:'💸',  wide:false },
-    { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'🚩',  wide:false },
-    { id:'wp-budget',    type:'status', panel:'budget',         label:'Budget',          icon:'📊',  wide:false },
-    { id:'wp-time',      type:'status', panel:'time',           label:'Time',            icon:'⏱',  wide:false },
-    { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'🧾',  wide:false },
-    { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'➕',  wide:false },
-    { id:'wp-addinc',    type:'action', action:"openM('m-peinc')",'label':'+ Add Income',icon:'➕', wide:false }
+    { id:'wp-income',    type:'status', panel:'peinc',          label:'Income',          icon:'<i class="fas fa-sack-dollar"></i>',  wide:false },
+    { id:'wp-expenses',  type:'status', panel:'peexp',          label:'Expenses',        icon:'<i class="fas fa-money-bill-wave"></i>',  wide:false },
+    { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'<i class="fas fa-flag"></i>',  wide:false },
+    { id:'wp-budget',    type:'status', panel:'budget',         label:'Budget',          icon:'<i class="fas fa-chart-column"></i>',  wide:false },
+    { id:'wp-time',      type:'status', panel:'time',           label:'Time',            icon:'<i class="far fa-clock"></i>',  wide:false },
+    { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'<i class="fas fa-receipt"></i>',  wide:false },
+    { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'<i class="fas fa-plus"></i>',  wide:false },
+    { id:'wp-addinc',    type:'action', action:"openM('m-peinc')",'label':'+ Add Income',icon:'<i class="fas fa-plus"></i>', wide:false }
   ]
 };
 
 // All available tiles a user can add — shown in the picker
 var _WP_ALL_TILES = [
-  { id:'wp-grants',    type:'status', panel:'grants',         label:'Grants',          icon:'🏛',  types:['np'] },
-  { id:'wp-donors',    type:'status', panel:'donors',         label:'Donors',          icon:'👥',  types:['np'] },
-  { id:'wp-income',    type:'status', panel:'funding',        label:'Income',          icon:'💰',  types:['np','pe'] },
-  { id:'wp-expenses',  type:'status', panel:'npexp',          label:'Expenses',        icon:'💸',  types:['np'] },
-  { id:'wp-sbexp',     type:'status', panel:'sbexp',          label:'Expenses',        icon:'💸',  types:['sb'] },
-  { id:'wp-peexp',     type:'status', panel:'peexp',          label:'Expenses',        icon:'💸',  types:['pe'] },
-  { id:'wp-revenue',   type:'status', panel:'revenue',        label:'Revenue',         icon:'📈',  types:['sb'] },
-  { id:'wp-ar',        type:'status', panel:'ar',             label:'Invoices / A/R',  icon:'📄',  types:['sb'] },
-  { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'🚩',  types:['np','sb','pe'] },
-  { id:'wp-recon',     type:'status', panel:'recon',          label:'Reconciliation',  icon:'✅',  types:['np','sb'] },
-  { id:'wp-time',      type:'status', panel:'time',           label:'Time Tracking',   icon:'⏱',  types:['np','sb','pe'] },
-  { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'🧾',  types:['np','sb'] },
-  { id:'wp-budget',    type:'status', panel:'budget',         label:'Budget',          icon:'📊',  types:['np','sb','pe'] },
-  { id:'wp-vendors',   type:'status', panel:'vendors',        label:'Vendors',         icon:'🏢',  types:['np','sb','pe'] },
-  { id:'wp-reports',   type:'status', panel:'reports',        label:'Reports',         icon:'📑',  types:['np','sb','pe'] },
-  { id:'wp-vault',     type:'status', panel:'vault',          label:'Document Vault',  icon:'📎',  types:['np','sb','pe'] },
-  { id:'wp-gl',        type:'status', panel:'gl',             label:'General Ledger',  icon:'📒',  types:['np','sb','pe'] },
-  { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'➕',  types:['np','sb','pe'] },
-  { id:'wp-addinc',    type:'action', action:"openM('m-inc')", label:'+ Add Income',   icon:'➕',  types:['np','pe'] },
-  { id:'wp-addrev',    type:'action', action:"openM('m-rev')", label:'+ Add Revenue',  icon:'➕',  types:['sb'] },
-  { id:'wp-addinv',    type:'action', action:"openM('m-inv')", label:'+ Add Invoice',  icon:'➕',  types:['sb'] },
-  { id:'wp-addgrant',  type:'action', action:"openM('m-grant')",'label':'+ Add Grant', icon:'➕',  types:['np'] },
-  { id:'wp-adddonor',  type:'action', action:"openM('m-donation')",'label':'+ Add Donor',icon:'➕',types:['np'] }
+  { id:'wp-grants',    type:'status', panel:'grants',         label:'Grants',          icon:'<i class="fas fa-landmark"></i>',  types:['np'] },
+  { id:'wp-donors',    type:'status', panel:'donors',         label:'Donors',          icon:'<i class="fas fa-users"></i>',  types:['np'] },
+  { id:'wp-income',    type:'status', panel:'funding',        label:'Income',          icon:'<i class="fas fa-sack-dollar"></i>',  types:['np','pe'] },
+  { id:'wp-expenses',  type:'status', panel:'npexp',          label:'Expenses',        icon:'<i class="fas fa-money-bill-wave"></i>',  types:['np'] },
+  { id:'wp-sbexp',     type:'status', panel:'sbexp',          label:'Expenses',        icon:'<i class="fas fa-money-bill-wave"></i>',  types:['sb'] },
+  { id:'wp-peexp',     type:'status', panel:'peexp',          label:'Expenses',        icon:'<i class="fas fa-money-bill-wave"></i>',  types:['pe'] },
+  { id:'wp-revenue',   type:'status', panel:'revenue',        label:'Revenue',         icon:'<i class="fas fa-chart-line"></i>',  types:['sb'] },
+  { id:'wp-ar',        type:'status', panel:'ar',             label:'Invoices / A/R',  icon:'<i class="fas fa-file"></i>',  types:['sb'] },
+  { id:'wp-flagged',   type:'status', panel:'flagged',        label:'Flagged',         icon:'<i class="fas fa-flag"></i>',  types:['np','sb','pe'] },
+  { id:'wp-recon',     type:'status', panel:'recon',          label:'Reconciliation',  icon:'<i class="fas fa-circle-check"></i>',  types:['np','sb'] },
+  { id:'wp-time',      type:'status', panel:'time',           label:'Time Tracking',   icon:'<i class="far fa-clock"></i>',  types:['np','sb','pe'] },
+  { id:'wp-reimb',     type:'status', panel:'reimbursements', label:'Reimbursements',  icon:'<i class="fas fa-receipt"></i>',  types:['np','sb'] },
+  { id:'wp-budget',    type:'status', panel:'budget',         label:'Budget',          icon:'<i class="fas fa-chart-column"></i>',  types:['np','sb','pe'] },
+  { id:'wp-vendors',   type:'status', panel:'vendors',        label:'Vendors',         icon:'<i class="fas fa-building"></i>',  types:['np','sb','pe'] },
+  { id:'wp-reports',   type:'status', panel:'reports',        label:'Reports',         icon:'<i class="fas fa-bookmark"></i>',  types:['np','sb','pe'] },
+  { id:'wp-vault',     type:'status', panel:'vault',          label:'Document Vault',  icon:'<i class="fas fa-paperclip"></i>',  types:['np','sb','pe'] },
+  { id:'wp-gl',        type:'status', panel:'gl',             label:'General Ledger',  icon:'<i class="fas fa-book"></i>',  types:['np','sb','pe'] },
+  { id:'wp-addexp',    type:'action', action:"openM('m-exp')", label:'+ Add Expense',  icon:'<i class="fas fa-plus"></i>',  types:['np','sb','pe'] },
+  { id:'wp-addinc',    type:'action', action:"openM('m-inc')", label:'+ Add Income',   icon:'<i class="fas fa-plus"></i>',  types:['np','pe'] },
+  { id:'wp-addrev',    type:'action', action:"openM('m-rev')", label:'+ Add Revenue',  icon:'<i class="fas fa-plus"></i>',  types:['sb'] },
+  { id:'wp-addinv',    type:'action', action:"openM('m-inv')", label:'+ Add Invoice',  icon:'<i class="fas fa-plus"></i>',  types:['sb'] },
+  { id:'wp-addgrant',  type:'action', action:"openM('m-grant')",'label':'+ Add Grant', icon:'<i class="fas fa-plus"></i>',  types:['np'] },
+  { id:'wp-adddonor',  type:'action', action:"openM('m-donation')",'label':'+ Add Donor',icon:'<i class="fas fa-plus"></i>',types:['np'] }
 ];
 
 // ── TILE DATA — live snapshot per tile ────────────────────────
@@ -120,7 +120,7 @@ function _wpTileData(c, tile) {
         return days >= 0 && days <= 30;
       }).length;
       if(!total) return { main: 'No grants yet', sub: 'Click to add your first grant', isEmpty:true };
-      return { main: active+' active', sub: deadlines ? '⚠ '+deadlines+' deadline'+(deadlines>1?'s':'')+' this month' : 'No upcoming deadlines', alert: deadlines>0 };
+      return { main: active+' active', sub: deadlines ? '<i class="fas fa-triangle-exclamation"></i> '+deadlines+' deadline'+(deadlines>1?'s':'')+' this month' : 'No upcoming deadlines', alert: deadlines>0 };
     }
     case 'donors': {
       var total = (c.donors||[]).length;
@@ -159,11 +159,11 @@ function _wpTileData(c, tile) {
       var overdue = unpaid.filter(function(i){
         var d = parseDate(i.due||''); return d && d < now;
       }).length;
-      return { main: fmt(unpaidAmt)+' outstanding', sub: overdue ? '⚠ '+overdue+' overdue' : unpaid.length+' open invoice'+(unpaid.length!==1?'s':''), alert: overdue>0 };
+      return { main: fmt(unpaidAmt)+' outstanding', sub: overdue ? '<i class="fas fa-triangle-exclamation"></i> '+overdue+' overdue' : unpaid.length+' open invoice'+(unpaid.length!==1?'s':''), alert: overdue>0 };
     }
     case 'flagged': {
       var flags = (c.expenses||[]).concat(c.income||[]).filter(function(e){ return e.flagged&&!e.deleted&&!e.flagDismissed; }).length;
-      return { main: flags ? flags+' item'+(flags!==1?'s':'')+' flagged' : 'No flags', sub: flags ? 'Needs review' : 'All clear ✓', alert: flags>0 };
+      return { main: flags ? flags+' item'+(flags!==1?'s':'')+' flagged' : 'No flags', sub: flags ? 'Needs review' : 'All clear <i class="fas fa-check"></i>', alert: flags>0 };
     }
     case 'recon': {
       var recs = c.reconciliations||[];
@@ -232,7 +232,7 @@ function renderWaypoint() {
   // Edit mode controls
   var editBar = _WP_EDIT_MODE
     ? '<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;padding:.6rem 1rem;background:var(--amber-bg);border:1px solid var(--amber);border-radius:10px;flex-wrap:wrap">'
-      +'<span style="font-size:12px;font-weight:500;color:var(--amber)">✏️ Editing tiles — drag to reorder, × to remove</span>'
+      +'<span style="font-size:12px;font-weight:500;color:var(--amber)"><i class="fas fa-pen"></i> Editing tiles — drag to reorder, × to remove</span>'
       +'<button onclick="waypointShowPicker()" style="padding:5px 12px;border:1px solid var(--amber);border-radius:6px;background:none;cursor:pointer;font-size:12px;color:var(--amber);font-family:\'DM Sans\',sans-serif">+ Add tile</button>'
       +'<button onclick="waypointEditMode()" style="margin-left:auto;padding:5px 14px;border:none;border-radius:6px;background:var(--amber);color:#fff;cursor:pointer;font-size:12px;font-weight:500;font-family:\'DM Sans\',sans-serif">Done</button>'
       +'</div>'
@@ -246,7 +246,7 @@ function renderWaypoint() {
   // Edit toggle button (bottom, subtle)
   var editToggle = !_WP_EDIT_MODE
     ? '<div style="text-align:center;margin-top:1.5rem">'
-      +'<button onclick="waypointEditMode()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);font-family:\'DM Sans\',sans-serif;text-decoration:underline">✏️ Customize tiles</button>'
+      +'<button onclick="waypointEditMode()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);font-family:\'DM Sans\',sans-serif;text-decoration:underline"><i class="fas fa-pen"></i> Customize tiles</button>'
       +'</div>'
     : '';
 
@@ -259,7 +259,7 @@ function renderWaypoint() {
           +'<span style="font-family:\'DM Serif Display\',serif;font-size:20px;letter-spacing:-.3px">The Waypoint</span>'
           +(attn>0
             ?'<span style="background:var(--red);color:#fff;border-radius:10px;padding:2px 9px;font-size:11px;font-weight:600">'+attn+' need attention</span>'
-            :'<span style="background:var(--green-bg);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:500">All clear ✓</span>')
+            :'<span style="background:var(--green-bg);color:var(--green);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:500">All clear <i class="fas fa-check"></i></span>')
           +'</div>'
           +'<div style="font-size:11px;color:var(--muted);margin-top:3px">'+_wpGreeting()+'</div>'
           +'</div>';
@@ -474,7 +474,7 @@ function _wpAttentionCount(c) {
       var tabs = _origGetTabs(t);
       // Only add if not already present
       if (!tabs.find(function(tab){ return tab[0]==='waypoint'; })) {
-        tabs.unshift(['waypoint','⚓ Waypoint']);
+        tabs.unshift(['waypoint','Waypoint']);
       }
       return tabs;
     };

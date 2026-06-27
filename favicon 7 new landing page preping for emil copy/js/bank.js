@@ -7,7 +7,7 @@
 //   <script src="js/bank.js"></script>  — after features.js
 //
 // ADDS TO nav.js getTabs():
-//   ['bank','🏦 Bank']  — added to np, sb, pe tab lists
+//   ['bank','<i class="fas fa-building-columns"></i> Bank']  — added to np, sb, pe tab lists
 //
 // DATA ON CLIENT OBJECT:
 //   c.bankTransactions  [] — pending transactions awaiting approval
@@ -119,7 +119,17 @@ function renderBank(c) {
             : '')
         + '</td>';
 
-      return '<tr id="btr-' + t.id + '">'        + '<td style="width:26px"><input type="checkbox" class="bank-chk" data-id="' + t.id + '" style="width:14px;height:14px;cursor:pointer"></td>'        + '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + escHtml(t.date || '—') + '</td>'        + '<td style="max-width:160px"><input type="text" value="' + escHtml(t.description) + '" onchange="bankSetDesc(\'' + t.id + '\',this.value)" onfocus="this.style.outline=\'2px solid var(--np)\';this.style.borderRadius=\'4px\'" onblur="this.style.outline=\'none\'" style="font-size:12px;width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:\'DM Sans\',sans-serif;padding:2px 4px;border-radius:4px;cursor:text;"></td>'        + '<td><select onchange="bankSetType(\'' + t.id + '\',this.value)" ' + sel + '>'        + '<option value="debit"' + (t.type === 'debit' ? ' selected' : '') + '>Expense</option>'        + '<option value="credit"' + (t.type === 'credit' ? ' selected' : '') + '>Income</option>'        + '</select></td>'        + '<td><select onchange="bankSetCat(\'' + t.id + '\',this.value)" ' + sel + '>' + catOpts + '</select></td>'        + grantCol        + '<td><select onchange="bankSetParty(\'' + t.id + '\',this.value,\'' + (isInc ? 'customer' : 'vendor') + '\')" ' + sel + '>' + partyOpts + '</select></td>'        + '<td><select onchange="bankSetAcct(\'' + t.id + '\',this.value,\'' + (isInc ? 'income' : 'expense') + '\')" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);' + acctStyle + '">' + acctOpts + '</select></td>'        + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap" class="' + (isInc ? 'vg' : 'vr') + '">'        + (isInc ? '+' : '−') + fmt(t.amount) + '</td>'        + '<td style="text-align:right;white-space:nowrap">'        + '<button onclick="bankApproveOne(\'' + t.id + '\')" style="font-size:11px;padding:4px 9px;border:none;border-radius:5px;background:var(--green);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif">✓ Post</button>'        + ' <button onclick="bankDeletePending(\'' + t.id + '\')" style="font-size:11px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer">✕</button>'        + '</td>'        + '</tr>';
+      // Look for candidate matches in the existing books (e.g. a bill paid
+      // by check that hasn't cleared the bank yet). Show the Match button
+      // whenever at least one candidate exists — bankMatchOne() handles the
+      // single-vs-multiple branching itself (auto-match one, ask the user
+      // to pick among several rather than silently guessing).
+      var _matchCandidates = _bankFindMatchCandidates(t);
+      var matchBtn = _matchCandidates.length
+        ? '<button onclick="bankMatchOne(\'' + t.id + '\')" title="' + (_matchCandidates.length === 1 ? 'Link to: ' + escHtml(_matchCandidates[0].item.desc || _matchCandidates[0].item.name || '') : _matchCandidates.length + ' entries with this amount — choose which one') + '" style="font-size:11px;padding:4px 9px;border:1px solid var(--np);border-radius:5px;background:var(--np-bg);color:var(--np);cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-right:4px"><i class="fas fa-link"></i> Match' + (_matchCandidates.length > 1 ? ' (' + _matchCandidates.length + ')' : '') + '</button>'
+        : '';
+
+      return '<tr id="btr-' + t.id + '">'        + '<td style="width:26px"><input type="checkbox" class="bank-chk" data-id="' + t.id + '" style="width:14px;height:14px;cursor:pointer"></td>'        + '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + escHtml(t.date || '—') + '</td>'        + '<td style="max-width:160px"><input type="text" value="' + escHtml(t.description) + '" onchange="bankSetDesc(\'' + t.id + '\',this.value)" onfocus="this.style.outline=\'2px solid var(--np)\';this.style.borderRadius=\'4px\'" onblur="this.style.outline=\'none\'" style="font-size:12px;width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:\'DM Sans\',sans-serif;padding:2px 4px;border-radius:4px;cursor:text;"></td>'        + '<td><select onchange="bankSetType(\'' + t.id + '\',this.value)" ' + sel + '>'        + '<option value="debit"' + (t.type === 'debit' ? ' selected' : '') + '>Expense</option>'        + '<option value="credit"' + (t.type === 'credit' ? ' selected' : '') + '>Income</option>'        + '</select></td>'        + '<td><select onchange="bankSetCat(\'' + t.id + '\',this.value)" ' + sel + '>' + catOpts + '</select></td>'        + grantCol        + '<td><select onchange="bankSetParty(\'' + t.id + '\',this.value,\'' + (isInc ? 'customer' : 'vendor') + '\')" ' + sel + '>' + partyOpts + '</select></td>'        + '<td><select onchange="bankSetAcct(\'' + t.id + '\',this.value,\'' + (isInc ? 'income' : 'expense') + '\')" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);' + acctStyle + '">' + acctOpts + '</select></td>'        + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap" class="' + (isInc ? 'vg' : 'vr') + '">'        + (isInc ? '+' : '−') + fmt(t.amount) + '</td>'        + '<td style="text-align:right;white-space:nowrap">'        + matchBtn        + '<button onclick="bankApproveOne(\'' + t.id + '\')" style="font-size:11px;padding:4px 9px;border:none;border-radius:5px;background:var(--green);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="fas fa-check"></i> Post</button>'        + ' <button onclick="bankDeletePending(\'' + t.id + '\')" style="font-size:11px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer"><i class="fas fa-xmark"></i></button>'        + '</td>'        + '</tr>';
     }).join('');
   }
 
@@ -127,7 +137,7 @@ function renderBank(c) {
   var tplRows = templates.length
     ? templates.map(function(t, i) {
         return '<div style="display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;border-radius:8px;background:var(--bg);margin-bottom:.4rem">'
-          + '<span style="font-size:18px">🏦</span>'
+          + '<span style="font-size:18px"><i class="fas fa-building-columns"></i></span>'
           + '<div style="flex:1"><div style="font-size:13px;font-weight:500">' + escHtml(t.bankName) + '</div>'
           + '<div style="font-size:11px;color:var(--muted)">Created ' + (t.createdAt ? t.createdAt.slice(0,10) : '') + ' · ' + (t.usageCount || 0) + ' imports</div></div>'
           + '<button onclick="bankDeleteTemplate(' + i + ')" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer">Remove</button>'
@@ -153,7 +163,7 @@ function renderBank(c) {
 
     // Header
     + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem">'
-    + '<div><div style="font-size:17px;font-weight:600">🏦 Bank Statements</div>'
+    + '<div><div style="font-size:17px;font-weight:600"><i class="fas fa-building-columns"></i> Bank Statements</div>'
     + '<div style="font-size:12px;color:var(--muted);margin-top:2px">Import, review, and post transactions to your books</div></div>'
     + '<button onclick="bankOpenUpload()" style="padding:8px 18px;border:none;border-radius:8px;background:var(--np);color:#fff;cursor:pointer;font-size:13px;font-weight:500;font-family:\'DM Sans\',sans-serif">+ Import Statement</button>'
     + '</div>'
@@ -166,8 +176,8 @@ function renderBank(c) {
     + '</div>'
     + (pending.length ? '<div style="display:flex;gap:.5rem;flex-wrap:wrap">'
       + '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="bank-chk-all" onchange="bankToggleAll(this.checked)" style="width:14px;height:14px"> Select all</label>'
-      + '<button onclick="bankApproveSelected()" style="padding:6px 14px;border:none;border-radius:7px;background:var(--green);color:#fff;cursor:pointer;font-size:12px;font-weight:500;font-family:\'DM Sans\',sans-serif">✓ Post selected</button>'
-      + '<button onclick="bankDeleteSelected()" style="padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:\'DM Sans\',sans-serif">✕ Remove selected</button>'
+      + '<button onclick="bankApproveSelected()" style="padding:6px 14px;border:none;border-radius:7px;background:var(--green);color:#fff;cursor:pointer;font-size:12px;font-weight:500;font-family:\'DM Sans\',sans-serif"><i class="fas fa-check"></i> Post selected</button>'
+      + '<button onclick="bankDeleteSelected()" style="padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:\'DM Sans\',sans-serif"><i class="fas fa-xmark"></i> Remove selected</button>'
       + '</div>' : '')
     + '</div>'
     + (pending.length
@@ -187,8 +197,8 @@ function renderBank(c) {
         + '<tbody>' + pendingRows + '</tbody>'
         + '</table></div>'
       : '<div style="text-align:center;padding:2.5rem;color:var(--muted)">'
-        + '<div style="font-size:2rem;margin-bottom:.75rem">✓</div>'
-        + '<div id="bank-drop-zone" ondragover="bankDragOver(event)" ondragleave="bankDragLeave(event)" ondrop="bankDrop(event)" onclick="bankOpenUpload()" style="text-align:center;padding:2.5rem 1.25rem;color:var(--muted);border:2px dashed var(--border);border-radius:12px;cursor:pointer;transition:border-color .15s,background .15s">'        + '<div style="font-size:2.5rem;margin-bottom:.75rem">📄</div>'        + '<div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:.35rem">Drop a bank statement here</div>'        + '<div style="font-size:12px;margin-bottom:1rem">or click to browse for a PDF</div>'        + '<button onclick="event.stopPropagation();bankOpenUpload()" style="padding:7px 18px;border:none;border-radius:7px;background:var(--np);color:#fff;cursor:pointer;font-size:12px;font-weight:500;font-family:\'DM Sans\',sans-serif">+ Import Statement</button>'        + '</div>')
+        + '<div style="font-size:2rem;margin-bottom:.75rem"><i class="fas fa-check"></i></div>'
+        + '<div id="bank-drop-zone" ondragover="bankDragOver(event)" ondragleave="bankDragLeave(event)" ondrop="bankDrop(event)" onclick="bankOpenUpload()" style="text-align:center;padding:2.5rem 1.25rem;color:var(--muted);border:2px dashed var(--border);border-radius:12px;cursor:pointer;transition:border-color .15s,background .15s">'        + '<div style="font-size:2.5rem;margin-bottom:.75rem"><i class="fas fa-file"></i></div>'        + '<div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:.35rem">Drop a bank statement here</div>'        + '<div style="font-size:12px;margin-bottom:1rem">or click to browse for a PDF</div>'        + '<button onclick="event.stopPropagation();bankOpenUpload()" style="padding:7px 18px;border:none;border-radius:7px;background:var(--np);color:#fff;cursor:pointer;font-size:12px;font-weight:500;font-family:\'DM Sans\',sans-serif">+ Import Statement</button>'        + '</div>')
     + '</div>'
 
     // Templates section
@@ -552,13 +562,196 @@ function bankUndoPost(bankTxnId) {
   _bankToast(removed ? 'Post undone — back in the pending queue.' : 'Post undone, but the original entry could not be located (it may have been edited or deleted separately).');
 }
 
+// ── MATCH vs POST ────────────────────────────────────────────
+// "Post" (existing) always creates a new ledger entry from a bank
+// transaction. "Match" links a bank transaction to a record that already
+// exists in the books (e.g. a bill paid by check via payBill(), or an
+// invoice payment entered by hand) instead of creating a duplicate entry.
+//
+// Matching strategy mirrors _pdfFindPaymentMatch() in pdfreader.js: exact
+// amount (within a cent, to allow for float rounding) + closest date within
+// a 5-day window. Items that are already matched (matchId set) or already
+// reconciled are excluded so a transaction can't be matched twice.
+function _bankFindMatchCandidates(t) {
+  var c = gc(); if (!c) return [];
+  var txnDate = parseDate(t.date); if (!txnDate) return [];
+  var target = Math.abs(Number(t.amount || 0));
+  var candidates = [];
+  // Window mirrors QuickBooks Online's documented match range: a books entry
+  // can be dated up to 90 days before the bank transaction (e.g. a check
+  // written well before it's cashed) or up to 20 days after (e.g. a deposit
+  // recorded a few days ahead of when it actually clears). Amount is the
+  // hard requirement — a wide date window only works because amount narrows
+  // things down first. When more than one candidate shares the same amount
+  // within the window, bankMatchOne() asks the user to pick rather than
+  // silently guessing — see _bankShowMatchPicker().
+  var DAYS_BEFORE = 90, DAYS_AFTER = 20;
+
+  if (t.type === 'debit') {
+    // Bank money-out → look for an unmatched expense of the same amount
+    (c.expenses || []).forEach(function(e, i) {
+      if (e.deleted || e.matchId || e.reconciled) return;
+      if (Math.abs(Number(e.amt || 0) - target) > 0.01) return;
+      var eDate = parseDate(e.date); if (!eDate) return;
+      var daysDiff = (txnDate - eDate) / 86400000; // positive = entry dated before the bank txn
+      if (daysDiff <= DAYS_BEFORE && daysDiff >= -DAYS_AFTER) {
+        candidates.push({ listKey: 'expenses', index: i, item: e, daysDiff: Math.abs(daysDiff) });
+      }
+    });
+  } else {
+    // Bank money-in → look for an unmatched income/revenue entry
+    var list = c.type === 'sb' ? (c.revenue || []) : (c.income || []);
+    var listKey = c.type === 'sb' ? 'revenue' : 'income';
+    list.forEach(function(r, i) {
+      if (r.deleted || r.matchId || r.reconciled) return;
+      var amt = Number(r.act != null ? r.act : (r.recv != null ? r.recv : 0));
+      if (Math.abs(amt - target) > 0.01) return;
+      var rDate = parseDate(r.date); if (!rDate) return;
+      var daysDiff = (txnDate - rDate) / 86400000;
+      if (daysDiff <= DAYS_BEFORE && daysDiff >= -DAYS_AFTER) {
+        candidates.push({ listKey: listKey, index: i, item: r, daysDiff: Math.abs(daysDiff) });
+      }
+    });
+  }
+
+  candidates.sort(function(a, b) { return a.daysDiff - b.daysDiff; });
+  return candidates;
+}
+
+// Kept for any other call sites that just want the single best guess
+// (e.g. a future "auto-match all" batch action) — returns null when there
+// isn't exactly one unambiguous candidate, since silently picking among
+// several same-amount entries is exactly the mistake bankMatchOne() now
+// avoids by asking the user instead.
+function _bankFindMatch(t) {
+  var candidates = _bankFindMatchCandidates(t);
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+// Links a bank transaction to an existing books entry instead of posting a
+// new one. Marks both sides matched + reconciled (a matched transaction is
+// by definition already accounted for and cleared).
+function _bankApplyMatch(t, match) {
+  var c = gc(); if (!c) return;
+  var list = c[match.listKey];
+  var item = list[match.index];
+  item.matchId = t.id;
+  item.reconciled = true;
+  if (!item.bankTxnId) item.bankTxnId = t.id;
+
+  t.approved = true;
+  t.matched = true;
+  t.matchedListKey = match.listKey;
+  t.matchedIndex = match.index;
+  t.postedAt = new Date().toISOString();
+
+  sv(); renderAll();
+  setTimeout(function(){ renderBank(gc()); _bankRefreshActivePanel(gc()); }, 50);
+  _bankToast('Matched to: ' + (item.desc || item.name || 'existing entry'));
+}
+
+function bankMatchOne(id) {
+  var c = gc(); if (!c) return;
+  var t = (c.bankTransactions || []).find(function(x) { return x.id === id; });
+  if (!t) return;
+  if (t.approved) { _bankToast('This transaction has already been posted.'); return; }
+
+  var candidates = _bankFindMatchCandidates(t);
+  if (!candidates.length) { _bankToast('No matching entry found for this transaction.'); return; }
+
+  // Always show the picker — even for a single candidate — so the user
+  // sees what they're matching to (description, date, check number) and
+  // explicitly confirms before it's applied. Auto-committing a single
+  // match with only a 4-second toast as feedback didn't give anyone a
+  // real chance to review or back out before a transaction was marked
+  // reconciled.
+  _bankShowMatchPicker(t, candidates);
+}
+
+// Picker modal shown whenever Match is clicked — whether there's exactly
+// one candidate to confirm or several to choose between. Built the same
+// way as _bankShowTemplatePicker() — a standalone overlay appended to
+// <body>, since this can be triggered from deep inside a long
+// pending-transactions table render rather than from a fixed spot in
+// app.html.
+function _bankShowMatchPicker(t, candidates) {
+  var existing = document.getElementById('bank-match-picker');
+  if (existing) existing.parentNode.removeChild(existing);
+
+  var isSingle = candidates.length === 1;
+  var div = document.createElement('div');
+  div.innerHTML = '<div class="overlay open" id="bank-match-picker" style="z-index:10001">'
+    + '<div class="modal" style="max-width:480px;padding:0;overflow:hidden">'
+
+    // Header
+    + '<div style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem;border-bottom:1px solid var(--border)">'
+    + '<div><div style="font-size:15px;font-weight:600"><i class="fas fa-link"></i> '
+    + (isSingle ? 'Confirm this match' : 'Which entry does this match?') + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">'
+    + escHtml(t.description || '') + ' — ' + fmt(t.amount) + ' on ' + escHtml(t.date || '')
+    + (isSingle ? '' : ' &middot; ' + candidates.length + ' entries have this same amount') + '</div></div>'
+    + '<button class="cx" onclick="_bankClosematchPicker()">&#215;</button>'
+    + '</div>'
+
+    // Candidate list (one row when single, several when picking)
+    + '<div style="padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.5rem;max-height:50vh;overflow-y:auto">'
+    + candidates.map(function(cand, i) {
+        var item = cand.item;
+        var label = escHtml(item.desc || item.name || item.vendor1099 || 'Untitled entry');
+        var sub = escHtml(item.date || '—') + (item.checkNum ? ' &middot; Check #' + escHtml(item.checkNum) : '');
+        return '<button onclick="_bankMatchPickerSelect(\'' + t.id + '\',' + i + ')" style="'
+          + 'display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;'
+          + 'border:1px solid var(--border);border-radius:10px;background:var(--surface);'
+          + 'cursor:pointer;text-align:left;width:100%;font-family:\'DM Sans\',sans-serif;'
+          + 'transition:border-color .15s,background .15s" '
+          + 'onmouseover="this.style.borderColor=\'var(--np)\';this.style.background=\'var(--np-bg)\'" '
+          + 'onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--surface)\'">'
+          + '<div style="flex:1">'
+          + '<div style="font-size:13px;font-weight:600;color:var(--text)">' + label + '</div>'
+          + '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + sub + '</div>'
+          + '</div>'
+          + '<span style="font-size:18px;color:var(--muted)">' + (isSingle ? '<i class="fas fa-check"></i>' : '›') + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div>'
+
+    // Footer — bail out, this isn't right
+    + '<div style="padding:.75rem 1.25rem;border-top:1px solid var(--border);text-align:center">'
+    + '<button onclick="_bankClosematchPicker()" style="font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:\'DM Sans\',sans-serif;text-decoration:underline">'
+    + (isSingle ? 'Not a match — I\'ll Post instead' : 'None of these — I\'ll Post instead') + '</button>'
+    + '</div>'
+
+    + '</div></div>';
+  document.body.appendChild(div.firstChild);
+  // Stash candidates on the element so the select handler can read them
+  // back without recomputing the search (the books may have changed in
+  // the meantime, but re-finding by t.id + index is still correct since
+  // listKey/index were captured at picker-open time).
+  document.getElementById('bank-match-picker')._candidates = candidates;
+}
+
+function _bankMatchPickerSelect(txnId, candidateIndex) {
+  var c = gc(); if (!c) return;
+  var t = (c.bankTransactions || []).find(function(x) { return x.id === txnId; });
+  var picker = document.getElementById('bank-match-picker');
+  var candidates = picker && picker._candidates;
+  if (!t || !candidates || !candidates[candidateIndex]) { _bankClosematchPicker(); return; }
+  _bankApplyMatch(t, candidates[candidateIndex]);
+  _bankClosematchPicker();
+}
+
+function _bankClosematchPicker() {
+  var m = document.getElementById('bank-match-picker');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
 function bankApproveOne(id) {
   var c = gc(); if (!c) return;
   var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
   if (!t) return;
   // Hard guard — never double-post an already-approved transaction
   if (t.approved) {
-    _bankToast('⚠ This transaction has already been posted.');
+    _bankToast('This transaction has already been posted.');
     return;
   }
   // Account is required
@@ -570,7 +763,7 @@ function bankApproveOne(id) {
       acctSel.style.boxShadow = '0 0 0 2px rgba(192,57,43,.2)';
       setTimeout(function(){ acctSel.style.borderColor=''; acctSel.style.boxShadow=''; }, 2500);
     }
-    _bankToast('⚠ Select an account before posting.');
+    _bankToast('Select an account before posting.');
     return;
   }
   _bankPost(c, t);
@@ -595,13 +788,13 @@ function bankApproveSelected() {
     if (t && !t.approved && !t.acctCode) missing.push(t.description || id);
   });
   if (missing.length) {
-    alert('⚠ The following transactions are missing an account code:\n\n' + missing.join('\n') + '\n\nPlease select an account for each before posting.');
+    alert('The following transactions are missing an account code:\n\n' + missing.join('\n') + '\n\nPlease select an account for each before posting.');
     return;
   }
   var count = 0;
   checked.forEach(function(id) {
     var t = (c.bankTransactions || []).find(function(x){ return x.id === id; });
-    if (!t || t.approved) { _bankToast('⚠ One or more transactions were already posted and skipped.'); return; }
+    if (!t || t.approved) { _bankToast('One or more transactions were already posted and skipped.'); return; }
     _bankPost(c, t);
     t.approved = true;
     t.postedAt = new Date().toISOString();
@@ -762,7 +955,7 @@ function _bankPost(c, t) {
           _mEl.id='bank-dup-donation-modal';
           _mEl.style.cssText='position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
           _mEl.innerHTML='<div style="background:var(--surface);border-radius:14px;padding:1.5rem;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:\'DM Sans\',sans-serif">'
-            +'<div style="font-size:15px;font-weight:600;margin-bottom:.5rem;color:var(--text)">⚠️ Donation already logged</div>'
+            +'<div style="font-size:15px;font-weight:600;margin-bottom:.5rem;color:var(--text)"><i class="fas fa-triangle-exclamation"></i> Donation already logged</div>'
             +'<div style="font-size:13px;color:var(--muted);margin-bottom:.75rem">A donation of <strong style="color:var(--text)">$'+Number(_dd.donation.amt).toFixed(2)+'</strong>'
             +(_dd.donor?' from <strong style="color:var(--text)">'+escHtml(_dd.donor.name)+'</strong>':'')
             +' was already manually logged on <strong style="color:var(--text)">'+(_dd.donation.date||'unknown date')+'</strong>.'
@@ -1032,7 +1225,7 @@ function _bankShowTemplatePicker(file, c, templates) {
 
     // Header
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem;border-bottom:1px solid var(--border)">'
-    + '<div><div style="font-size:15px;font-weight:600">🏦 Which bank is this statement from?</div>'
+    + '<div><div style="font-size:15px;font-weight:600"><i class="fas fa-building-columns"></i> Which bank is this statement from?</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escHtml(file.name) + '</div></div>'
     + '<button class="cx" onclick="var m=document.getElementById(\'bank-tpl-picker\');if(m)m.parentNode.removeChild(m)">&#215;</button>'
     + '</div>'
@@ -1047,7 +1240,7 @@ function _bankShowTemplatePicker(file, c, templates) {
           + 'transition:border-color .15s,background .15s" '
           + 'onmouseover="this.style.borderColor=\'var(--np)\';this.style.background=\'var(--np-bg)\'" '
           + 'onmouseout="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--surface)\'">'
-          + '<span style="font-size:22px">🏦</span>'
+          + '<span style="font-size:22px"><i class="fas fa-building-columns"></i></span>'
           + '<div style="flex:1">'
           + '<div style="font-size:13px;font-weight:600;color:var(--text)">' + escHtml(tpl.bankName) + '</div>'
           + '<div style="font-size:11px;color:var(--muted);margin-top:1px">'
@@ -1434,7 +1627,7 @@ function _bankInjectMapperModal() {
 
     // Header
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem;border-bottom:1px solid var(--border);flex-shrink:0">'
-    + '<div><div style="font-size:15px;font-weight:600">🏦 Set Up Bank Import</div>'
+    + '<div><div style="font-size:15px;font-weight:600"><i class="fas fa-building-columns"></i> Set Up Bank Import</div>'
     + '<div style="font-size:11px;color:var(--muted)">Teach Clarity where to find information on your bank\'s PDF</div></div>'
     + '<button class="cx" onclick="bankMapperCancel()" style="flex-shrink:0">&#215;</button>'
     + '</div>'
@@ -1535,7 +1728,7 @@ function _bankShowStep(step) {
       var active = i === step;
       return '<div style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;'
         + (active ? 'background:var(--np);color:#fff' : done ? 'background:var(--green-bg);color:var(--green)' : 'color:var(--muted)') + '">'
-        + (done && !active ? '✓ ' : (i+1) + '. ')
+        + (done && !active ? '<i class="fas fa-check"></i> ' : (i+1) + '. ')
         + s.label + '</div>';
     }).join('');
   }
@@ -1624,9 +1817,9 @@ function _bankMapClick(pdfX, pdfY, canvasX, canvasY) {
         }
       });
       if (samples.length) {
-        promptEl.textContent = '✓ Captured — values at this column: ' + samples.join(', ') + '. Click Next to confirm or click a different row to re-set.';
+        promptEl.textContent = 'Captured — values at this column: ' + samples.join(', ') + '. Click Next to confirm or click a different row to re-set.';
       } else {
-        promptEl.textContent = '⚠ No numbers found at that position — try clicking directly on an amount value, not the column header.';
+        promptEl.textContent = 'No numbers found at that position — try clicking directly on an amount value, not the column header.';
         // Don't auto-advance if nothing was found
         return;
       }
@@ -1667,7 +1860,7 @@ function _bankPopulateNameRow(container) {
       groups[grp].forEach(function(n){ html += '<option value="' + escHtml(n) + '"' + (n === currentName ? ' selected' : '') + '>' + escHtml(n) + '</option>'; });
       html += '</optgroup>';
     });
-    html += '<option value="__new__">✏ Enter a new name…</option></select>';
+    html += '<option value="__new__">Enter a new name…</option></select>';
     var showInp = currentName && !seen[currentName.toLowerCase()];
     html += '<input id="bank-name-input" type="text" placeholder="e.g. First National Checking" value="' + escHtml(showInp ? currentName : '') + '" style="flex:1;' + s + ';display:' + (showInp ? 'block' : 'none') + '">';
   } else {
@@ -1825,7 +2018,7 @@ function _bankShowProgress(msg) {
       + 'display:flex;align-items:center;gap:.75rem;color:var(--text)';
     document.body.appendChild(existing);
   }
-  existing.innerHTML = '<span style="font-size:18px">⏳</span>' + escHtml(msg);
+  existing.innerHTML = '<span style="font-size:18px"><i class="fas fa-hourglass-half"></i></span>' + escHtml(msg);
 }
 
 // ── TOAST ─────────────────────────────────────────────────────
@@ -1854,7 +2047,7 @@ function _bankToast(msg) {
     var insertAt = wp >= 0 ? wp + 1 : 1;
     // Don't add twice
     if (tabs.findIndex(function(tab){ return tab[0] === 'bank'; }) >= 0) return tabs;
-    tabs.splice(insertAt, 0, ['bank', '🏦 Bank']);
+    tabs.splice(insertAt, 0, ['bank', 'Bank']);
     return tabs;
   };
   getTabs._bankPatched = true;
@@ -1904,7 +2097,7 @@ function renderCCTab(c) {
 
   if (!(c.creditCards || []).length) {
     p.innerHTML = '<div style="max-width:520px;margin:3rem auto;text-align:center">'
-      + '<div style="font-size:2rem;margin-bottom:1rem">💳</div>'
+      + '<div style="font-size:2rem;margin-bottom:1rem"><i class="fas fa-credit-card"></i></div>'
       + '<div style="font-size:16px;font-weight:600;margin-bottom:.5rem">No credit cards set up yet</div>'
       + '<div style="font-size:13px;color:var(--muted);margin-bottom:1.5rem">Add a card to track charges, import statements, and reconcile your balance.</div>'
       + '<button class="sv-btn" onclick="openAddCC()" style="max-width:200px;margin:0 auto">+ Add credit card</button>'

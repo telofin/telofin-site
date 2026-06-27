@@ -254,7 +254,7 @@ function _ttUpdateSidebar(){
   var el=document.getElementById('tt-sidebar');if(!el)return;
   if(!_TT_ACTIVE){
     el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between">'
-      +'<span style="font-size:11px;color:var(--muted);font-weight:500">⏱ Time</span>'
+      +'<span style="font-size:11px;color:var(--muted);font-weight:500"><i class="far fa-clock"></i> Time</span>'
       +'<button onclick="ttOpenFullLog(true)" style="font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0">all logs</button>'
       +'</div>'
       +'<div style="display:flex;gap:.4rem;margin-top:.4rem">'
@@ -267,9 +267,9 @@ function _ttUpdateSidebar(){
   for(var i=0;i<D.clients.length;i++){if(D.clients[i].id===_TT_CLIENT_ID){timedClient=D.clients[i];break;}}
   var clientName=timedClient?timedClient.name:'Unknown';
   var statusCol=_TT_IS_IDLE?'var(--amber)':'var(--green)';
-  var dot=_TT_IS_IDLE?'💤':'🟢';
+  var dot=_TT_IS_IDLE?'<i class="fas fa-moon"></i>':'<i class="fas fa-circle"></i>';
   el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">'
-    +'<span style="font-size:11px;color:var(--muted);font-weight:500">⏱ Time</span>'
+    +'<span style="font-size:11px;color:var(--muted);font-weight:500"><i class="far fa-clock"></i> Time</span>'
     +'<span style="font-size:10px;color:'+statusCol+'">'+dot+(_TT_IS_IDLE?' idle':' live')+'</span>'
     +'</div>'
     +'<div style="font-size:10px;color:var(--muted);margin-bottom:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(clientName)+'</div>'
@@ -321,7 +321,7 @@ function renderTimePanel(){
   if(!log.length){
     var rateHint=c2&&!c2.timeRate?'<div style="font-size:11px;margin-top:.5rem;color:var(--amber)">Tip: set a billing rate above to track billable value automatically.</div>':'';
     table='<div class="card"><div style="padding:2rem;text-align:center;color:var(--muted);font-size:13px">'
-      +'<div style="font-size:28px;margin-bottom:.5rem">⏱</div>'
+      +'<div style="font-size:28px;margin-bottom:.5rem"><i class="far fa-clock"></i></div>'
       +'<div style="font-weight:500;color:var(--text);margin-bottom:.25rem">No time logged yet</div>'
       +'<div style="font-size:12px">Hit ▶ Start to begin tracking, or use "+ Log time" to add past sessions manually.</div>'
       +rateHint
@@ -343,7 +343,7 @@ function renderTimePanel(){
         +'<td>'+bb+mb+'</td>'
         +'<td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(e.note||'—')+'</td>'
         +'<td><div class="row-acts">'
-        +'<button class="e-btn" onclick="ttMarkBilled(\''+e.id+'\')" title="'+(e.billed?'Mark unbilled':'Mark billed')+'">'+(e.billed?'↩':'✓')+'</button>'
+        +'<button class="e-btn" onclick="ttMarkBilled(\''+e.id+'\')" title="'+(e.billed?'Mark unbilled':'Mark billed')+'">'+(e.billed?'<i class="fas fa-rotate-left"></i>':'<i class="fas fa-check"></i>')+'</button>'
         +'<button class="d-btn" onclick="ttDeleteEntry(\''+e.id+'\')">&#215;</button>'
         +'</div></td></tr>';
     }).join('');
@@ -395,7 +395,7 @@ function _ttShowNotePrompt(targetC, sessionStart, sessionEnd, sessionWork, sessi
   // Header
   var hdr=document.createElement('div');
   hdr.style.cssText='font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem';
-  hdr.textContent='⏱ Session ended';
+  hdr.textContent='Session ended';
   wrap.appendChild(hdr);
 
   // Time display
@@ -504,7 +504,7 @@ function _ttWaypointWidget(c){
     ?'<div id="tt-widget-live" style="font-size:22px;font-weight:700;color:'+(liveIdle?'var(--amber)':'var(--green)')+'">'
       +_ttFmtDur(liveSecs)
       +'<span style="font-size:11px;font-weight:400;margin-left:6px;color:'+(liveIdle?'var(--amber)':'var(--green)')+'">'
-      +(liveIdle?'💤 idle':'🟢 live')+'</span></div>'
+      +(liveIdle?'<i class="fas fa-moon"></i> idle':'<i class="fas fa-circle"></i> live')+'</span></div>'
     :'<div style="font-size:13px;color:var(--muted)">Timer not running</div>';
 
   var btn=running
@@ -520,7 +520,7 @@ function _ttWaypointWidget(c){
   }
 
   return'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem">'
-    +'<span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">⏱ Time</span>'
+    +'<span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em"><i class="far fa-clock"></i> Time</span>'
     +'<button onclick="ttOpenFullLog()" style="font-size:11px;color:var(--np);background:none;border:none;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:0">'
     +(log.length?'Log ('+log.length+') →':'View log →')
     +'</button>'
@@ -591,8 +591,8 @@ function renderAllClientsLog(el){
   }).join('');
 
   var exportBtn='<div style="display:flex;justify-content:flex-end;gap:.5rem;margin-bottom:.75rem">'
-    +'<button onclick="ttExportAllClientsXLSX()" style="padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;font-weight:500">📊 Export Excel</button>'
-    +'<button onclick="ttExportAllClientsPDF()" style="padding:6px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-weight:500">📄 Export PDF</button>'
+    +'<button onclick="ttExportAllClientsXLSX()" style="padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;font-weight:500"><i class="fas fa-chart-column"></i> Export Excel</button>'
+    +'<button onclick="ttExportAllClientsPDF()" style="padding:6px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-weight:500"><i class="fas fa-file"></i> Export PDF</button>'
     +'</div>';
 
   el.innerHTML=summary+exportBtn
@@ -668,7 +668,7 @@ function ttExportAllClientsPDF(){
 
   var win=window.open('','_blank');
   if(!win){alert('Allow popups to export PDF.');return;}
-  var printBar='<div style="position:sticky;top:0;z-index:999;background:#1a1814;padding:10px 40px;display:flex;align-items:center;justify-content:space-between">'    +'<span style="color:#f0ede6;font-size:13px;font-family:Helvetica Neue,Arial,sans-serif">📄 Clarity by Telofin™ — All clients time log</span>'    +'<div style="display:flex;gap:8px">'    +'<button onclick="window.print()" style="padding:7px 18px;border:none;border-radius:7px;background:#1D9E75;color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif">🖨 Print / Save as PDF</button>'    +'<button onclick="window.close()" style="padding:7px 14px;border:1px solid rgba(255,255,255,.3);border-radius:7px;background:none;color:#f0ede6;font-size:13px;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif">✕ Close</button>'    +'</div></div>';
+  var printBar='<div style="position:sticky;top:0;z-index:999;background:#1a1814;padding:10px 40px;display:flex;align-items:center;justify-content:space-between">'    +'<span style="color:#f0ede6;font-size:13px;font-family:Helvetica Neue,Arial,sans-serif"><i class="fas fa-file"></i> Clarity by Telofin™ — All clients time log</span>'    +'<div style="display:flex;gap:8px">'    +'<button onclick="window.print()" style="padding:7px 18px;border:none;border-radius:7px;background:#1D9E75;color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif"><i class="fas fa-print"></i> Print / Save as PDF</button>'    +'<button onclick="window.close()" style="padding:7px 14px;border:1px solid rgba(255,255,255,.3);border-radius:7px;background:none;color:#f0ede6;font-size:13px;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif"><i class="fas fa-xmark"></i> Close</button>'    +'</div></div>';
   html = html.replace('<body>', '<body>'+printBar);
   win.document.write(html);
   win.document.close();
@@ -690,7 +690,7 @@ function _ttInjectFullLogModal(){
   div.innerHTML='<div class="overlay" id="m-tt-log" style="align-items:flex-start;padding:1rem" onclick="if(event.target===this)closeM(\'m-tt-log\')">'
     +'<div class="modal" style="max-width:720px;width:100%;max-height:88vh;overflow-y:auto">'
     +'<div class="m-head" style="display:flex;align-items:center;gap:.75rem">'
-    +'<span class="m-title">⏱ Time log</span>'
+    +'<span class="m-title"><i class="far fa-clock"></i> Time log</span>'
     +'<div style="display:flex;gap:.4rem;margin-left:.5rem">'
     +'<button id="tt-log-tab-cur" onclick="_TT_LOG_ALL_CLIENTS=false;renderTimePanelModal()" style="padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border)">This client</button>'
     +'<button id="tt-log-tab-all" onclick="_TT_LOG_ALL_CLIENTS=true;renderTimePanelModal()" style="padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border)">All clients</button>'
@@ -716,7 +716,7 @@ function ttEditNote(id){
   var e=c.timeLog.find(function(x){return x.id===id;});if(!e)return;
   var cell=document.getElementById('tt-note-'+id);if(!cell)return;
   var cur=e.note||'';
-  cell.innerHTML='<div style="display:flex;gap:4px;align-items:center">'    +'<input id="tt-note-edit-'+id+'" type="text" value="'+escHtml(cur)+'" style="flex:1;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;background:var(--surface);color:var(--text)">'    +'<button onclick="ttSaveNoteEdit(\''+id+'\')" style="padding:3px 7px;border:none;border-radius:5px;background:var(--green);color:#fff;font-size:11px;cursor:pointer">✓</button>'    +'<button onclick="renderTimePanelModal()" style="padding:3px 7px;border:1px solid var(--border);border-radius:5px;background:none;font-size:11px;cursor:pointer;color:var(--muted)">✕</button>'    +'</div>';
+  cell.innerHTML='<div style="display:flex;gap:4px;align-items:center">'    +'<input id="tt-note-edit-'+id+'" type="text" value="'+escHtml(cur)+'" style="flex:1;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;background:var(--surface);color:var(--text)">'    +'<button onclick="ttSaveNoteEdit(\''+id+'\')" style="padding:3px 7px;border:none;border-radius:5px;background:var(--green);color:#fff;font-size:11px;cursor:pointer"><i class="fas fa-check"></i></button>'    +'<button onclick="renderTimePanelModal()" style="padding:3px 7px;border:1px solid var(--border);border-radius:5px;background:none;font-size:11px;cursor:pointer;color:var(--muted)"><i class="fas fa-xmark"></i></button>'    +'</div>';
   setTimeout(function(){
     var inp=document.getElementById('tt-note-edit-'+id);
     if(inp){inp.focus();inp.select();inp.onkeydown=function(ev){if(ev.key==='Enter')ttSaveNoteEdit(id);if(ev.key==='Escape')renderTimePanelModal();};}
@@ -834,7 +834,7 @@ function ttExportInvoicePDF(){
 
   var win=window.open('','_blank');
   if(!win){alert('Allow popups to export the invoice PDF.');return;}
-  var printBar='<div style="position:sticky;top:0;z-index:999;background:#1a1814;padding:10px 40px;display:flex;align-items:center;justify-content:space-between">'    +'<span style="color:#f0ede6;font-size:13px;font-family:Helvetica Neue,Arial,sans-serif">📄 Clarity by Telofin™ — All clients time log</span>'    +'<div style="display:flex;gap:8px">'    +'<button onclick="window.print()" style="padding:7px 18px;border:none;border-radius:7px;background:#1D9E75;color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif">🖨 Print / Save as PDF</button>'    +'<button onclick="window.close()" style="padding:7px 14px;border:1px solid rgba(255,255,255,.3);border-radius:7px;background:none;color:#f0ede6;font-size:13px;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif">✕ Close</button>'    +'</div></div>';
+  var printBar='<div style="position:sticky;top:0;z-index:999;background:#1a1814;padding:10px 40px;display:flex;align-items:center;justify-content:space-between">'    +'<span style="color:#f0ede6;font-size:13px;font-family:Helvetica Neue,Arial,sans-serif"><i class="fas fa-file"></i> Clarity by Telofin™ — All clients time log</span>'    +'<div style="display:flex;gap:8px">'    +'<button onclick="window.print()" style="padding:7px 18px;border:none;border-radius:7px;background:#1D9E75;color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif"><i class="fas fa-print"></i> Print / Save as PDF</button>'    +'<button onclick="window.close()" style="padding:7px 14px;border:1px solid rgba(255,255,255,.3);border-radius:7px;background:none;color:#f0ede6;font-size:13px;cursor:pointer;font-family:Helvetica Neue,Arial,sans-serif"><i class="fas fa-xmark"></i> Close</button>'    +'</div></div>';
   html = html.replace('<body>', '<body>'+printBar);
   win.document.write(html);
   win.document.close();
@@ -897,8 +897,8 @@ function renderTimePanelModal(){
       :'<button onclick="ttStartSession();if(typeof closeM===\'function\')closeM(\'m-tt-log\');" style="padding:6px 14px;border:none;border-radius:7px;background:var(--green);color:#fff;font-size:12px;font-weight:500;cursor:pointer">▶ Start timer</button>')
     +'<button onclick="ttOpenManual()" style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;background:none;font-size:12px;cursor:pointer;color:var(--text)">+ Log manually</button>'
     +'<span style="flex:1"></span>'
-    +(allLog.length?'<button onclick="ttExportLogXLSX()" style="padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;font-weight:500">📊 Excel</button>':'')
-    +(allLog.length?'<button onclick="ttExportInvoicePDF()" style="padding:6px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-weight:500">📄 Invoice PDF</button>':'')
+    +(allLog.length?'<button onclick="ttExportLogXLSX()" style="padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;font-weight:500"><i class="fas fa-chart-column"></i> Excel</button>':'')
+    +(allLog.length?'<button onclick="ttExportInvoicePDF()" style="padding:6px 14px;border:1px solid var(--np);border-radius:7px;background:var(--np);color:#fff;font-size:12px;cursor:pointer;font-weight:500"><i class="fas fa-file"></i> Invoice PDF</button>':'')
     +'</div>'
     // Filter row — compact, below action buttons
     +'<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap">'
@@ -921,7 +921,7 @@ function renderTimePanelModal(){
       var mb=e.manual?'<span style="background:var(--soft);color:var(--muted);border-radius:10px;padding:2px 7px;font-size:10px;margin-left:3px">Manual</span>':'';
       // Note cell — click to edit inline
       var noteCell='<td id="tt-note-'+e.id+'" style="font-size:11px;color:var(--muted);max-width:180px">'        +'<span style="cursor:pointer;text-decoration:underline dotted" onclick="ttEditNote(\''+e.id+'\')" title="Click to edit note">'        +(e.note?escHtml(e.note):'<em style="opacity:.5">add note</em>')        +'</span></td>';
-      return'<tr>'        +'<td style="font-size:12px;white-space:nowrap">'+ds+'<br><span style="color:var(--muted);font-size:10px">'+ts+'</span></td>'        +'<td style="font-weight:600;white-space:nowrap">'+_ttFmtHrs(e.workSecs||0)+'</td>'        +(rate?'<td style="color:var(--green);font-weight:600;white-space:nowrap">'+_ttBillable(rate,e.workSecs||0)+'</td>':'')        +'<td>'+bb+mb+'</td>'        +noteCell        +'<td><div style="display:flex;gap:4px">'        +'<button class="e-btn" onclick="ttMarkBilled(\''+e.id+'\');renderTimePanelModal();_ttRefreshWidget()" title="'+(e.billed?'Mark unbilled':'Mark billed')+'">'+(e.billed?'↩':'✓')+'</button>'        +'<button class="d-btn" onclick="ttDeleteEntry(\''+e.id+'\');renderTimePanelModal();_ttRefreshWidget()">&#215;</button>'        +'</div></td></tr>';
+      return'<tr>'        +'<td style="font-size:12px;white-space:nowrap">'+ds+'<br><span style="color:var(--muted);font-size:10px">'+ts+'</span></td>'        +'<td style="font-weight:600;white-space:nowrap">'+_ttFmtHrs(e.workSecs||0)+'</td>'        +(rate?'<td style="color:var(--green);font-weight:600;white-space:nowrap">'+_ttBillable(rate,e.workSecs||0)+'</td>':'')        +'<td>'+bb+mb+'</td>'        +noteCell        +'<td><div style="display:flex;gap:4px">'        +'<button class="e-btn" onclick="ttMarkBilled(\''+e.id+'\');renderTimePanelModal();_ttRefreshWidget()" title="'+(e.billed?'Mark unbilled':'Mark billed')+'">'+(e.billed?'<i class="fas fa-rotate-left"></i>':'<i class="fas fa-check"></i>')+'</button>'        +'<button class="d-btn" onclick="ttDeleteEntry(\''+e.id+'\');renderTimePanelModal();_ttRefreshWidget()">&#215;</button>'        +'</div></td></tr>';
     }).join('');
     table='<div style="overflow-x:auto"><table><thead><tr>'      +'<th>Date</th><th>Working</th>'      +(rate?'<th>Billable</th>':'')      +'<th>Status</th><th>Description / Note</th><th></th>'      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'      +'<div style="font-size:11px;color:var(--muted);margin-top:.5rem">Click any note to edit it inline.</div>';
   }

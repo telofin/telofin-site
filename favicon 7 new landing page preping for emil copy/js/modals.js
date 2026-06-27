@@ -10,7 +10,7 @@ function openM(id){
   if(id==='m-proc'){
     var c=gc();var sel=g('proc-grant');if(sel&&c){
       var grants=c.grants||[];
-      sel.innerHTML='<option value="">— None —</option>'+grants.map(function(gr){return'<option value="'+gr.id+'">'+gr.name+'</option>';}).join('');
+      sel.innerHTML='<option value="">— None —</option>'+grants.map(function(gr){return'<option value="'+escHtml(gr.id)+'">'+escHtml(gr.name)+'</option>';}).join('');
       if(PROC_EI>=0&&c.procurement[PROC_EI])sel.value=c.procurement[PROC_EI].grantId||'';
     }
   }
@@ -638,7 +638,7 @@ function updateTpl(type){
   else{
     l.style.display='block';
     var labels={expenses:'Expenses',income:'Income / Revenue',budget:'Budget',donors:'Donors',cc:'CC Charges'};
-    l.textContent='⬇ Download '+(labels[type]||type)+' template';
+    l.textContent='Download '+(labels[type]||type)+' template';
     l.onclick=function(e){e.preventDefault();dlTpl(type);};
     l.href='#';
   }
@@ -1001,9 +1001,9 @@ function openSplitReview(){
     document.body.appendChild(div);
   }
   g('split-progress').textContent='('+(_splitIdx+1)+' of '+_splitQueue.length+')';
-  g('split-info').innerHTML='<strong>'+sp.desc+'</strong>'
-    +(sp.date?' &nbsp;·&nbsp; '+sp.date:'')
-    +(sp.checkNum?' &nbsp;·&nbsp; Check #'+sp.checkNum:'')
+  g('split-info').innerHTML='<strong>'+escHtml(sp.desc||'')+'</strong>'
+    +(sp.date?' &nbsp;·&nbsp; '+escHtml(sp.date):'')
+    +(sp.checkNum?' &nbsp;·&nbsp; Check #'+escHtml(sp.checkNum):'')
     +'<div style="font-size:16px;font-weight:700;color:var(--green);margin-top:.25rem">Total: $'+Number(sp.amt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>';
   // Start with 2 blank lines
   sp.lines=[{cat:'',amt:''}];
@@ -1039,7 +1039,7 @@ function updateSplitRemaining(){
   var el=g('split-remaining');if(!el)return;
   var color=Math.abs(rem)<0.01?'var(--green)':rem>0?'var(--amber)':'var(--red)';
   el.style.color=color;
-  el.textContent=Math.abs(rem)<0.01?'✓ Fully allocated':'Remaining: $'+Math.abs(rem).toFixed(2)+(rem<0?' (over by $'+Math.abs(rem).toFixed(2)+')':'');
+  el.textContent=Math.abs(rem)<0.01?'Fully allocated':'Remaining: $'+Math.abs(rem).toFixed(2)+(rem<0?' (over by $'+Math.abs(rem).toFixed(2)+')':'');
 }
 
 function saveSplitRow(){
@@ -1102,7 +1102,7 @@ function renderBankReviewRow(){
   var el=g('bank-review-body');if(!el)return;
   var prog=g('bank-review-prog');if(prog)prog.textContent=(rows.length-remaining.length)+' of '+rows.length+' categorized';
   if(!remaining.length){
-    el.innerHTML='<div style="text-align:center;padding:2rem"><div style="font-size:32px;margin-bottom:.5rem">✓</div><div style="font-size:14px;font-weight:500;color:var(--green)">All transactions categorized!</div><button class="go-btn" style="margin-top:1.25rem" onclick="commitBankImport()">Import '+rows.length+' transactions</button></div>';
+    el.innerHTML='<div style="text-align:center;padding:2rem"><div style="font-size:32px;margin-bottom:.5rem"><i class="fas fa-check"></i></div><div style="font-size:14px;font-weight:500;color:var(--green)">All transactions categorized!</div><button class="go-btn" style="margin-top:1.25rem" onclick="commitBankImport()">Import '+rows.length+' transactions</button></div>';
     return;
   }
   var row=remaining[0];var ri=rows.indexOf(row);

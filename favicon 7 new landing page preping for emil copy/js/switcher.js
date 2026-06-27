@@ -112,7 +112,7 @@ function _swRender() {
 
 // ── STEP 1 — WELCOME ──────────────────────────────────────────
 function _swStep1(title, body) {
-  title.textContent = '👋 Welcome to Clarity';
+  title.textContent = 'Welcome to Clarity';
   var c = _swGetClient();
   var clientName = c ? c.name : 'your organization';
 
@@ -127,9 +127,9 @@ function _swStep1(title, body) {
     + '<div style="background:var(--soft);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.25rem">'
     + '<div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">Here\'s what you\'ll need</div>'
     + '<div style="font-size:12px;line-height:2;color:var(--text)">'
-    + '<div>📋 <strong>Balance Sheet</strong> — for each year you want to import</div>'
-    + '<div>📊 <strong>Profit & Loss</strong> — for each year you want to import</div>'
-    + '<div>📒 <strong>Account Registers</strong> — transaction-level detail per account</div>'
+    + '<div><i class="fas fa-clipboard"></i> <strong>Balance Sheet</strong> — for each year you want to import</div>'
+    + '<div><i class="fas fa-chart-column"></i> <strong>Profit & Loss</strong> — for each year you want to import</div>'
+    + '<div><i class="fas fa-book"></i> <strong>Account Registers</strong> — transaction-level detail per account</div>'
     + '</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-top:.6rem;line-height:1.5">'
     + 'Export these from your current software as PDFs. QuickBooks, Xero, FreshBooks, Wave, '
@@ -137,8 +137,8 @@ function _swStep1(title, body) {
     + '</div>'
     + '</div>'
     + '<div style="background:var(--green-bg);border:1px solid var(--green);border-radius:10px;padding:.75rem 1rem;margin-bottom:1.5rem;font-size:12px;color:var(--text);line-height:1.6">'
-    + '✓ Up to <strong>3 years</strong> of history you can import yourself — free, right now.<br>'
-    + '✓ Need more than 3 years? We\'ll help you import it for a small fee.'
+    + '<i class="fas fa-check"></i> Up to <strong>3 years</strong> of history you can import yourself — free, right now.<br>'
+    + '<i class="fas fa-check"></i> Need more than 3 years? We\'ll help you import it for a small fee.'
     + '</div>'
     + _swFooter('Skip for now', 'switcherSkip()', 'Get started', 'switcherNext()');
 }
@@ -204,10 +204,10 @@ function _swStep3(title, body) {
     + 'We handle this personally so nothing gets lost.'
     + '</div>'
     + '<div style="background:var(--soft);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.25rem;font-size:12px;line-height:1.8">'
-    + '<div>📦 We\'ll review your existing reports and registers</div>'
-    + '<div>🔍 Verify reconciliation status on each account</div>'
-    + '<div>✅ Import everything cleanly into your Clarity file</div>'
-    + '<div>📞 Walk you through the result together</div>'
+    + '<div><i class="fas fa-box"></i> We\'ll review your existing reports and registers</div>'
+    + '<div><i class="fas fa-magnifying-glass"></i> Verify reconciliation status on each account</div>'
+    + '<div><i class="fas fa-circle-check"></i> Import everything cleanly into your Clarity file</div>'
+    + '<div><i class="fas fa-phone"></i> Walk you through the result together</div>'
     + '</div>'
     + '<div class="f-row"><label>Your name</label>'
     + '<input id="sw-contact-name" type="text" placeholder="Jane Smith"></div>'
@@ -264,8 +264,8 @@ function _swSendContact() {
       status.style.display = 'block';
       if (res.ok){
         status.style.color   = 'var(--green)';
-        status.textContent   = '✓ Request sent! We\'ll be in touch within 1 business day.';
-        if (btn){ btn.textContent='Sent ✓'; }
+        status.textContent   = 'Request sent! We\'ll be in touch within 1 business day.';
+        if (btn){ btn.textContent='Sent'; }
         setTimeout(function(){ _SW_STEP=10; _swRender(); }, 2000);
       } else {
         status.style.color  = 'var(--red)';
@@ -324,7 +324,7 @@ function _swStep4(title, body) {
           + (active?'var(--np)':complete?'var(--green-bg)':'var(--soft)')
           + ';color:'+(active?'#fff':complete?'var(--green)':'var(--muted)')
           + ';font-size:11px;cursor:pointer;font-family:\'DM Sans\',sans-serif">'
-          + (complete?'✓ ':'')+y.year+'</button>';
+          + (complete?'<i class="fas fa-check"></i> ':'')+y.year+'</button>';
       }).join('')
     + '</div>';
 
@@ -342,7 +342,7 @@ function _swStep4(title, body) {
     + yearTabs
     + docs
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:1rem;line-height:1.6">'
-    + '💡 Account registers contain the full transaction detail per account. '
+    + '<i class="fas fa-lightbulb"></i> Account registers contain the full transaction detail per account. '
     + 'Export one register per account from your current software — checking, savings, credit cards, etc.'
     + '</div>'
     + _swFooter(
@@ -355,8 +355,8 @@ function _swStep4(title, body) {
 
 function _swDocCards(yr) {
   return '<div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem">'
-    + _swDocCard(yr, 'bs',  '📋 Balance Sheet',   yr.bs)
-    + _swDocCard(yr, 'pl',  '📊 Profit & Loss',   yr.pl)
+    + _swDocCard(yr, 'bs',  '<i class="fas fa-clipboard"></i> Balance Sheet',   yr.bs)
+    + _swDocCard(yr, 'pl',  '<i class="fas fa-chart-column"></i> Profit & Loss',   yr.pl)
     + _swRegisterCard(yr)
     + '</div>';
 }
@@ -365,7 +365,7 @@ function _swDocCard(yr, docType, label, done) {
   return '<div style="border:1px solid '+(done?'var(--green)':'var(--border)')+';border-radius:10px;padding:.875rem 1rem;background:'+(done?'var(--green-bg)':'var(--surface)')+'">'
     + '<div style="display:flex;align-items:flex-start;gap:.75rem;flex-wrap:wrap">'
     + '<div style="flex:1">'
-    + '<div style="font-size:13px;font-weight:500">'+(done?'✅ ':'')+label+' — '+yr.year+'</div>'
+    + '<div style="font-size:13px;font-weight:500">'+(done?'<i class="fas fa-circle-check"></i> ':'')+label+' — '+yr.year+'</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">'
     + (done ? 'Imported successfully' : 'Upload the PDF export from your accounting software')
     + '</div></div>'
@@ -383,7 +383,7 @@ function _swRegisterCard(yr) {
   return '<div style="border:1px solid '+(count?'var(--green)':'var(--border)')+';border-radius:10px;padding:.875rem 1rem;background:'+(count?'var(--green-bg)':'var(--surface)')+'">'
     + '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">'
     + '<div style="flex:1">'
-    + '<div style="font-size:13px;font-weight:500">'+(count?'✅ ':'')+' 📒 Account Registers — '+yr.year+'</div>'
+    + '<div style="font-size:13px;font-weight:500">'+(count?'<i class="fas fa-circle-check"></i> ':'')+' <i class="fas fa-book"></i> Account Registers — '+yr.year+'</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">'
     + (count ? count+' register'+(count>1?'s':'')+' imported' : 'One PDF per account — checking, savings, credit cards, etc.')
     + '</div></div>'
@@ -460,7 +460,7 @@ function _swFinish() {
 
 // ── STEP 10 — DONE ────────────────────────────────────────────
 function _swDone(title, body) {
-  title.textContent = '🎉 You\'re all set';
+  title.textContent = 'You\'re all set';
   var c = _swGetClient();
   var imported = c ? (c.historicalReports||[]).length : 0;
   var bsCount  = (c&&c.historicalReports||[]).filter(function(r){return r.type==='bs';}).length;
@@ -469,7 +469,7 @@ function _swDone(title, body) {
 
   body.innerHTML =
     '<div style="text-align:center;padding:1rem 0 1.5rem">'
-    + '<div style="font-size:48px;margin-bottom:.75rem">✅</div>'
+    + '<div style="font-size:48px;margin-bottom:.75rem"><i class="fas fa-circle-check"></i></div>'
     + '<div style="font-size:16px;font-weight:500;margin-bottom:.5rem">'
     + (c?escHtml(c.name)+' is':'Your client is')+' ready to go'
     + '</div>'
@@ -481,9 +481,9 @@ function _swDone(title, body) {
     + '<div style="background:var(--soft);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.5rem">'
     + '<div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">What was imported</div>'
     + '<div style="font-size:12px;line-height:2">'
-    + (bsCount  ? '<div>📋 '+bsCount+' Balance Sheet'+(bsCount>1?'s':'')+'</div>' : '')
-    + (plCount  ? '<div>📊 '+plCount+' Profit & Loss report'+(plCount>1?'s':'')+'</div>' : '')
-    + (regCount ? '<div>📒 '+regCount+' Account register'+(regCount>1?'s':'')+'</div>' : '')
+    + (bsCount  ? '<div><i class="fas fa-clipboard"></i> '+bsCount+' Balance Sheet'+(bsCount>1?'s':'')+'</div>' : '')
+    + (plCount  ? '<div><i class="fas fa-chart-column"></i> '+plCount+' Profit & Loss report'+(plCount>1?'s':'')+'</div>' : '')
+    + (regCount ? '<div><i class="fas fa-book"></i> '+regCount+' Account register'+(regCount>1?'s':'')+'</div>' : '')
     + (!imported ? '<div style="color:var(--muted)">No documents imported — you can always add them later from any tab.</div>' : '')
     + '</div></div>'
     + '<div style="display:flex;justify-content:flex-end">'
