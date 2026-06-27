@@ -223,6 +223,29 @@ function renderWaypoint() {
     c.waypointTiles = JSON.parse(JSON.stringify(_WP_DEFAULTS[c.type]||_WP_DEFAULTS.np));
   }
 
+  // MIGRATION: refresh icon values on already-saved tiles. Once a client's
+  // waypointTiles array exists, it's read from c.waypointTiles forever —
+  // the defaults above only ever get copied in once, the very first time
+  // a client is created. That means any tile saved before an icon set
+  // changed (e.g. emoji -> Font Awesome) would otherwise show the stale
+  // icon permanently, completely independent of what the current code
+  // says, since the saved data simply never gets touched again.
+  // This keeps every other saved customization (order, which tiles are
+  // present, any custom-added tile) exactly as the user left it — it only
+  // ever overwrites the icon field, matched by the tile's stable id
+  // against the current authoritative definition in _WP_ALL_TILES.
+  // ASSUMPTION: a given tile id has the same icon across every client type
+  // that uses it (true today — e.g. wp-income is identical in np and pe).
+  // If a future change ever needs a different icon for the same id
+  // depending on client type, this lookup needs to become type-aware too.
+  (function _wpMigrateTileIcons(){
+    var _iconById={};
+    _WP_ALL_TILES.forEach(function(def){ _iconById[def.id]=def.icon; });
+    c.waypointTiles.forEach(function(t){
+      if(_iconById.hasOwnProperty(t.id)&&t.icon!==_iconById[t.id]) t.icon=_iconById[t.id];
+    });
+  })();
+
   var tiles = c.waypointTiles;
 
   // Welcome back card placeholder — welcome.js fills this
