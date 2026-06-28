@@ -298,10 +298,16 @@ function _srchOpenGrant(grantId){AG=grantId;renderGrants();}
 // developer could interpolate user text into that string without realizing
 // the risk). Dispatch now looks up a real function reference by name here
 // and calls it directly with structured args — nothing is ever eval'd.
-var _SRCH_ACTIONS={
-  editItem:editItem, editDonor:editDonor, editInv:editInv,
-  renderCOA:renderCOA, _srchOpenGrant:_srchOpenGrant
-};
+//
+// IMPORTANT: this is a whitelist of NAMES (strings), not live function
+// references. nav.js loads and runs before saves.js (where editItem is
+// defined) — building this object with editItem:editItem would try to
+// read the global editItem the instant this line runs, which throws
+// "editItem is not defined" since saves.js hasn't executed yet at that
+// point. Storing names and resolving via window[name] at actual click
+// time (see dispatcher below) sidesteps load-order entirely, since every
+// script has finished running long before a user can click a result.
+var _SRCH_ACTIONS=['editItem','editDonor','editInv','renderCOA','_srchOpenGrant'];
 
 // Show search bar when a client is open
 function showGlobalSearch(){var w=g('global-search-wrap');if(w)w.style.display='block';}
@@ -321,11 +327,12 @@ document.addEventListener('click',function(e){
   // Switch tab
   var tabBtn=document.querySelector('[data-panel="'+r.tab+'"]');
   if(tabBtn)switchTab({target:tabBtn},r.tab);
-  // Run action after render settles — looked up from the whitelist above,
-  // called directly with the result's structured args. No code is built
-  // from strings or eval'd at any point.
-  if(r.fn){
-    var fn=_SRCH_ACTIONS[r.fn];
+  // Run action after render settles — name checked against the whitelist
+  // above, then resolved to a real function via window[] only now, at
+  // click time, when every script has definitely finished loading.
+  // Nothing is built or eval'd from a string at any point.
+  if(r.fn&&_SRCH_ACTIONS.indexOf(r.fn)>=0){
+    var fn=window[r.fn];
     if(typeof fn==='function'){
       setTimeout(function(){try{fn.apply(null,r.args||[]);}catch(e2){console.warn('Search action error:',e2);}},150);
     }
