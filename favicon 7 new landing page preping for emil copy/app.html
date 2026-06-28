@@ -448,6 +448,7 @@ tr:hover td{background:var(--bg)}
           <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
             <button class="add-btn" onclick="refreshData()">↻ Refresh</button>
             <button class="add-btn" onclick="manualSync()" style="background:var(--np);color:#fff;border-color:var(--np)"><i class="fas fa-cloud"></i> Save to cloud</button>
+            <button id="migration-check-btn" class="add-btn" onclick="if(typeof forceMigrationCheck==='function')forceMigrationCheck();" title="Check or retry the one-time move to the new data storage">Check data migration</button>
             <button id="mob-pin-btn" class="add-btn" onclick="pinCurrentClient()" style="display:none"></button>
             <button id="wc-bookmark-btn" class="add-btn" onclick="if(typeof wcBookmark==='function')wcBookmark()" title="Bookmark current position"><i class="fas fa-bookmark"></i></button>
             <button class="add-btn" onclick="showAddClient()">+ New client</button>
