@@ -2676,6 +2676,17 @@ function clearPeriodLock(){
       // Always save cloud data back to localStorage so next load is instant
       try{localStorage.setItem(STORE,JSON.stringify(D));}catch(e){}
     }
+    // STEP 5 — Supabase table restructuring: one-time migration into the
+    // new per-table schema. Safe to call on every sign-in — it checks for
+    // existing rows in the new `clients` table and no-ops instantly if this
+    // person has already been migrated. Runs only after their real cloud
+    // data has loaded above, so it's never migrating stale/local data.
+    // Fails silently on error and simply retries next sign-in — see
+    // migration.js for the full safety design (backup-first, no data
+    // deleted, nothing touched if anything goes wrong).
+    if(typeof maybeMigrateUser==='function'){
+      try{await maybeMigrateUser();}catch(e){console.error('[migration] unexpected error:',e);}
+    }
   }
 
   // Set up auth listener FIRST — catches OAuth redirect callbacks
