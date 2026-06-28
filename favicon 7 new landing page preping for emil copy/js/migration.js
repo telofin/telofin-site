@@ -160,6 +160,19 @@ async function _migrateBlobToTables(sb, userId, oldBlob) {
     }
     var clientId = clientRes.data.id;
 
+    // Record the old id -> new id mapping so Step 6's dual-write code
+    // (saveExp, saveInc, etc.) can find the right new-table client row
+    // when a person keeps using the app on their old, still-running
+    // local client object. Without this, there's no way to know which
+    // new `clients` row a freshly-saved expense belongs to.
+    if (oc.id) {
+      await sb.from('client_id_map').insert({
+        old_client_id: String(oc.id),
+        user_id: userId,
+        new_client_id: clientId
+      });
+    }
+
     // id_map holds old-id -> new-id for every record type that other
     // records reference (accounts by code don't need this; donors,
     // grants, projects, bank accounts, credit cards, bills, payroll,
