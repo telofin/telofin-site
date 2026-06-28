@@ -689,3 +689,67 @@ async function _migrateBlobToTables(sb, userId, oldBlob) {
     // in field-inventory.md and schema-draft.md, not an oversight.
   }
 }
+
+// ── MANUAL TRIGGER (button) ───────────────────────────────────
+// maybeMigrateUser() only runs once automatically and shows a brief
+// screen that's easy to miss if migration finishes in under a second.
+// This gives a visible, on-demand way to check status or force a retry,
+// with a clear result message — not just a flash of a loading spinner.
+// Safe to click any number of times: it reuses the exact same safety
+// logic as the automatic path (backup-first, only-if-needed, scoped to
+// this user's own session) — this is not a separate, riskier code path.
+async function forceMigrationCheck() {
+  var sb = sbClient();
+  if (!sb || !_user) {
+    alert('Not signed in — nothing to migrate.');
+    return;
+  }
+
+  var btn = document.getElementById('migration-check-btn');
+  var originalText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = 'Checking…'; btn.disabled = true; }
+
+  try {
+    var oldRes = await sb.from('User_Data').select('data').eq('user_id', _user.id).maybeSingle();
+    if (!oldRes.data || !oldRes.data.data || !oldRes.data.data.clients || !oldRes.data.data.clients.length) {
+      alert('Nothing to migrate — no client data found for this account.');
+      return;
+    }
+    var oldClientCount = oldRes.data.data.clients.length;
+
+    var check = await sb.from('clients').select('id').eq('user_id', _user.id);
+    var newClientCount = (check.data || []).length;
+
+    if (newClientCount >= oldClientCount) {
+      alert('Already up to date.\n\n'
+        + 'Old data: ' + oldClientCount + ' client(s)\n'
+        + 'New tables: ' + newClientCount + ' client(s)\n\n'
+        + 'No migration needed.');
+      return;
+    }
+
+    if (!confirm('This account has ' + oldClientCount + ' client(s) in the old storage, '
+      + 'but only ' + newClientCount + ' in the new tables.\n\n'
+      + 'Run migration now? A safety backup is taken automatically first, '
+      + 'and nothing in your existing data is deleted or changed.')) {
+      return;
+    }
+
+    await maybeMigrateUser();
+
+    // Re-check afterward so the success message reflects what actually happened
+    var recheck = await sb.from('clients').select('id').eq('user_id', _user.id);
+    var finalCount = (recheck.data || []).length;
+    alert('Migration finished.\n\n'
+      + 'Clients now in new tables: ' + finalCount + ' of ' + oldClientCount + '\n\n'
+      + (finalCount >= oldClientCount
+          ? 'All clients migrated successfully.'
+          : 'Some clients may not have migrated — check the browser console for errors, or click this button again to retry.'));
+
+  } catch (e) {
+    console.error('[migration] manual check failed:', e);
+    alert('Something went wrong checking migration status. Check the browser console for details, and nothing was changed.');
+  } finally {
+    if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+  }
+}
