@@ -179,8 +179,13 @@ function clearSampleData(){
 // LOAD
 // ══════════════════════════════════════════
 // ── STARTUP HELPERS ────────────────────────────────────────────────────────
+// Collects healAcctCodeDuplicates() summaries from the most recent migrateD()
+// call, so the one-time notice UI (see welcome.js-style pattern) can show
+// what changed. Cleared at the top of every migrateD() run.
+var _ACCT_HEAL_SUMMARIES=[];
 // migrateD(): runs all migration steps on D in-place. Safe to call multiple times.
 function migrateD(){
+  _ACCT_HEAL_SUMMARIES=[];
   if(!D.clients)D.clients=[];
   // Fix old names & ensure donors array
   var fix={'My nonprofit':'My Nonprofit','My small business':'My Small Business','My personal':'My Personal','New nonprofit':'New Nonprofit','New small business':'New Small Business','New personal':'New Personal'};
@@ -284,6 +289,9 @@ function migrateD(){
       // ── MIGRATION: Invoice URL/path on bills
       (c.bills||[]).forEach(function(b){if(b.invoiceUrl===undefined)b.invoiceUrl='';if(b.invoicePath===undefined)b.invoicePath='';});
       if(!c.ledgerEntries.length)migrateToLedger(c);
+      // ── MIGRATION: heal duplicate Chart-of-Accounts codes (one-time per client)
+      var healSummary=healAcctCodeDuplicates(c);
+      if(healSummary)_ACCT_HEAL_SUMMARIES.push(healSummary);
     });
   // Deduplicate: remove empty default clients if a data-filled one of same type exists
   var seen={};D.clients=D.clients.filter(function(cl){var k=cl.type;if(seen[k]){var hasD=(cl.income&&cl.income.length)||(cl.expenses&&cl.expenses.length)||(cl.revenue&&cl.revenue.length)||(cl.grants&&cl.grants.length)||(cl.donors&&cl.donors.length);return hasD;}seen[k]=true;return true;});
@@ -382,6 +390,144 @@ function migrateToLedger(c){
   });
 }
 
+// ── ACCOUNT-CODE DEDUP HEALING ──────────────────────────────────────────────
+// One-time-per-client repair for a bug (now fixed — see _nextAcctCode in
+// state.js) where auto-generated Chart-of-Accounts codes could collide once
+// the numbering crossed a thousand boundary (e.g. 5990 -> 6000, then every
+// account created after that also got handed code 6000), silently merging
+// many unrelated categories onto one account code and corrupting Trial
+// Balance / General Ledger totals for that code.
+// Idempotent — guarded by c._acctDedupHealed, safe to call on every load,
+// and a no-op for clients that were never affected.
+// Returns a summary object if it did real work, or null if there was
+// nothing to fix (so callers can skip showing a notice).
+function healAcctCodeDuplicates(c){
+  if(!c||c._acctDedupHealed)return null;
+  c._acctDedupHealed=true;
+  if(!c.accounts||!c.accounts.length)return null;
+
+  // Step 1 — backfill any transaction still missing a stable id (leftover
+  // from before ids were guaranteed on save). Needed so step 3 can post a
+  // ledger entry for it, and so future edits/deletes address it correctly.
+  var backfilledIds=0;
+  ['expenses','income','revenue'].forEach(function(arrName){
+    (c[arrName]||[]).forEach(function(item){
+      if(!item.id){item.id=uid();backfilledIds++;}
+    });
+  });
+
+  // Step 2 — find every account code shared by more than one account. Keep
+  // the first account at its original code; give each other one a fresh,
+  // real code. Relink every transaction that actually belongs to that
+  // specific account (matched by category name — verified unambiguous,
+  // never the now-meaningless shared code) plus its posted ledger lines.
+  var byCode={};
+  c.accounts.forEach(function(a){(byCode[a.code]=byCode[a.code]||[]).push(a);});
+  var recoded=[];
+  Object.keys(byCode).forEach(function(code){
+    var group=byCode[code];
+    if(group.length<2)return;
+    group.slice(1).forEach(function(dupAcct){
+      var oldCode=dupAcct.code;
+      var newCode=_nextAcctCode(c,dupAcct.type);
+      dupAcct.code=newCode;
+      ['expenses','income','revenue'].forEach(function(arrName){
+        (c[arrName]||[]).forEach(function(item){
+          if(item.acctCode!==oldCode)return;
+          if(item.cat!==dupAcct.cat&&item.cat!==dupAcct.name)return;
+          item.acctCode=newCode;
+          (c.ledgerEntries||[]).forEach(function(le){
+            if(le.sourceId!==item.id)return;
+            (le.lines||[]).forEach(function(l){if(l.accountCode===oldCode)l.accountCode=newCode;});
+          });
+          recoded.push({desc:item.desc||item.name||'',cat:item.cat,amt:Number(item.amt||item.recv||item.act||0),oldCode:oldCode,newCode:newCode});
+        });
+      });
+    });
+  });
+  if(recoded.length)c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
+
+  // Step 2b — a transaction can be left sitting on one of the old shared
+  // codes above even after step 2, if its category never matched any of the
+  // colliding accounts by name (e.g. it was typed slightly differently, or
+  // the account it truly belongs to already existed elsewhere in the COA
+  // under its own real code all along). For anything still on an old shared
+  // code, fall back to the same category lookup the app already trusts for
+  // this exact purpose elsewhere (see the acctCode backfill above in
+  // migrateD) — but only relink if it resolves to a *different*, real
+  // account, so nothing is touched unless we have an unambiguous match.
+  var oldSharedCodes=Object.keys(byCode).filter(function(code){return byCode[code].length>1;});
+  if(oldSharedCodes.length){
+    ['expenses','income','revenue'].forEach(function(arrName){
+      (c[arrName]||[]).forEach(function(item){
+        if(oldSharedCodes.indexOf(item.acctCode)<0)return;
+        var match=lookupAcctByCAT(c,item.cat);
+        if(!match||match===item.acctCode)return;
+        var oldCode=item.acctCode;
+        item.acctCode=match;
+        (c.ledgerEntries||[]).forEach(function(le){
+          if(le.sourceId!==item.id)return;
+          (le.lines||[]).forEach(function(l){if(l.accountCode===oldCode)l.accountCode=match;});
+        });
+        recoded.push({desc:item.desc||item.name||'',cat:item.cat,amt:Number(item.amt||item.recv||item.act||0),oldCode:oldCode,newCode:match});
+      });
+    });
+  }
+
+  // Step 2c — anything still left on an old shared code at this point
+  // belongs to a category that never had its own Chart-of-Accounts entry at
+  // all (not a mismatch — genuinely missing). Create one, the same way the
+  // app already does for any other brand-new category (see syncBudgetToCOA),
+  // then relink. Skip whichever account is the rightful keeper of the old
+  // code — its own transactions should stay put.
+  var created=[];
+  if(oldSharedCodes.length){
+    ['expenses','income','revenue'].forEach(function(arrName){
+      var coaType=arrName==='expenses'?'Expense':'Income';
+      (c[arrName]||[]).forEach(function(item){
+        if(oldSharedCodes.indexOf(item.acctCode)<0)return;
+        var keeper=byCode[item.acctCode][0];
+        if(item.cat===keeper.cat||item.cat===keeper.name)return;// belongs here for real
+        if(!item.cat)return;// nothing to name a new account after
+        var newAcct=c.accounts.find(function(a){return a.type===coaType&&(a.cat===item.cat||a.name===item.cat);});
+        if(!newAcct){
+          newAcct={id:uid(),code:_nextAcctCode(c,coaType),name:item.cat,type:coaType,cat:item.cat,fromBudget:true};
+          c.accounts.push(newAcct);
+          created.push(newAcct);
+        }
+        var oldCode=item.acctCode;
+        item.acctCode=newAcct.code;
+        (c.ledgerEntries||[]).forEach(function(le){
+          if(le.sourceId!==item.id)return;
+          (le.lines||[]).forEach(function(l){if(l.accountCode===oldCode)l.accountCode=newAcct.code;});
+        });
+        recoded.push({desc:item.desc||item.name||'',cat:item.cat,amt:Number(item.amt||item.recv||item.act||0),oldCode:oldCode,newCode:newAcct.code});
+      });
+    });
+    if(created.length)c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
+  }
+
+  // Step 3 — post ledger entries for anything that never got one (this is
+  // what the missing ids in step 1 were silently blocking). migrateToLedger
+  // is already idempotent — it skips anything already posted.
+  var beforeIds={};(c.ledgerEntries||[]).forEach(function(le){beforeIds[le.id]=true;});
+  migrateToLedger(c);
+  var newEntries=(c.ledgerEntries||[]).filter(function(le){return!beforeIds[le.id];});
+  var newlyPostedTotal=newEntries.reduce(function(s,le){
+    var line=(le.lines||[]).find(function(l){return Number(l.dr||0)>0;});
+    return s+(line?Number(line.dr||0):0);
+  },0);
+
+  if(!recoded.length&&!backfilledIds&&!newEntries.length)return null;
+  return{
+    clientId:c.id,clientName:c.name,
+    backfilledIds:backfilledIds,
+    recoded:recoded,
+    newlyPostedCount:newEntries.length,
+    newlyPostedTotal:newlyPostedTotal
+  };
+}
+
 function renderApp(){
   // New user: show welcome, no clients
   if(!D.clients||!D.clients.length){
@@ -434,7 +580,17 @@ function load(){
       try{var s=localStorage.getItem(STORE);if(s){var _p=JSON.parse(s);if(_p&&_p.clients)D=_p;}}catch(e){}
     }
     // 2. Run migration in-place
-    try{migrateD();}catch(e){
+    try{
+      migrateD();
+      // migrateD() itself never persists — it only mutates D in memory.
+      // That's fine for most of its steps (idempotent no-ops next time
+      // regardless), but the account-code healing pass needs to actually
+      // land in localStorage (and sync to the cloud if signed in) right
+      // away — otherwise a user who loads the app, looks around, and
+      // closes the tab without triggering any other save would see the
+      // fix silently discarded and the one-time notice reappear next visit.
+      if(_ACCT_HEAL_SUMMARIES.length)sv();
+    }catch(e){
       console.error('[clarity] migrateD error:',e);
       // Non-fatal — continue to renderApp with whatever D we have
     }
@@ -454,6 +610,49 @@ function load(){
       try{if(typeof renderAll==='function')renderAll();}catch(e){}
     },0);
   }
+  // 5. One-time notice if any client just had duplicate account codes healed
+  if(_ACCT_HEAL_SUMMARIES.length){
+    setTimeout(function(){try{_acctHealShowNotice();}catch(e){console.error('[clarity] heal notice:',e);}},300);
+  }
+}
+
+// ── ACCOUNT-CODE HEAL NOTICE ─────────────────────────────────────────────────
+// Shown once, right after healAcctCodeDuplicates() actually changes something
+// (see migrateD()). Not blocking — informational, so a bookkeeper never sees
+// their Trial Balance change between sessions with no explanation.
+function _acctHealShowNotice(){
+  if(document.getElementById('m-acct-heal'))return;
+  var fmtAmt=function(n){return'$'+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');};
+  var body=_ACCT_HEAL_SUMMARIES.map(function(s){
+    var lines='';
+    if(s.recoded.length){
+      var byCat={};
+      s.recoded.forEach(function(r){byCat[r.cat]=(byCat[r.cat]||0)+r.amt;});
+      var catRows=Object.keys(byCat).map(function(cat){
+        return'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px"><span>'+escHtml(cat)+'</span><span>'+fmtAmt(byCat[cat])+'</span></div>';
+      }).join('');
+      lines+='<div style="margin-bottom:.5rem"><div style="font-size:12px;color:var(--muted);margin-bottom:.25rem">'+s.recoded.length+' transaction(s) were mis-filed under a duplicate account code — moved to their correct category:</div>'+catRows+'</div>';
+    }
+    if(s.newlyPostedCount){
+      lines+='<div style="font-size:12px;color:var(--text)"><i class="fas fa-circle-info"></i> '+s.newlyPostedCount+' expense(s) totaling '+fmtAmt(s.newlyPostedTotal)+' had never been added to your books (saved before records had permanent IDs) — they\'ve now been posted.</div>';
+    }
+    return'<div style="border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;margin-bottom:.75rem">'
+      +'<div style="font-weight:600;font-size:13px;margin-bottom:.4rem">'+escHtml(s.clientName)+'</div>'
+      +lines+'</div>';
+  }).join('');
+  var div=document.createElement('div');
+  div.innerHTML=
+    '<div class="overlay open" id="m-acct-heal">'
+    +'<div class="modal" style="max-width:520px">'
+    +'<div class="m-head"><span class="m-title"><i class="fas fa-wrench"></i> We fixed an account-coding issue</span>'
+    +'<button class="m-x" onclick="document.getElementById(\'m-acct-heal\').remove()">&#215;</button></div>'
+    +'<div class="m-body">'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:.85rem">Some categories were sharing the same account code, which mixed unrelated transactions together on your Trial Balance and reports. This has been corrected — nothing was deleted, only recoded to the right place.</div>'
+    +body
+    +'<div style="display:flex;justify-content:flex-end;margin-top:.5rem">'
+    +'<button onclick="document.getElementById(\'m-acct-heal\').remove()" style="padding:8px 18px;border:none;border-radius:7px;background:var(--np);color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:\'DM Sans\',sans-serif">Got it</button>'
+    +'</div></div></div></div>';
+  document.body.appendChild(div.firstChild);
 }
 
 // ══════════════════════════════════════════

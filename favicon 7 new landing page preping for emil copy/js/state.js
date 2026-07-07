@@ -28,6 +28,23 @@ function sv(){
 }
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 
+// Next available COA code for a given account type. Scoped by a.type (not by
+// string-matching the code's leading digit) so it keeps working correctly
+// once codes cross a thousand boundary (e.g. 5990 -> 6000) — the old
+// per-callsite versions of this logic all matched codes by string prefix,
+// which silently stopped counting codes once they crossed into the next
+// thousand, handing out the same "next" code to every account created after
+// that point. Collision-avoidance loop is a backstop for any stray/manual
+// code that doesn't fit the normal increment-by-10 pattern.
+function _nextAcctCode(c,coaType){
+  var prefix={Income:'4',Expense:'5',Asset:'1',Liability:'2',Equity:'3'}[coaType]||'5';
+  var used=(c.accounts||[]).filter(function(a){return a.type===coaType;}).map(function(a){return parseInt(a.code)||0;});
+  var next=used.length?Math.max.apply(null,used)+10:parseInt(prefix+'010');
+  var taken={};(c.accounts||[]).forEach(function(a){taken[a.code]=true;});
+  while(taken[String(next)])next++;
+  return String(next);
+}
+
 // ── FUND HELPERS ────────────────────────
 function getFunds(){var c=gc();return c&&c.funds?c.funds:[];}
 function fundOpts(selectedVal,includeBlank){
@@ -1048,10 +1065,9 @@ function quickAddAcctFromImport(c,nameOrCode,defaultType){
   if(!c.accounts)c.accounts=[];
   var existing=(c.accounts||[]).find(function(a){return a.name===nameOrCode||a.code===nameOrCode;});
   if(existing)return existing.code;
-  var prefix=defaultType==='Income'?'4':'5';
-  var used=c.accounts.filter(function(a){return a.code.indexOf(prefix)=== 0;}).map(function(a){return parseInt(a.code)||0;});
-  var code=String(used.length?(Math.max.apply(null,used)+10):parseInt(prefix+'010'));
-  c.accounts.push({id:uid(),code:code,name:nameOrCode,type:defaultType||'Expense',cat:nameOrCode,fromImport:true});
+  var coaType=defaultType||'Expense';
+  var code=_nextAcctCode(c,coaType);
+  c.accounts.push({id:uid(),code:code,name:nameOrCode,type:coaType,cat:nameOrCode,fromImport:true});
   c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
   return code;
 }

@@ -4744,11 +4744,8 @@ function syncBudgetToCOA(c,cat,type,grp){
   var coaType=type==='Income'?'Income':'Expense';
   var exists=c.accounts.find(function(a){return a.cat===cat&&a.type===coaType;});
   if(!exists){
-    // Pick next available code in 4xxx (income) or 5xxx (expense) range
-    var prefix=coaType==='Income'?'4':'5';
-    var used=c.accounts.filter(function(a){return a.code.indexOf(prefix)===0;}).map(function(a){return parseInt(a.code)||0;});
-    var next=used.length?Math.max.apply(null,used)+10:parseInt(prefix+'010');
-    c.accounts.push({id:uid(),code:String(next),name:cat,type:coaType,cat:cat,fromBudget:true});
+    var next=_nextAcctCode(c,coaType);
+    c.accounts.push({id:uid(),code:next,name:cat,type:coaType,cat:cat,fromBudget:true});
     c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
   }
 }

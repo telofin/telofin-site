@@ -321,16 +321,11 @@ function resetAcctForm(){
   // Auto-suggest next Expense account code
   var c=gc();if(!c||!c.accounts)return;
   var codeEl=g('acct-code');if(!codeEl)return;
-  var used5=c.accounts.filter(function(a){return a.code&&a.code.indexOf('5')===0;}).map(function(a){return parseInt(a.code)||0;});
-  var next=used5.length?(Math.max.apply(null,used5)+10):5010;
-  codeEl.value=String(next);
+  codeEl.value=_nextAcctCode(c,'Expense');
   // Re-suggest when type changes
   var typeEl=g('acct-type');
   if(typeEl){typeEl.onchange=function(){
-    var prefix={Income:'4',Expense:'5',Asset:'1',Liability:'2',Equity:'3'}[typeEl.value]||'5';
-    var used=c.accounts.filter(function(a){return a.code&&a.code.indexOf(prefix)===0;}).map(function(a){return parseInt(a.code)||0;});
-    var nextC=used.length?(Math.max.apply(null,used)+10):parseInt(prefix+'010');
-    codeEl.value=String(nextC);
+    codeEl.value=_nextAcctCode(c,typeEl.value||'Expense');
   };}
 }
 function editAcct(i){var c=gc();if(!c.accounts[i])return;ACCT_EI=i;var a=c.accounts[i];g('acct-code').value=a.code||'';g('acct-name').value=a.name||'';g('acct-type').value=a.type||'Expense';if(g('acct-fund'))g('acct-fund').value=a.fund||'';openM('m-coa');}
@@ -340,6 +335,8 @@ function saveAcct(){
   var code=g('acct-code').value.trim();var name=g('acct-name').value.trim();
   if(!code||!name){alert('Code and name are required.');return;}
   var existing=ACCT_EI>=0?c.accounts[ACCT_EI]:null;
+  var codeClash=c.accounts.find(function(a){return a.code===code&&a!==existing;});
+  if(codeClash&&!confirm('Account code '+code+' is already used by "'+codeClash.name+'". Two accounts sharing a code will get mixed together on Trial Balance and reports.\n\nSave anyway?'))return;
   var item={id:ACCT_EI>=0?(c.accounts[ACCT_EI].id||uid()):uid(),code:code,name:name,type:g('acct-type').value,cat:name,fund:g('acct-fund')&&g('acct-fund').value||''};
   // Preserve active flag — never reset it on edit
   if(existing&&existing.active===false)item.active=false;

@@ -2075,7 +2075,7 @@ function saveBankAcct(){
   // Auto-create COA account for this bank
   if(!c.accounts)c.accounts=[];
   var coaExists=c.accounts.find(function(a){return a.name===name&&a.type==='Asset';});
-  if(!coaExists){var usedAsset=c.accounts.filter(function(a){return a.code.indexOf('1')=== 0;}).map(function(a){return parseInt(a.code)||0;});var nextCode=String(usedAsset.length?(Math.max.apply(null,usedAsset)+10):1010);c.accounts.push({id:uid(),code:nextCode,name:name,type:'Asset',cat:name});c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});}
+  if(!coaExists){var nextCode=_nextAcctCode(c,'Asset');c.accounts.push({id:uid(),code:nextCode,name:name,type:'Asset',cat:name});c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});}
   BANK_ACCT_EI=-1;sv();renderReconciliation(c);closeM('m-bank-acct');['ba-name','ba-last4'].forEach(function(id){var el=g(id);if(el)el.value='';});
 }
 function deleteBankAcct(id){
