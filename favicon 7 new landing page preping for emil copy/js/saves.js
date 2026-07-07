@@ -36,6 +36,8 @@ function delItem(type,i){
   if(item.id)voidLedgerEntry(c,item.id);
   sv();
   if(type==='expenses'&&typeof dwUpsertExpense==='function')dwUpsertExpense(c,item);
+  else if(type==='income'&&typeof dwUpsertIncome==='function')dwUpsertIncome(c,item);
+  else if(type==='revenue'&&typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,item);
   renderAll();
 }
 

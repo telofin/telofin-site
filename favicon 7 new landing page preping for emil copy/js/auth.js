@@ -293,6 +293,61 @@ async function dwUpsertExpense(c,item){
   }
 }
 
+// Same shape as dwUpsertExpense — see its comments above. FK fields (grantId,
+// bankId, projectId) left null for now, same reasoning: those record types
+// aren't dual-written yet.
+async function dwUpsertIncome(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,
+      name:item.name||null,cat:item.cat||null,
+      status:item.status||null,proj:item.proj||null,recv:item.recv||null,
+      recurring:item.recurring||null,recur_end_date:item.recurEndDate||null,
+      recur_count:item.recurCount||null,fund:item.fund||null,date:item.date||null,
+      acct_code:item.acctCode||null,
+      inkind_ref:!!item.inkindRef,auction_ref:!!item.auctionRef,
+      from_bank:!!item.fromBank,vendor_1099:item.vendor1099||null,
+      voided:!!item.voided,is_reversal:!!item.isReversal,
+      reconciled:!!item.reconciled,deleted:!!item.deleted,deleted_at:item.deletedAt||null,
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('income').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertIncome failed (blob save unaffected):',e);
+  }
+}
+
+// Same shape as dwUpsertExpense — see its comments above. FK fields (bankId,
+// projectId) left null for now, same reasoning: those record types aren't
+// dual-written yet. The sales-tax-split second ledger entry saveRev() may
+// post stays blob-only — this only mirrors the revenue row itself, not the
+// internal ledger.
+async function dwUpsertRevenue(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,
+      name:item.name||null,customer_name:item.customerName||null,
+      cat:item.cat||null,conf:item.conf||null,proj:item.proj||null,
+      act:item.act||null,recurring:item.recurring||null,
+      recur_end_date:item.recurEndDate||null,recur_count:item.recurCount||null,
+      date:item.date||null,tax_rate:item.taxRate||null,tax_amt:item.taxAmt||null,
+      tax_jurisdiction:item.taxJurisdiction||null,
+      voided:!!item.voided,is_reversal:!!item.isReversal,reconciled:!!item.reconciled,
+      deleted:!!item.deleted,deleted_at:item.deletedAt||null,
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('revenue').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertRevenue failed (blob save unaffected):',e);
+  }
+}
+
 async function checkSyncConflict(){
   // Before saving, check if the server has a newer version than what we loaded.
   // Covers two scenarios:
