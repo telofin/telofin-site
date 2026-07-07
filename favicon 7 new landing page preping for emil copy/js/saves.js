@@ -521,55 +521,79 @@ function doPDF(tabOverride){
     openPDF(tbHtml+pdfDisclaimer('Trial balance derived from double-entry ledger entries. Verify all postings with a licensed CPA before preparing financial statements.'),c,'Trial Balance');
 
   }else if(type==='cashflow'){
-    // Cash Flow Statement PDF — mirrors renderCF() indirect method
-    var fy2=getFiscalYear(c.fiscalYearEnd);
-    var fyS=fy2.start,fyE=fy2.end;
-    function _cfInFY(ds){if(!ds)return false;var pp=ds.split('/');if(pp.length!==3)return false;var d=new Date(Number(pp[2]),Number(pp[0])-1,Number(pp[1]));return d>=fyS&&d<=fyE;}
-    function _cfFmt(n){var abs=Math.abs(n||0);var s='$'+abs.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});return n<0?'('+s+')':s;}
-    function _cfTr(label,amt,bold){return'<tr'+(bold?' class="total"':'')+'><td>'+label+'</td><td class="right" style="color:'+(amt<0?'#c0392b':'#1D9E75')+'">'+_cfFmt(amt)+'</td></tr>';}
-    // Operating
-    var _cfRev=(c.revenue||[]).filter(function(r){return!r.deleted&&_cfInFY(r.date);}).reduce(function(s,r){return s+basisInc(c,r);},0);
-    var _cfExp=(c.expenses||[]).filter(function(e){return!e.deleted&&!e.voided&&_cfInFY(e.date);}).reduce(function(s,e){return s+Number(e.amt||0);},0);
-    var _cfNet=_cfRev-_cfExp;
-    var _cfDepr=(c.ledgerEntries||[]).filter(function(e){return!e.superseded&&e.sourceType==='depreciation'&&_cfInFY(e.date);}).reduce(function(s,e){return s+(e.lines||[]).reduce(function(ls,l){return ls+Number(l.dr||0);},0);},0);
-    if(!_cfDepr)_cfDepr=(c.expenses||[]).filter(function(e){return _cfInFY(e.date)&&((e.cat||'').toLowerCase().indexOf('depreciation')>=0||(e.desc||'').toLowerCase().indexOf('depreciation')>=0);}).reduce(function(s,e){return s+Number(e.amt||0);},0);
-    var _cfAR=(c.invoices||[]).filter(function(i){return i.status!=='Paid'&&i.status!=='Void';}).reduce(function(s,i){return s+Number(i.amt||0);},0);
-    var _cfAP=(c.bills||[]).filter(function(b){return b.status==='Unpaid';}).reduce(function(s,b){return s+Number(b.amt||0);},0);
-    var _cfOpTotal=_cfNet+_cfDepr-_cfAR+_cfAP;
-    // Investing
-    var _cfAssets=(c.fixedAssets||[]).filter(function(a){return _cfInFY(a.date);}).reduce(function(s,a){return s+Number(a.cost||0);},0);
-    var _cfInvTotal=-_cfAssets;
-    // Financing
-    var _cfLoans=(c.loans||[]).filter(function(l){return _cfInFY(l.startDate);}).reduce(function(s,l){return s+Number(l.principal||0);},0);
-    var _cfDebt=(c.expenses||[]).filter(function(e){return _cfInFY(e.date)&&((e.cat||'').toLowerCase().indexOf('loan')>=0||(e.cat||'').toLowerCase().indexOf('debt')>=0);}).reduce(function(s,e){return s+Number(e.amt||0);},0);
-    var _cfFinTotal=_cfLoans-_cfDebt;
-    var _cfNetChg=_cfOpTotal+_cfInvTotal+_cfFinTotal;
-    var _cfOpen=(c.bankAccounts||[]).reduce(function(s,b){return s+Number(b.openingBalance||b.balance||0);},0);
-    var _cfEnd=_cfOpen+_cfNetChg;
-    var cfHtml='<h2>Cash Flow Statement</h2>'
-      +'<div style="font-size:11px;color:#888;margin-bottom:12px">Indirect method &middot; Fiscal year '+escHtml(fy2.label)+' &middot; '+escHtml(c.name)+'</div>'
-      +'<h3>Operating Activities</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
-      +_cfTr('Net income',_cfNet,false)
-      +_cfTr('Add: Depreciation & amortization',_cfDepr,false)
-      +_cfTr('Less: Increase in accounts receivable',-_cfAR,false)
-      +_cfTr('Add: Increase in accounts payable',_cfAP,false)
-      +_cfTr('Net cash from operating activities',_cfOpTotal,true)
+    // Cash Position & Runway PDF — mirrors renderCashFlowRpt() (burn rate / runway, not a GAAP cash flow statement)
+    var _cpExp=(c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});
+    var _cpRev=(c.revenue||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});
+    var _cpMOut=_cpExp.reduce(function(s,e){var a=Number(e.amt||0);return s+(e.freq==='Weekly'?a*4:e.freq==='Bi-weekly'?a*2:e.freq==='Monthly'?a:e.freq==='Quarterly'?a/3:e.freq==='Annual'?a/12:a);},0);
+    var _cpMIn=_cpRev.reduce(function(s,r){return s+Number(r.proj||0);},0);
+    var _cpFixed=_cpExp.filter(function(e){return e.fixed==='Fixed';}).reduce(function(s,e){return s+Number(e.amt||0);},0);
+    var _cpVar=_cpExp.filter(function(e){return e.fixed!=='Fixed';}).reduce(function(s,e){return s+Number(e.amt||0);},0);
+    var _cpTotAct=_cpRev.reduce(function(s,r){return s+basisInc(c,r);},0);
+    var _cpTotExp=_cpExp.reduce(function(s,e){return s+Number(e.amt||0);},0);
+    var _cpCash=getCashOnHand(c);
+    var _cpRunway=_cpMOut>0?Math.round(_cpCash/_cpMOut):null;
+    function _cpTr(label,amt,bold){return'<tr'+(bold?' class="total"':'')+'><td>'+label+'</td><td class="right" style="color:'+(amt<0?'#c0392b':'#1D9E75')+'">'+fmtN(amt)+'</td></tr>';}
+    var cpHtml='<h2>Cash Position &amp; Runway</h2>'
+      +'<div style="font-size:11px;color:#888;margin-bottom:12px">'+escHtml(c.name)+'</div>'
+      +'<h3>Cash Position</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
+      +_cpTr('Cash on hand (from reconciliation)',_cpCash,false)
+      +_cpTr('Monthly projected inflow',Math.round(_cpMIn),false)
+      +_cpTr('Monthly projected outflow',-Math.round(_cpMOut),false)
+      +_cpTr('Monthly net',Math.round(_cpMIn)-Math.round(_cpMOut),true)
       +'</table>'
+      +'<h3>Actuals to Date</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
+      +_cpTr('Total revenue (actual)',_cpTotAct,false)
+      +_cpTr('Fixed expenses',-_cpFixed,false)
+      +_cpTr('Variable expenses',-_cpVar,false)
+      +_cpTr('Net P&L',_cpTotAct-_cpTotExp,true)
+      +'</table>'
+      +(_cpRunway!==null?'<h3>Runway</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'+_cpTr('Runway at current burn rate',_cpRunway,false)+'</table>':'');
+    openPDF(cpHtml+pdfDisclaimer('Cash position figures are estimates based on entered transactions. Verify with a licensed CPA before use in financial reporting.'),c,'Cash Position & Runway');
+
+  }else if(type==='cfdirect'||type==='cfindirect'){
+    // Cash Flow Statement (Direct/Indirect) PDF — built from the shared getCashFlowStatement() engine
+    // in state.js, so the PDF always matches the on-screen report exactly (no duplicated calc logic).
+    var fy3=getFiscalYear(c.fiscalYearEnd);
+    var cf=getCashFlowStatement(c,fy3.start,fy3.end);
+    function _cfFmt2(n){var abs=Math.abs(n||0);var s='$'+abs.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});return n<0?'('+s+')':s;}
+    function _cfTr2(label,amt,bold){return'<tr'+(bold?' class="total"':'')+'><td>'+escHtml(label)+'</td><td class="right" style="color:'+(amt<0?'#c0392b':'#1D9E75')+'">'+_cfFmt2(amt)+'</td></tr>';}
+    var opTableRows,opTotalLabel,methodLabel,extraNote;
+    if(type==='cfdirect'){
+      methodLabel='Direct Method';
+      opTableRows=cf.direct.operating.map(function(r){return _cfTr2(r.label,r.amt);}).join('');
+      opTotalLabel='Net cash from operating activities';
+      extraNote='';
+    }else{
+      methodLabel='Indirect Method';
+      opTableRows=_cfTr2('Net income',cf.indirect.netIncome)
+        +cf.indirect.addbacks.map(function(r){return _cfTr2('Add: '+r.label,r.amt);}).join('')
+        +cf.indirect.workingCapital.map(function(r){return _cfTr2(r.label,r.amt);}).join('');
+      opTotalLabel='Net cash from operating activities';
+      extraNote=cf.reconciled
+        ?'<div style="font-size:10px;color:#1D9E75;margin:4px 0 12px">&#10003; Ties to the direct-method operating total.</div>'
+        :'<div style="font-size:10px;color:#c0392b;margin:4px 0 12px">&#9888; Off from the direct-method operating total by '+_cfFmt2(cf.diff)+'.</div>';
+    }
+    var cfHtml='<h2>Statement of Cash Flows</h2>'
+      +'<div style="font-size:11px;color:#888;margin-bottom:12px">'+methodLabel+' &middot; Fiscal year '+escHtml(fy3.label)+' &middot; '+escHtml(c.name)+'</div>'
+      +'<h3>Operating Activities</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
+      +(opTableRows||'<tr><td colspan="2" style="color:#8a8880">No operating activity.</td></tr>')
+      +_cfTr2(opTotalLabel,cf.direct.opTotal,true)
+      +'</table>'+extraNote
       +'<h3>Investing Activities</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
-      +_cfTr('Purchase of fixed assets',-_cfAssets,false)
-      +_cfTr('Net cash from investing activities',_cfInvTotal,true)
+      +(cf.investing.map(function(r){return _cfTr2(r.label,r.amt);}).join('')||'<tr><td colspan="2" style="color:#8a8880">No investing activity.</td></tr>')
+      +_cfTr2('Net cash from investing activities',cf.invTotal,true)
       +'</table>'
       +'<h3>Financing Activities</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
-      +_cfTr('Proceeds from loans',_cfLoans,false)
-      +_cfTr('Principal payments on debt',-_cfDebt,false)
-      +_cfTr('Net cash from financing activities',_cfFinTotal,true)
+      +(cf.financing.map(function(r){return _cfTr2(r.label,r.amt);}).join('')||'<tr><td colspan="2" style="color:#8a8880">No financing activity.</td></tr>')
+      +_cfTr2('Net cash from financing activities',cf.finTotal,true)
       +'</table>'
       +'<h3>Net Change in Cash</h3><table><tr><th>Item</th><th class="right">Amount</th></tr>'
-      +_cfTr('Net increase (decrease) in cash',_cfNetChg,false)
-      +_cfTr('Cash at beginning of period',_cfOpen,false)
-      +_cfTr('Cash at end of period',_cfEnd,true)
-      +'</table>';
-    openPDF(cfHtml+pdfDisclaimer('Cash flow figures are estimates based on entered transactions. Verify with a licensed CPA before use in financial reporting.'),c,'Cash Flow Statement');
+      +_cfTr2('Net increase (decrease) in cash',cf.netChange,false)
+      +_cfTr2('Cash at beginning of period (ledger)',cf.openingCash,false)
+      +_cfTr2('Cash at end of period (ledger)',cf.endingCash,true)
+      +'</table>'
+      +(Math.abs(cf.unpostedGap)>=0.5?'<div style="font-size:10px;color:#b8860b;margin-top:6px">&#9888; '+_cfFmt2(Math.abs(cf.unpostedGap))+' of the fixed-asset/loan activity above hasn\'t posted to the ledger\'s cash accounts yet, so it doesn\'t appear in the ledger cash balance.</div>':'');
+    openPDF(cfHtml+pdfDisclaimer('Operating activity is derived from posted ledger entries; fixed-asset and loan cash flows are drawn from those records directly (see queue item on ledger-posting these). Verify all figures with a licensed CPA before use in financial reporting.'),c,'Statement of Cash Flows ('+methodLabel+')');
 
   }else if(type==='f990partix'){
     // Form 990 Part IX — Statement of Functional Expenses (NP only)

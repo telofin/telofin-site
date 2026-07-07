@@ -1474,7 +1474,9 @@ function renderReports(){
     +'<option value="pl">P&L</option>'
     +'<option value="plcompare">Year-over-Year P&L</option>'
     +((c.type==='sb'||c.type==='np')?'<option value="bsheet">Balance Sheet</option>':'')
-    +(c.type==='sb'?'<option value="cashflow">Cash Flow</option>':'')
+    +((c.type==='sb'||c.type==='np')?'<option value="cfdirect">Cash Flow Statement — Direct</option>':'')
+    +((c.type==='sb'||c.type==='np')?'<option value="cfindirect">Cash Flow Statement — Indirect</option>':'')
+    +(c.type==='sb'?'<option value="cashflow">Cash Position &amp; Runway</option>':'')
     +'<optgroup label="── Budget ──"></optgroup>'
     +'<option value="budget">Budget vs Actual</option>'
     +'<option value="budgetexport">Budget Summary</option>'
@@ -1632,6 +1634,8 @@ function renderReports(){
     +'<div id="rpt-projpl"       style="display:none"></div>'
     +'<div id="rpt-functional"   style="display:none"></div>'
     +'<div id="rpt-cashflow"     style="display:none"></div>'
+    +'<div id="rpt-cfdirect"     style="display:none"></div>'
+    +'<div id="rpt-cfindirect"   style="display:none"></div>'
     +'<div id="rpt-bsheet"       style="display:none"></div>'
     +'<div id="rpt-fundpl"       style="display:none"></div>'
     +'<div id="rpt-budgetbyfund" style="display:none"></div>'
@@ -1673,7 +1677,7 @@ function switchRpt(type){
   // Hide every report panel
   ['rpt-pl','rpt-grants','rpt-budget','rpt-category','rpt-1099','rpt-budgetmulti',
    'rpt-budgetexport','rpt-budgettwoyr','rpt-plcompare','rpt-functional','rpt-expdetail','rpt-incdetail','rpt-vendor','rpt-donors',
-   'rpt-projpl','rpt-cashflow','rpt-bsheet','rpt-executive','rpt-fundpl','rpt-budgetbyfund',
+   'rpt-projpl','rpt-cashflow','rpt-cfdirect','rpt-cfindirect','rpt-bsheet','rpt-executive','rpt-fundpl','rpt-budgetbyfund',
    'rpt-mileage','rpt-assets','rpt-esttax','rpt-loans','rpt-consolidated',
    'rpt-grantcloseout','rpt-grantstatus'
   ].forEach(function(id){var el=g(id);if(el)el.style.display='none';});
@@ -1708,6 +1712,8 @@ function switchRpt(type){
     'donors':renderDonorRpt,
     'projpl':renderProjPLRpt,
     'cashflow':renderCashFlowRpt,
+    'cfdirect':renderCFDirectRpt,
+    'cfindirect':renderCFIndirectRpt,
     'bsheet':renderBSheetRpt,
     'budgetbyfund':renderBudgetByFundRpt,
     'mileage':renderMileageRpt,
@@ -2605,6 +2611,89 @@ function renderProjPLRpt(){
     +rptRow('Income',inc,'vg')+rptRow('Expenses',exp,'vr')+rptTotal('Net',net,net>=0?'vg':'vr')+'</div>';
   }).join('');
   el.innerHTML='<div class="rpt-sec"><div class="rpt-ttl">Project P&amp;L</div>'+rows+'</div>';
+}
+
+function _cfFmt(n){var abs=Math.abs(n||0);var s='$'+abs.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});return n<0?'('+s+')':s;}
+function _cfRow(label,amt,cls){return'<div class="rpt-row"><span>'+label+'</span><span class="'+(cls||(amt<0?'vr':'vg'))+'">'+_cfFmt(amt)+'</span></div>';}
+function _cfTotal(label,amt,cls){return'<div class="rpt-total"><span>'+label+'</span><span class="'+(cls||(amt<0?'vr':'vg'))+'">'+_cfFmt(amt)+'</span></div>';}
+// _cfRptFYRange(c): same current/prior-FY resolution pattern used elsewhere in renders.js (see renderReports)
+function _cfRptFYRange(c){
+  if(RPT_FY==='current')return getFiscalYear(c.fiscalYearEnd);
+  var yr=parseInt(RPT_FY.replace('FY ',''));
+  if(isNaN(yr))return getFiscalYear(c.fiscalYearEnd);
+  var parts=(c.fiscalYearEnd||'12/31').split('/');
+  var refDate=new Date(yr,parseInt(parts[0])-1,parseInt(parts[1]));
+  return getFiscalYear(c.fiscalYearEnd,refDate);
+}
+function _cfDisclaimer(fyLabel,linkTarget,linkLabel){
+  return'<div style="font-size:11px;color:var(--muted);margin-bottom:1rem;line-height:1.5">'
+    +'Fiscal year <strong>'+fyLabel+'</strong>. Operating activity is derived from posted ledger entries (ties to the Trial Balance). '
+    +'Fixed asset purchases and loan proceeds/principal are drawn from the Fixed Assets and Loans records, since those don\'t yet post to the ledger — '
+    +'verify against source documents before filing. <span onclick="switchRpt(\''+linkTarget+'\')" style="text-decoration:underline;cursor:pointer">'+linkLabel+'</span>.'
+    +'</div>';
+}
+function renderCFDirectRpt(){
+  var c=gc();if(!c)return;var el=g('rpt-cfdirect');if(!el)return;
+  var fy=_cfRptFYRange(c);
+  var cf=getCashFlowStatement(c,fy.start,fy.end);
+  var opRows=cf.direct.operating.map(function(r){return _cfRow(r.label,r.amt);}).join('');
+  var invRows=cf.investing.map(function(r){return _cfRow(r.label,r.amt);}).join('');
+  var finRows=cf.financing.map(function(r){return _cfRow(r.label,r.amt);}).join('');
+  var gapNote=Math.abs(cf.unpostedGap)>=0.5
+    ?'<div style="font-size:11px;color:var(--amber,#b8860b);margin-top:.5rem">&#9888; '+_cfFmt(Math.abs(cf.unpostedGap))+' of the fixed-asset/loan activity above hasn\'t posted to the ledger\'s cash accounts yet, so it doesn\'t appear in the ledger cash balance below — see the note above.</div>'
+    :'';
+  el.innerHTML=_cfDisclaimer(fy.label,'cfindirect','See indirect reconciliation')
+    +'<div class="rpt-sec"><div class="rpt-ttl">Operating Activities (Direct Method)</div>'
+    +(opRows||'<div style="color:var(--muted);font-size:12px">No operating cash activity posted this period.</div>')
+    +_cfTotal('Net cash from operating activities',cf.direct.opTotal)+'</div>'
+    +'<div class="rpt-sec"><div class="rpt-ttl">Investing Activities</div>'
+    +(invRows||'<div style="color:var(--muted);font-size:12px">No investing activity this period.</div>')
+    +_cfTotal('Net cash from investing activities',cf.invTotal)+'</div>'
+    +'<div class="rpt-sec"><div class="rpt-ttl">Financing Activities</div>'
+    +(finRows||'<div style="color:var(--muted);font-size:12px">No financing activity this period.</div>')
+    +_cfTotal('Net cash from financing activities',cf.finTotal)+'</div>'
+    +'<div class="rpt-sec">'
+    +_cfTotal('Net increase (decrease) in cash',cf.netChange)
+    +rptRow('Cash at beginning of period (ledger)',cf.openingCash,cf.openingCash<0?'vr':'vg')
+    +_cfTotal('Cash at end of period (ledger)',cf.endingCash)
+    +gapNote
+    +'</div>';
+}
+function renderCFIndirectRpt(){
+  var c=gc();if(!c)return;var el=g('rpt-cfindirect');if(!el)return;
+  var fy=_cfRptFYRange(c);
+  var cf=getCashFlowStatement(c,fy.start,fy.end);
+  var i=cf.indirect;
+  var addbackRows=i.addbacks.map(function(r){return _cfRow('Add: '+r.label,r.amt);}).join('');
+  var wcRows=i.workingCapital.map(function(r){return _cfRow(r.label,r.amt);}).join('');
+  var invRows=cf.investing.map(function(r){return _cfRow(r.label,r.amt);}).join('');
+  var finRows=cf.financing.map(function(r){return _cfRow(r.label,r.amt);}).join('');
+  var reconNote=cf.reconciled
+    ?'<div style="font-size:11px;color:var(--green);margin-bottom:.75rem">&#10003; Ties to the direct-method operating total.</div>'
+    :'<div style="font-size:11px;color:var(--red);margin-bottom:.75rem">&#9888; Off from the direct-method operating total by '+_cfFmt(cf.diff)+' — check for unposted or misclassified entries.</div>';
+  var gapNote=Math.abs(cf.unpostedGap)>=0.5
+    ?'<div style="font-size:11px;color:var(--amber,#b8860b);margin-top:.5rem">&#9888; '+_cfFmt(Math.abs(cf.unpostedGap))+' of the fixed-asset/loan activity above hasn\'t posted to the ledger\'s cash accounts yet, so it doesn\'t appear in the ledger cash balance below — see the note above.</div>'
+    :'';
+  el.innerHTML=_cfDisclaimer(fy.label,'cfdirect','See direct method')
+    +'<div class="rpt-sec"><div class="rpt-ttl">Operating Activities (Indirect Method)</div>'
+    +_cfRow('Net income',i.netIncome)
+    +(addbackRows||'')
+    +(wcRows||'')
+    +_cfTotal('Net cash from operating activities',i.opTotal)
+    +reconNote
+    +'</div>'
+    +'<div class="rpt-sec"><div class="rpt-ttl">Investing Activities</div>'
+    +(invRows||'<div style="color:var(--muted);font-size:12px">No investing activity this period.</div>')
+    +_cfTotal('Net cash from investing activities',cf.invTotal)+'</div>'
+    +'<div class="rpt-sec"><div class="rpt-ttl">Financing Activities</div>'
+    +(finRows||'<div style="color:var(--muted);font-size:12px">No financing activity this period.</div>')
+    +_cfTotal('Net cash from financing activities',cf.finTotal)+'</div>'
+    +'<div class="rpt-sec">'
+    +_cfTotal('Net increase (decrease) in cash',cf.netChange)
+    +rptRow('Cash at beginning of period (ledger)',cf.openingCash,cf.openingCash<0?'vr':'vg')
+    +_cfTotal('Cash at end of period (ledger)',cf.endingCash)
+    +gapNote
+    +'</div>';
 }
 
 function renderCashFlowRpt(){
@@ -4091,7 +4180,7 @@ function saveInc(){var c=gc();if(!c.income)c.income=[];
   var iBsAssetId=bv.indexOf('bsasset:')=== 0?bv.slice(8):'';
   var _oldInc=_rEI>=0?c.income[_rEI]:null;
   var _iAmtErr=validateAmt(g('i-r').value,{allowZero:true,label:'Amount received'});if(_iAmtErr){alert(_iAmtErr);if(g('i-r'))g('i-r').focus();return;}
-  var cat=g('i-c').value;var _iRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _iRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var item={name:n,cat:cat,status:g('i-s').value,proj:Number(g('i-p').value||0),recv:Number(g('i-r').value||0),date:g('i-dt')&&g('i-dt').value||'',fund:g('i-fund')&&g('i-fund').value||'',acctCode:g('i-acct')&&g('i-acct').value||lookupAcctByCAT(c,cat)||'',recurring:g('f-rec').value,grantId:g('i-gid')&&g('i-gid').value||''};
+  var cat=g('i-c').value;var _iRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _iRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var item={id:_rEI>=0?(c.income[_rEI].id||uid()):uid(),name:n,cat:cat,status:g('i-s').value,proj:Number(g('i-p').value||0),recv:Number(g('i-r').value||0),date:g('i-dt')&&g('i-dt').value||'',fund:g('i-fund')&&g('i-fund').value||'',acctCode:g('i-acct')&&g('i-acct').value||lookupAcctByCAT(c,cat)||'',recurring:g('f-rec').value,grantId:g('i-gid')&&g('i-gid').value||''};
   if(item.recurring&&item.recurring!=='None'){if(_iRecurEnd)item.recurEndDate=_iRecurEnd;if(_iRecurCnt>0){item.recurCount=_iRecurCnt;item.recurPostedCount=0;}}
   if(pid)item.projectId=pid;
   if(bv.indexOf('bank:')=== 0)item.bankId=bv.slice(5);
@@ -4114,7 +4203,7 @@ function saveRev(){var c=gc();if(!c.revenue)c.revenue=[];
   var _oldRev=_rREI>=0?c.revenue[_rREI]:null;
   var _rAmtErr=validateAmt(g('r-a').value,{allowZero:true,label:'Actual revenue'});if(_rAmtErr){alert(_rAmtErr);if(g('r-a'))g('r-a').focus();return;}
   var cat=g('r-c').value;var _taxRate=Number(g('r-taxrate')&&g('r-taxrate').value||0);var _taxAmt=Number(g('r-taxamt')&&g('r-taxamt').value||0);
-  var _taxJur=g('r-taxjur')&&g('r-taxjur').value||'';var _rRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _rRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var customerName2=sanitizeInput(g('r-cust')&&g('r-cust').value.trim()||'');var item={name:n,cat:cat,conf:g('r-cf').value,proj:Number(g('r-p').value||0),act:Number(g('r-a').value||0),date:g('r-dt')&&g('r-dt').value||'',acctCode:g('r-acct')&&g('r-acct').value||lookupAcctByCAT(c,cat)||'',recurring:g('f-rec').value};
+  var _taxJur=g('r-taxjur')&&g('r-taxjur').value||'';var _rRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _rRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var customerName2=sanitizeInput(g('r-cust')&&g('r-cust').value.trim()||'');var item={id:_rREI>=0?(c.revenue[_rREI].id||uid()):uid(),name:n,cat:cat,conf:g('r-cf').value,proj:Number(g('r-p').value||0),act:Number(g('r-a').value||0),date:g('r-dt')&&g('r-dt').value||'',acctCode:g('r-acct')&&g('r-acct').value||lookupAcctByCAT(c,cat)||'',recurring:g('f-rec').value};
   if(customerName2)item.customerName=customerName2;if(item.recurring&&item.recurring!=='None'){if(_rRecurEnd)item.recurEndDate=_rRecurEnd;if(_rRecurCnt>0){item.recurCount=_rRecurCnt;item.recurPostedCount=0;}}
   if(_taxRate>0){item.taxRate=_taxRate;item.taxAmt=_taxAmt;}
   if(_taxJur){item.taxJurisdiction=_taxJur;}
@@ -4316,7 +4405,7 @@ function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
   var _xAmtErr=validateAmt(g('e-a').value,{label:'Amount'});if(_xAmtErr){alert(_xAmtErr);if(g('e-a'))g('e-a').focus();return;}
   var _xRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';
   var _xRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;
-  if(c.type==='np'){var cat=g('e-c').value;var _990v=g('e-990line')&&g('e-990line').value||'';item={desc:d,cat:cat,line990:_990v,amt:Number(g('e-a').value||0),date:g('e-dt').value,fund:g('e-f').value,grantId:g('e-gid').value||'',grantPct:g('e-gpct')&&g('e-gpct').value!==''?Number(g('e-gpct').value):null,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,functional:g('e-func')&&g('e-func').value||'',receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
+  if(c.type==='np'){var cat=g('e-c').value;var _990v=g('e-990line')&&g('e-990line').value||'';item={id:_rXEI>=0?(c.expenses[_rXEI].id||uid()):uid(),desc:d,cat:cat,line990:_990v,amt:Number(g('e-a').value||0),date:g('e-dt').value,fund:g('e-f').value,grantId:g('e-gid').value||'',grantPct:g('e-gpct')&&g('e-gpct').value!==''?Number(g('e-gpct').value):null,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,functional:g('e-func')&&g('e-func').value||'',receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
     item.audit=EI>=0?auditTxn(_oldExp,item,'expenses'):(_oldExp&&_oldExp.audit||_auditCreated());
     if(!checkRestrictedFund(item.fund,item.amt,_oldExp?Number(_oldExp.amt||0):0))return;
     if(!checkBudgetOverspend(item.cat,Number(item.amt||0),_oldExp?Number(_oldExp.amt||0):0))return;
@@ -4325,7 +4414,7 @@ function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
     else if(_oldExp&&_oldExp.bsAssetId){applyBSAssetDelta(c,_oldExp.bsAssetId,_prevAmt);}// account changed — reverse old
     if(c.accounts&&c.accounts.length){var _coaMatch=(c.accounts||[]).find(function(a){return a.cat===cat||a.name===cat||a.code===item.acctCode;});if(!_coaMatch){if(!confirm('COA Warning: "'+cat+'" is not in your chart of accounts.\n\nSave anyway? (You can add this category to your COA later.)'))return;}}
     if(_rXEI>=0)updateLedgerEntry(c,item.id||c.expenses[_rXEI].id,item.acctCode||'5010',_defaultCashCode(c),Number(item.amt||0),item.desc||'Expense','expense');else postToLedger(c,item.acctCode||'5010',_defaultCashCode(c),Number(item.amt||0),item.desc||'Expense','expense',item.id);markDirty('npexp','grants','budget','reports','bs');if(_rXEI>=0)c.expenses[_rXEI]=item;else c.expenses.push(item);syncVendorFromExpense(c,item);sv();var _pnpexp=g('p-npexp');if(_pnpexp&&_pnpexp.classList.contains('active'))renderNpExp(c);var _pgrants=g('p-grants');if(_pgrants&&_pgrants.classList.contains('active'))renderGrants(c);renderBudgetMultiYear();renderReports();renderBalanceSheet(c);var _rp=g('p-recon');if(_rp&&_rp.classList.contains('active'))renderReconciliation(c);_refreshBankIfActive(c);closeM('m-exp');['e-d','e-c','e-a','e-dt','e-f','e-ref','e-url','e-func'].forEach(function(id){var el=g(id);if(el)el.value='';});var _egid=g('e-gid');if(_egid)_egid.value='';var _egpct=g('e-gpct');if(_egpct)_egpct.value='';var _990c=g('e-990line');if(_990c)_990c.value='';}
-  else if(c.type==='sb'){var cat=g('e-c').value;var _subcv=g('e-subcat')&&g('e-subcat').value.trim()||'';item={desc:d,cat:cat,subcat:_subcv,amt:Number(g('e-a').value||0),freq:g('e-fr').value,fixed:g('e-fx').value,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
+  else if(c.type==='sb'){var cat=g('e-c').value;var _subcv=g('e-subcat')&&g('e-subcat').value.trim()||'';item={id:_rXEI>=0?(c.expenses[_rXEI].id||uid()):uid(),desc:d,cat:cat,subcat:_subcv,amt:Number(g('e-a').value||0),freq:g('e-fr').value,fixed:g('e-fx').value,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
     item.audit=EI>=0?auditTxn(_oldExp,item,'expenses'):_auditCreated();
     var _prevAmt2=_oldExp?Number(_oldExp.amt||0):0;var _newAmt2=Number(item.amt||0);
     if(bsAssetId){applyBSAssetDelta(c,bsAssetId,_prevAmt2-_newAmt2);}
@@ -4333,7 +4422,7 @@ function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
     if(c.accounts&&c.accounts.length){var _coaMatch=(c.accounts||[]).find(function(a){return a.cat===cat||a.name===cat||a.code===item.acctCode;});if(!_coaMatch){if(!confirm('COA Warning: "'+cat+'" is not in your chart of accounts.\n\nSave anyway? (You can add this category to your COA later.)'))return;}}
     if(!checkBudgetOverspend(item.cat,Number(item.amt||0),_oldExp?Number(_oldExp.amt||0):0))return;
     if(_rXEI>=0)updateLedgerEntry(c,item.id||c.expenses[_rXEI].id,item.acctCode||'5010',_defaultCashCode(c),Number(item.amt||0),item.desc||'Expense','expense');else postToLedger(c,item.acctCode||'5010',_defaultCashCode(c),Number(item.amt||0),item.desc||'Expense','expense',item.id);markDirty('sbexp','budget','reports','bs');if(_rXEI>=0)c.expenses[_rXEI]=item;else c.expenses.push(item);syncVendorFromExpense(c,item);sv();var _psbexp=g('p-sbexp');if(_psbexp&&_psbexp.classList.contains('active'))renderSbExp(c);renderBudgetMultiYear();renderReports();renderBalanceSheet(c);var _rp=g('p-recon');if(_rp&&_rp.classList.contains('active'))renderReconciliation(c);_refreshBankIfActive(c);closeM('m-exp');['e-d','e-c','e-a','e-ref','e-url'].forEach(function(id){var el=g(id);if(el)el.value='';}); }
-  else{var cat=g('e-c').value;item={desc:d,cat:cat,amt:Number(g('e-a').value||0),freq:g('e-fr').value,date:g('e-dt').value,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
+  else{var cat=g('e-c').value;item={id:_rXEI>=0?(c.expenses[_rXEI].id||uid()):uid(),desc:d,cat:cat,amt:Number(g('e-a').value||0),freq:g('e-fr').value,date:g('e-dt').value,acctCode:resolveAcct(cat,g('e-acct')&&g('e-acct').value),reconciled:_rXEI>=0?c.expenses[_rXEI].reconciled:false,recurring:g('f-rec').value,is1099:is1099,vendor1099:vendor1099,tin1099:tin1099,receiptUrl:safeUrl(g('e-url')&&g('e-url').value)};var ref=g('e-ref')&&g('e-ref').value.trim()||'';if(ref)item.checkNum=ref;if(pid)item.projectId=pid;if(bankId)item.bankId=bankId;if(ccId)item.ccId=ccId;if(bsAssetId){item.bsAssetId=bsAssetId;item.acctCode=ensureBSAssetCOA(c,bsAssetId)||item.acctCode;}
     item.audit=EI>=0?auditTxn(_oldExp,item,'expenses'):_auditCreated();
     var _prevAmt3=_oldExp?Number(_oldExp.amt||0):0;var _newAmt3=Number(item.amt||0);
     if(bsAssetId){applyBSAssetDelta(c,bsAssetId,_prevAmt3-_newAmt3);}

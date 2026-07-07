@@ -357,7 +357,185 @@ function getBSFromLedger(c){
   };
 }
 
-// postClosingEntries(c, fyLabel)
+// ══════════════════════════════════════════
+// CASH FLOW STATEMENT
+// ══════════════════════════════════════════
+// _isCashAcct(a): true if the account is a cash/bank-type account.
+function _isCashAcct(a){
+  if(!a)return false;
+  if((a.cat||'')==='Cash')return true;
+  return isCashTypeAccount(a.name);
+}
+// _cfSection(a): classifies a non-cash account into 'operating' | 'investing' | 'financing'
+// for cash flow purposes. Uses an explicit a.cf tag on the COA account when present
+// (see COA_TEMPLATES below), otherwise infers from type/cat/name. Defaults to 'operating' —
+// income, expenses, AR/AP, prepaid, accrued, sales tax, and net-asset/retained-earnings
+// accounts are all operating unless tagged otherwise.
+function _cfSection(a){
+  if(!a)return'operating';
+  if(a.cf)return a.cf;
+  var cat=(a.cat||'').toLowerCase(),name=(a.name||'').toLowerCase();
+  if(cat.indexOf('fixed asset')>=0||cat.indexOf('investment')>=0||name.indexOf('fixed asset')>=0)return'investing';
+  if(cat.indexOf('loan')>=0||cat.indexOf('credit card')>=0||cat.indexOf('mortgage')>=0||name.indexOf('loan')>=0)return'financing';
+  if(name.indexOf('owner draw')>=0||name.indexOf('owner contribut')>=0||name.indexOf('paid-in capital')>=0)return'financing';
+  return'operating';
+}
+// getCashFlowStatement(c, startDate, endDate)
+// Builds a period cash flow statement, both direct and indirect presentations of the
+// operating section, from Date objects startDate/endDate (e.g. from getFiscalYear()).
+//
+// IMPORTANT DATA CAVEAT: fixed asset purchases and loan proceeds/principal payments do not
+// currently post to c.ledgerEntries[] (saveAsset() and saveLoan()/postLoanPayment() bypass
+// the ledger — see CLARITY_TODO queue item 2). So investing and financing activity is sourced
+// from c.fixedAssets[]/c.loans[] directly, using the loan's amortization schedule to date each
+// posted payment. Loan interest is likewise pulled from the schedule (rather than the ledger)
+// since postLoanPayment() pushes interest straight into c.expenses[] without a postToLedger()
+// call. Operating activity — everything that DOES post through postToLedger() (manual income/
+// expense entries, bills, invoices, petty cash, reimbursements, recurring transactions) — is
+// fully ledger-derived, so it always ties to the Trial Balance. Once fixed-asset/loan postings
+// are wired into the ledger, this function should be revisited to source investing/financing
+// from ledgerEntries too, for one consistent, fully auditable source of truth.
+function getCashFlowStatement(c,startDate,endDate){
+  var empty={
+    direct:{operating:[],opTotal:0},
+    indirect:{netIncome:0,addbacks:[],addbackTotal:0,workingCapital:[],wcTotal:0,opTotal:0},
+    investing:[],financing:[],invTotal:0,finTotal:0,
+    netChange:0,openingCash:0,endingCash:0,unpostedGap:0,reconciled:true,diff:0
+  };
+  if(!c||!startDate||!endDate)return empty;
+  function mdY(d){return(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')+'/'+d.getFullYear();}
+  var startStr=mdY(startDate),endStr=mdY(endDate);
+  var accts=c.accounts||[];
+  function acct(code){return accts.find(function(a){return a.code===code;})||null;}
+  function inPeriod(d){return d&&d>=startDate&&d<=endDate;}
+
+  var entries=(c.ledgerEntries||[]).filter(function(e){return!e.superseded&&inPeriod(parseDate(e.date));});
+
+  // ── DIRECT METHOD (operating only — see data caveat above) ──────────────
+  var dOp={};
+  function bump(label,amt){if(!dOp[label])dOp[label]=0;dOp[label]+=amt;}
+  entries.forEach(function(e){
+    var lines=e.lines||[];
+    var cashDelta=0,nonCash=[];
+    lines.forEach(function(l){
+      var a=acct(l.accountCode);
+      var net=Number(l.dr||0)-Number(l.cr||0);
+      if(_isCashAcct(a))cashDelta+=net;else nonCash.push({acct:a,net:net,mag:Math.abs(net)});
+    });
+    if(Math.abs(cashDelta)<0.005||!nonCash.length)return;
+    var magTotal=nonCash.reduce(function(s,n){return s+n.mag;},0)||1;
+    nonCash.forEach(function(n){
+      var a=n.acct;
+      if(_cfSection(a)!=='operating')return; // investing/financing handled separately below
+      var share=cashDelta*(n.mag/magTotal);
+      var t=(a&&a.type||'').toLowerCase(),cat=a?(a.cat||a.name):'Other';
+      var label;
+      if(t==='income')label='Cash received — '+cat;
+      else if(t==='expense')label='Cash paid — '+cat;
+      else if(a&&/receivable/i.test(a.cat||''))label='Collections on accounts receivable';
+      else if(a&&/payable/i.test(a.cat||''))label='Payments on accounts payable';
+      else label='Cash — '+cat;
+      bump(label,share);
+    });
+  });
+  var dOperating=Object.keys(dOp).sort().map(function(k){return{label:k,amt:dOp[k]};});
+
+  // ── Loan interest (schedule-sourced, see data caveat) — included in operating for both methods ──
+  var loanInterest=0;
+  (c.loans||[]).forEach(function(loan){
+    if(typeof calcAmort!=='function'||!loan.startDate)return;
+    var amort=calcAmort(Number(loan.principal||0),Number(loan.rate||0),Number(loan.term||0));
+    var posted=loan.posted||[];
+    amort.rows.forEach(function(r){
+      if(posted.indexOf(r.num)<0)return;
+      var due=parseDate(loan.startDate);if(!due)return;due.setMonth(due.getMonth()+r.num);
+      if(inPeriod(due))loanInterest+=r.interest;
+    });
+  });
+  if(loanInterest>0.005){dOperating.push({label:'Interest paid on loans',amt:-loanInterest});dOp['Interest paid on loans']=-loanInterest;}
+  var dOpTotal=dOperating.reduce(function(s,r){return s+r.amt;},0);
+
+  // ── INVESTING & FINANCING (feature-array sourced — see data caveat) ─────
+  var investing=[],financing=[];
+  var assetPurchases=(c.fixedAssets||[]).filter(function(a){return inPeriod(parseDate(a.date));})
+    .reduce(function(s,a){return s+Number(a.cost||0);},0);
+  if(assetPurchases>0.005)investing.push({label:'Purchase of fixed assets',amt:-assetPurchases});
+  var invTotal=investing.reduce(function(s,r){return s+r.amt;},0);
+
+  var loanProceeds=0,loanPrincipal=0;
+  (c.loans||[]).forEach(function(loan){
+    if(inPeriod(parseDate(loan.startDate)))loanProceeds+=Number(loan.principal||0);
+    if(typeof calcAmort!=='function'||!loan.startDate)return;
+    var amort=calcAmort(Number(loan.principal||0),Number(loan.rate||0),Number(loan.term||0));
+    var posted=loan.posted||[];
+    amort.rows.forEach(function(r){
+      if(posted.indexOf(r.num)<0)return;
+      var due=parseDate(loan.startDate);if(!due)return;due.setMonth(due.getMonth()+r.num);
+      if(inPeriod(due))loanPrincipal+=r.principal;
+    });
+  });
+  if(loanProceeds>0.005)financing.push({label:'Proceeds from loans',amt:loanProceeds});
+  if(loanPrincipal>0.005)financing.push({label:'Principal payments on debt',amt:-loanPrincipal});
+  var finTotal=financing.reduce(function(s,r){return s+r.amt;},0);
+
+  // ── INDIRECT METHOD: net income + non-cash addbacks + working capital changes ──
+  var incomeCodes=accts.filter(function(a){return(a.type||'').toLowerCase()==='income';}).map(function(a){return a.code;});
+  var expenseCodes=accts.filter(function(a){return(a.type||'').toLowerCase()==='expense';}).map(function(a){return a.code;});
+  var incomeTotal=0,expenseTotal=0;
+  entries.forEach(function(e){(e.lines||[]).forEach(function(l){
+    if(incomeCodes.indexOf(l.accountCode)>=0)incomeTotal+=Number(l.cr||0)-Number(l.dr||0);
+    if(expenseCodes.indexOf(l.accountCode)>=0)expenseTotal+=Number(l.dr||0)-Number(l.cr||0);
+  });});
+  var netIncome=incomeTotal-expenseTotal-loanInterest; // loan interest isn't in the ledger (see caveat) — fold it in here too
+
+  var deprAmt=entries.filter(function(e){return e.sourceType==='depreciation';})
+    .reduce(function(s,e){return s+(e.lines||[]).reduce(function(ls,l){return ls+Number(l.dr||0);},0);},0);
+  var addbacks=deprAmt>0.005?[{label:'Depreciation & amortization',amt:deprAmt}]:[];
+  var addbackTotal=addbacks.reduce(function(s,r){return s+r.amt;},0);
+
+  var dayBefore=addDays(startStr,-1);
+  var wcAccts=accts.filter(function(a){
+    var t=(a.type||'').toLowerCase();
+    return(t==='asset'||t==='liability')&&_cfSection(a)==='operating'&&!_isCashAcct(a);
+  });
+  var tbStart=getTrialBalance(c,dayBefore),tbEnd=getTrialBalance(c,endStr);
+  function balOf(tb,code){var r=tb.find(function(x){return x.code===code;});return r?r.balance:0;}
+  var workingCapital=[];
+  wcAccts.forEach(function(a){
+    var delta=balOf(tbEnd,a.code)-balOf(tbStart,a.code);
+    if(Math.abs(delta)<0.005)return;
+    var isAsset=(a.type||'').toLowerCase()==='asset';
+    workingCapital.push({label:(isAsset?'(Increase) decrease in ':'Increase (decrease) in ')+(a.cat||a.name),amt:isAsset?-delta:delta});
+  });
+  var wcTotal=workingCapital.reduce(function(s,r){return s+r.amt;},0);
+  var iOpTotal=netIncome+addbackTotal+wcTotal;
+
+  var diff=Math.round((dOpTotal-iOpTotal)*100)/100;
+  var reconciled=Math.abs(diff)<0.5;
+
+  var cashCodes=accts.filter(_isCashAcct).map(function(a){return a.code;});
+  var openingCash=cashCodes.reduce(function(s,code){return s+balOf(tbStart,code);},0);
+  // "Ending cash" always ties to the real ledger balance (what the Balance Sheet shows) — never
+  // derived as opening+netChange, since netChange includes fixed-asset/loan activity that (per the
+  // data caveat above) hasn't actually posted to the ledger's cash accounts yet. Any gap between
+  // computed netChange and the ledger's actual cash movement is surfaced explicitly below rather
+  // than silently absorbed, so this statement never shows a cash figure that disagrees with the books.
+  var endingCash=cashCodes.reduce(function(s,code){return s+balOf(tbEnd,code);},0);
+  var netChange=dOpTotal+invTotal+finTotal;
+  var actualLedgerChange=endingCash-openingCash;
+  var unpostedGap=Math.round((netChange-actualLedgerChange)*100)/100;
+
+  return{
+    direct:{operating:dOperating,opTotal:dOpTotal},
+    indirect:{netIncome:netIncome,addbacks:addbacks,addbackTotal:addbackTotal,workingCapital:workingCapital,wcTotal:wcTotal,opTotal:iOpTotal},
+    investing:investing,financing:financing,invTotal:invTotal,finTotal:finTotal,
+    netChange:netChange,openingCash:openingCash,endingCash:endingCash,
+    unpostedGap:unpostedGap,
+    reconciled:reconciled,diff:diff
+  };
+}
+
+
 // Posts GAAP year-end closing entries to ledgerEntries[].
 // Zeroes all Income and Expense account balances into the appropriate equity account.
 //   NP:  Cr/Dr → 3010 Unrestricted net assets
@@ -620,6 +798,8 @@ np:[
   {code:'1500',name:'Prepaid expenses',type:'Asset',cat:'Prepaid'},
   {code:'2010',name:'Accounts payable',type:'Liability',cat:'Payables'},
   {code:'2100',name:'Accrued liabilities',type:'Liability',cat:'Accrued'},
+  // 3010/3020/3030 net-asset codes left untagged (cf undefined -> falls back to 'operating' in _cfSection):
+  // net assets roll up from net income, already captured in the operating section, so they're not their own financing flow.
   {code:'3010',name:'Unrestricted net assets',type:'Equity',cat:'Net Assets'},
   {code:'3020',name:'Temp. restricted net assets',type:'Equity',cat:'Net Assets'},
   {code:'3030',name:'Perm. restricted net assets',type:'Equity',cat:'Net Assets'},
@@ -647,22 +827,24 @@ np:[
   {code:'5600',name:'Bank fees & charges',type:'Expense',cat:'Bank Fees',f990:'Part IX Line 24'},
   {code:'5610',name:'Depreciation',type:'Expense',cat:'Depreciation',f990:'Part IX Line 22'}
 ],
+// (fixed assets / investments / loans not part of the default np COA today —
+//  if/when they're added, tag them cf:'investing' or cf:'financing' as done below for sb/pe)
 sb:[
   {code:'1010',name:'Checking account',type:'Asset',cat:'Cash'},
   {code:'1020',name:'Savings account',type:'Asset',cat:'Cash'},
   {code:'1200',name:'Accounts receivable',type:'Asset',cat:'Receivables'},
   {code:'1300',name:'Inventory',type:'Asset',cat:'Inventory'},
   {code:'1500',name:'Prepaid expenses',type:'Asset',cat:'Prepaid'},
-  {code:'1600',name:'Fixed assets',type:'Asset',cat:'Fixed Assets'},
+  {code:'1600',name:'Fixed assets',type:'Asset',cat:'Fixed Assets',cf:'investing'},
   {code:'1610',name:'Accumulated depreciation',type:'Asset',cat:'Fixed Assets'},
   {code:'2010',name:'Accounts payable',type:'Liability',cat:'Payables'},
-  {code:'2100',name:'Credit cards payable',type:'Liability',cat:'Credit Cards'},
-  {code:'2200',name:'Loans payable',type:'Liability',cat:'Loans'},
+  {code:'2100',name:'Credit cards payable',type:'Liability',cat:'Credit Cards',cf:'financing'},
+  {code:'2200',name:'Loans payable',type:'Liability',cat:'Loans',cf:'financing'},
   {code:'2300',name:'Accrued liabilities',type:'Liability',cat:'Accrued'},
   {code:'2350',name:'Sales tax payable',type:'Liability',cat:'Sales Tax'},
-  {code:'3010',name:'Owner equity',type:'Equity',cat:'Equity'},
+  {code:'3010',name:'Owner equity',type:'Equity',cat:'Equity',cf:'financing'},
   {code:'3020',name:'Retained earnings',type:'Equity',cat:'Equity'},
-  {code:'3030',name:'Owner draws',type:'Equity',cat:'Equity'},
+  {code:'3030',name:'Owner draws',type:'Equity',cat:'Equity',cf:'financing'},
   {code:'3999',name:'Opening balance equity',type:'Equity',cat:'Equity'},
   {code:'4010',name:'Product sales',type:'Income',cat:'Product Sales'},
   {code:'4020',name:'Service revenue',type:'Income',cat:'Services'},
@@ -692,11 +874,11 @@ sb:[
 pe:[
   {code:'1010',name:'Checking account',type:'Asset',cat:'Cash'},
   {code:'1020',name:'Savings account',type:'Asset',cat:'Cash'},
-  {code:'1030',name:'Investment account',type:'Asset',cat:'Investments'},
-  {code:'2010',name:'Credit card',type:'Liability',cat:'Credit Cards'},
-  {code:'2100',name:'Auto loan',type:'Liability',cat:'Loans'},
-  {code:'2200',name:'Student loan',type:'Liability',cat:'Loans'},
-  {code:'2300',name:'Mortgage',type:'Liability',cat:'Loans'},
+  {code:'1030',name:'Investment account',type:'Asset',cat:'Investments',cf:'investing'},
+  {code:'2010',name:'Credit card',type:'Liability',cat:'Credit Cards',cf:'financing'},
+  {code:'2100',name:'Auto loan',type:'Liability',cat:'Loans',cf:'financing'},
+  {code:'2200',name:'Student loan',type:'Liability',cat:'Loans',cf:'financing'},
+  {code:'2300',name:'Mortgage',type:'Liability',cat:'Loans',cf:'financing'},
   {code:'3010',name:'Net worth',type:'Equity',cat:'Equity'},
   {code:'3999',name:'Opening balance equity',type:'Equity',cat:'Equity'},
   {code:'4010',name:'Salary',type:'Income',cat:'Employment'},
