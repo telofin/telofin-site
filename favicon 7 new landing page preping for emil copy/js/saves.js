@@ -34,7 +34,9 @@ function delItem(type,i){
   item.deleted=true;item.deletedAt=new Date().toISOString();item.deletedType=type;
   // Post ledger reversals for all ledger entries tied to this item
   if(item.id)voidLedgerEntry(c,item.id);
-  sv();renderAll();
+  sv();
+  if(type==='expenses'&&typeof dwUpsertExpense==='function')dwUpsertExpense(c,item);
+  renderAll();
 }
 
 function restoreItem(type,i){

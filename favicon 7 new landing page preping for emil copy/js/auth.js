@@ -210,6 +210,89 @@ async function loadFromSupabase(){
   return false;
 }
 
+// ══════════════════════════════════════════
+// DUAL-WRITE — Supabase Step 6, Phase 2 (expenses only, first slice)
+// ══════════════════════════════════════════
+// The relational tables (clients, expenses, ...) only ever got filled in
+// once, at migration.js's one-time run. These two functions keep the
+// `expenses` table current on every save going forward, without changing
+// anything about the blob — the blob stays authoritative; this is a mirror.
+// Nothing in the app reads from these tables yet, so a bug here can't
+// affect what anyone sees. Both are written to never throw outward: a
+// Supabase failure is logged and swallowed, the blob save is untouched.
+var _dwClientIdCache={};
+
+// Resolves this client's Supabase UUID via the existing client_id_map table
+// (built once by migration.js). If no mapping exists yet — this client was
+// created after that one-time migration ran — creates the clients row and
+// the mapping now, using the exact same field shape migration.js already
+// uses for client rows.
+async function dwResolveClientId(c){
+  var sb=sbClient();if(!sb||!_user||!c)return null;
+  if(_dwClientIdCache[c.id])return _dwClientIdCache[c.id];
+  try{
+    var mapRes=await sb.from('client_id_map').select('new_client_id').eq('old_client_id',String(c.id)).eq('user_id',_user.id).maybeSingle();
+    if(mapRes.data&&mapRes.data.new_client_id){
+      _dwClientIdCache[c.id]=mapRes.data.new_client_id;
+      return mapRes.data.new_client_id;
+    }
+    var clientRes=await sb.from('clients').insert({
+      user_id:_user.id,name:c.name||'',type:c.type||'np',
+      fiscal_year_end:c.fiscalYearEnd||null,basis_type:c.basisType||null,
+      np_type:c.npType||null,closed_through:c.closedThrough||null
+    }).select('id').single();
+    if(clientRes.error||!clientRes.data)return null;
+    var newClientId=clientRes.data.id;
+    await sb.from('client_id_map').insert({old_client_id:String(c.id),user_id:_user.id,new_client_id:newClientId});
+    _dwClientIdCache[c.id]=newClientId;
+    return newClientId;
+  }catch(e){
+    console.warn('[clarity] dwResolveClientId failed:',e);
+    return null;
+  }
+}
+
+// Maps a blob expense record's core fields to the relational `expenses`
+// table and upserts on (client_id, old_id) — reuses the exact field mapping
+// migration.js's _migrateBlobToTables already proved for expenses.
+// FK fields that point at other not-yet-dual-written record types (grant,
+// bank account, credit card, project, payroll, bill, petty cash,
+// reimbursement) are intentionally left null for now, same as migration.js
+// already does for match_id/bank_txn_id — those relationships get filled in
+// once those record types get their own dual-write pass.
+async function dwUpsertExpense(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,
+      description:item.desc||null,cat:item.cat||null,
+      amt:item.amt||null,date:item.date||null,fund:item.fund||null,
+      line_990:item.line990||null,
+      recurring:item.recurring||null,recur_end_date:item.recurEndDate||null,
+      recur_count:item.recurCount||null,recur_posted_count:item.recurPostedCount||0,
+      check_num:item.checkNum||null,functional:item.functional||null,
+      receipt_url:item.receiptUrl||null,tin_1099:item.tin1099||null,
+      vendor_1099:item.vendor1099||null,is_1099:!!item.is1099,
+      acct_code:item.acctCode||null,
+      bank_name:item.bankName||null,
+      bs_asset_id:item.bsAssetId||null,freq:item.freq||null,fixed:item.fixed||null,
+      subcat:item.subcat||null,
+      is_reimb:!!item.isReimb,
+      inkind_ref:!!item.inkindRef,functional_split:!!item.functionalSplit,
+      reconciled:!!item.reconciled,voided:!!item.voided,voided_at:item.voidedAt||null,
+      is_reversal:!!item.isReversal,deleted:!!item.deleted,deleted_at:item.deletedAt||null,
+      flagged:!!item.flagged,flag_reason:item.flagReason||null,
+      flag_severity:item.flagSeverity||null,flagged_at:item.flaggedAt||null,
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('expenses').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertExpense failed (blob save unaffected):',e);
+  }
+}
+
 async function checkSyncConflict(){
   // Before saving, check if the server has a newer version than what we loaded.
   // Covers two scenarios:
