@@ -222,7 +222,11 @@ tr:hover td{background:var(--bg)}
 .rpt-ttl{font-size:13px;font-weight:500;margin-bottom:.75rem;padding-bottom:.5rem;border-bottom:1px solid var(--soft)}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
-.modal{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:1.5rem;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.modal{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:1.5rem;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
+.modal::-webkit-scrollbar{width:8px}
+.modal::-webkit-scrollbar-track{background:transparent}
+.modal::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.modal::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 .m-title{font-size:15px;font-weight:500;margin-bottom:1.25rem;font-family:'DM Serif Display',serif}
 .cx{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1}
 .fl{margin-bottom:10px}
@@ -750,7 +754,7 @@ tr:hover td{background:var(--bg)}
     <div class="m-title" id="m-bill-title">Enter bill</div>
     <div class="fl" style="margin-bottom:.5rem"><label>Vendor <span style="color:var(--red)">*</span></label><input type="text" id="bill-vendor" placeholder="e.g. Home Depot"></div>
     <div class="fl" style="margin-bottom:.5rem"><label>Description</label><input type="text" id="bill-desc" placeholder="e.g. Repairs and maintenance"></div>
-    <div class="fr"><div class="fl" style="margin-bottom:0"><label>Amount ($) <span style="color:var(--red)">*</span></label><input type="number" id="bill-amt" placeholder="0.00" oninput="fmtAmt(this)"></div><div class="fl" style="margin-bottom:0"><label>Expense account <span style="color:var(--red)">*</span></label><select id="bill-acct"></select></div></div>
+    <div class="fr"><div class="fl" style="margin-bottom:0"><label>Amount ($) <span style="color:var(--red)">*</span></label><input type="number" id="bill-amt" placeholder="0.00" oninput="fmtAmt(this)"></div><div class="fl" style="margin-bottom:0"><label>Account (COA) <span style="color:var(--red)">*</span></label><select id="bill-acct"></select></div></div>
     <div class="fr"><div class="fl" style="margin-bottom:0"><label>Bill date (MM/DD/YYYY)</label><input type="text" id="bill-recv" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl" style="margin-bottom:0"><label>Due date (MM/DD/YYYY)</label><input type="text" id="bill-due" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>
     <input type="hidden" id="bill-cat">
     <div class="fl" style="margin-bottom:.5rem"><label>Notes</label><input type="text" id="bill-notes" placeholder="Optional"></div>
@@ -771,6 +775,23 @@ tr:hover td{background:var(--bg)}
     <div class="fl" id="pb-ref-row" style="display:none;margin-bottom:.5rem"><label>Reference # (optional)</label><input type="text" id="pb-refnum"></div>
     <div style="display:flex;gap:8px;margin-top:.5rem">
       <button class="sv-btn" onclick="confirmPayBill()">Mark paid</button>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="m-pay-bills-batch">
+  <div class="modal">
+    <button class="cx" onclick="closeM('m-pay-bills-batch')">&#215;</button>
+    <div class="m-title">Pay bills (batch)</div>
+    <div id="pbb-list" style="font-size:12px;color:var(--muted);margin-bottom:.75rem;max-height:160px;overflow-y:auto"></div>
+    <div id="pbb-total" style="font-size:13px;font-weight:600;margin-bottom:.75rem"></div>
+    <div class="fl" style="margin-bottom:.5rem"><label>Payment method</label><select id="pbb-method" onchange="_payBillsBatchMethodChanged()"><option value="check">Check</option><option value="ach">ACH</option><option value="other">Other</option></select></div>
+    <div id="pbb-check-fields">
+      <div class="fr"><div class="fl" style="margin-bottom:0"><label>Pay from account</label><select id="pbb-bank" onchange="_payBillsBatchBankChanged()"></select></div><div class="fl" style="margin-bottom:0"><label>Starting check number</label><input type="text" id="pbb-startnum" oninput="_payBillsBatchRenderNums()"></div></div>
+      <div id="pbb-numlist" style="font-size:11px;color:var(--muted);margin-top:.5rem;line-height:1.7"></div>
+    </div>
+    <div class="fl" id="pbb-ref-row" style="display:none;margin-bottom:.5rem"><label>Reference # (optional)</label><input type="text" id="pbb-refnum"></div>
+    <div style="display:flex;gap:8px;margin-top:.5rem">
+      <button class="sv-btn" onclick="confirmPayBillsBatch()">Mark all paid</button>
     </div>
   </div>
 </div>
