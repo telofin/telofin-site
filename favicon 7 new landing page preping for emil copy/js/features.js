@@ -586,6 +586,16 @@ function delPayroll(i){
 // ── END PAYROLL ───────────────────────────
 // ══════════════════════════════════════════
 var BILL_EI=-1;
+// AP_SELECTED: bill id -> true, tracks which unpaid bills are checked in the Accounts
+// Payable list for batch pay/print. Keyed by id (not row index) so selection survives
+// re-renders and reordering. Cleared after a successful batch pay. renderAP() has no
+// container of its own — it's concatenated straight into the Expenses panel's innerHTML
+// (same as catF/srchBar/sortDateBar) — so selection toggles re-render via the same
+// caller-supplied "fn" string convention sortDateBar already uses, not a lookup by id.
+var AP_SELECTED={};
+function _apToggleSelect(id){if(AP_SELECTED[id])delete AP_SELECTED[id];else AP_SELECTED[id]=true;}
+function _apSelectAllState(ids){return ids.length>0&&ids.every(function(id){return AP_SELECTED[id];});}
+function _apToggleSelectAll(ids){var allSel=_apSelectAllState(ids);AP_SELECTED={};if(!allSel)ids.forEach(function(id){AP_SELECTED[id]=true;});}
 var _f990Tab='ix';// 'ix'=Part IX expenses | 'viii'=Part VIII revenue | 'x'=Part X balance sheet
 function apAgeDays(due){var d=parseDate(due);if(!d)return 0;return Math.floor((new Date()-d)/(1000*60*60*24));}
 function apAgeBadge(due,status){
@@ -597,10 +607,18 @@ function apAgeBadge(due,status){
   if(days<61)return'<span class="badge b-amber">60 days</span>';
   return'<span class="badge b-red">90+ days</span>';
 }
-function renderAP(c){
+// renderAP(c, fn): fn is the caller's own re-render call (e.g. 'renderNpExp(gc())'), same
+// convention sortDateBar/catF already use — renderAP has no container of its own, it's
+// concatenated straight into the Expenses panel's innerHTML, so selection checkboxes need
+// the caller's re-render string to redraw after a toggle.
+function renderAP(c,fn){
+  fn=fn||'';
   var now=new Date();now.setHours(0,0,0,0);
   var bills=(c.bills||[]).filter(function(b){return b.status!=='Paid';});
   var tot=bills.reduce(function(s,b){return s+Number(b.amt||0);},0);
+  var billIds=bills.map(function(b){return b.id;});
+  var selCount=billIds.filter(function(id){return AP_SELECTED[id];}).length;
+  var idsLit='['+billIds.map(function(id){return"'"+id+"'";}).join(',')+']';
   // A/P aging buckets — mirror A/R exactly
   var ag={cur:0,d30:0,d60:0,d90:0,d90p:0};
   bills.forEach(function(b){
@@ -618,28 +636,40 @@ function renderAP(c){
     +'</tr></tbody></table></div>':'';
   var rows=bills.map(function(b){
     var oi=(c.bills||[]).indexOf(b);
-    return'<tr><td style="font-weight:500">'+escHtml(b.vendor||'—')+'</td><td>'+escHtml(b.desc||'—')+'</td><td class="vr">'+fmt(b.amt)+'</td><td style="color:var(--muted)">'+(b.due||'—')+'</td><td>'+apAgeBadge(b.due,b.status)+'</td>'
+    return'<tr><td><input type="checkbox" '+(AP_SELECTED[b.id]?'checked':'')+' onchange="_apToggleSelect(\''+b.id+'\');'+fn+'"></td><td style="font-weight:500">'+escHtml(b.vendor||'—')+'</td><td>'+escHtml(b.desc||'—')+'</td><td class="vr">'+fmt(b.amt)+'</td><td style="color:var(--muted)">'+(b.due||'—')+'</td><td>'+apAgeBadge(b.due,b.status)+'</td>'
     +'<td><div class="row-acts">'+billRcptCell(oi,b)+'<button class="e-btn" onclick="payBill('+oi+')" title="Pay this bill" style="color:var(--green);white-space:nowrap"><i class="fas fa-check"></i> Pay bill</button><button class="e-btn" onclick="editBill('+oi+')">&#9998;</button><button class="d-btn" onclick="delBill('+oi+')">&#215;</button></div></td></tr>';
   }).join('');
   return'<div class="card" style="border-left:3px solid var(--amber);margin-bottom:1.25rem">'
-  +'<div class="c-head"><span class="c-title">Accounts payable</span><div style="display:flex;gap:6px"><button class="add-btn" onclick="printAPAging()" title="Export aging schedule PDF"><i class="fas fa-print"></i> Print aging</button><button class="add-btn" onclick="billOpenNew()">+ Enter bill</button></div></div>'
+  +'<div class="c-head"><span class="c-title">Accounts payable</span><div style="display:flex;gap:6px">'
+  +(selCount>0?'<button class="add-btn" onclick="payBillsBatch()" style="color:var(--green);border-color:var(--green)"><i class="fas fa-check-double"></i> Pay selected ('+selCount+')</button>':'')
+  +'<button class="add-btn" onclick="printAPAging()" title="Export aging schedule PDF"><i class="fas fa-print"></i> Print aging</button><button class="add-btn" onclick="billOpenNew()">+ Enter bill</button></div></div>'
   +agingHtml
   +(bills.length
-    ?'<table><thead><tr><th style="width:16%">Vendor</th><th style="width:22%">Description</th><th style="width:10%">Amount</th><th style="width:11%">Due</th><th style="width:12%">Age</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>'
+    ?'<table><thead><tr><th style="width:20px"><input type="checkbox" '+(_apSelectAllState(billIds)?'checked':'')+' onchange="_apToggleSelectAll('+idsLit+');'+fn+'" title="Select all"></th><th style="width:15%">Vendor</th><th style="width:21%">Description</th><th style="width:10%">Amount</th><th style="width:11%">Due</th><th style="width:12%">Age</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>'
     :'<div style="font-size:12px;color:var(--muted)">No open bills. Enter a bill to track what you owe before it hits your bank.</div>')
   +'</div>';
 }
-// Populate the bill modal's expense-account dropdown with live Expense-type
-// accounts from the COA. Re-run every time the modal opens so newly added
-// accounts show up, and so edits to an existing bill pre-select the right one.
+// Populate the bill modal's account dropdown with live Asset/Liability/Expense
+// accounts from the COA, grouped by type — a bill can hit any of the three
+// (e.g. equipment bought on account should debit an Asset, not an Expense;
+// Equity/Income are excluded since a bill never sensibly hits those). Re-run
+// every time the modal opens so newly added accounts show up, and so edits to
+// an existing bill pre-select the right one.
 function _billPopulateAcctOptions(selectedCode){
   var c=gc();if(!c)return;
   var sel=g('bill-acct');if(!sel)return;
-  var expAccts=(c.accounts||[]).filter(function(a){return a.type==='Expense'&&a.active!==false;});
-  sel.innerHTML='<option value="">— Select expense account —</option>'
-    +expAccts.map(function(a){
-      return '<option value="'+a.code+'"'+(selectedCode===a.code?' selected':'')+'>'+a.code+' '+escHtml(a.name)+'</option>';
-    }).join('');
+  var groups=[{type:'Asset',label:'Asset'},{type:'Liability',label:'Liability'},{type:'Expense',label:'Expense'}];
+  var html='<option value="">— Select account —</option>';
+  groups.forEach(function(grp){
+    var accts=(c.accounts||[]).filter(function(a){return a.type===grp.type&&a.active!==false;});
+    if(!accts.length)return;
+    html+='<optgroup label="'+grp.label+'">'
+      +accts.map(function(a){
+        return '<option value="'+a.code+'"'+(selectedCode===a.code?' selected':'')+'>'+a.code+' '+escHtml(a.name)+'</option>';
+      }).join('')
+      +'</optgroup>';
+  });
+  sel.innerHTML=html;
 }
 function billOpenNew(){BILL_EI=-1;resetBillForm();_billPopulateAcctOptions('');openM('m-bill');}
 function saveBill(){
@@ -649,7 +679,7 @@ function saveBill(){
   if(_billLockDate&&isDateLocked(c,_billLockDate)){periodLockAlert(c.closedThrough);return;}
   var vendor=sanitizeInput(g('bill-vendor').value.trim());if(!vendor){alert('Please enter a vendor name.');return;}
   var acctCode=g('bill-acct')&&g('bill-acct').value;
-  if(!acctCode){alert('Please select an expense account for this bill.');return;}
+  if(!acctCode){alert('Please select an account for this bill.');return;}
   var acctObj=(c.accounts||[]).find(function(a){return a.code===acctCode;});
   var billId=BILL_EI>=0?(c.bills[BILL_EI].id||uid()):uid();
   var item={id:billId,vendor:vendor,desc:sanitizeInput(g('bill-desc').value.trim()),amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:acctCode,cat:(acctObj&&acctObj.cat)||'Uncategorized',status:'Unpaid',notes:g('bill-notes').value};
@@ -665,6 +695,66 @@ function saveBill(){
 }
 // PAY_BILL_I: index of the bill currently in the "Pay bill" modal (payBill() below).
 var PAY_BILL_I=-1;
+// _billBankSelectOptions(c): options for a bill-pay bank picker — existing bank accounts
+// (value = array index, the same scheme confirmPayBill()/confirmPayBillsBatch() already read),
+// plus COA Asset accounts not yet promoted to a bank account (value = "coaasset:"+id), plus
+// an inline "add account" option — mirrors the e-bank/i-bank/r-bank/pi-bank picker already
+// built in openM() (modals.js), reused here instead of building a second version.
+function _billBankSelectOptions(c){
+  var banks=c.bankAccounts||[];
+  var bankNames=banks.map(function(b){return b.name.toLowerCase();});
+  var coaAssets=(c.accounts||[]).filter(function(a){
+    return a.type==='Asset'&&a.name.toLowerCase().indexOf('depreciation')<0
+      &&!bankNames.some(function(n){return n===a.name.toLowerCase();});
+  });
+  return banks.map(function(bk,bi){return'<option value="'+bi+'">'+escHtml(bk.name)+'</option>';}).join('')
+    +coaAssets.map(function(a){return'<option value="coaasset:'+a.id+'">'+escHtml(a.name)+'</option>';}).join('')
+    +'<option value="__addbank__">＋ Add account…</option>';
+}
+// _billBankSelectOnChange(bankSel, c, afterFn): shared onchange for pb-bank/pbb-bank. Handles
+// promoting a COA-only asset or creating a brand new bank account inline (same logic as the
+// e-bank picker in modals.js), then rebuilds the options and normalizes bankSel.value back to
+// a real bankAccounts index before calling afterFn — so _payBillBankChanged()/
+// _payBillsBatchBankChanged() never need to know about the coaasset:/__addbank__ sentinels.
+function _billBankSelectOnChange(bankSel,c,afterFn){
+  var val=bankSel.value;
+  if(val==='__addbank__'){
+    var aname=prompt('Account name (e.g. Checking, Savings, Cash on Hand):');
+    if(!aname||!aname.trim()){bankSel.value='';if(afterFn)afterFn();return;}
+    aname=aname.trim();
+    if(!c.bankAccounts)c.bankAccounts=[];
+    var newBank={id:uid(),name:aname,type:'bank',last4:''};
+    c.bankAccounts.push(newBank);
+    if(!c.accounts)c.accounts=[];
+    var coaEx=c.accounts.find(function(a){return a.name===aname&&a.type==='Asset';});
+    if(!coaEx){
+      var usedA=c.accounts.filter(function(a){return a.code.indexOf('1')===0;}).map(function(a){return parseInt(a.code)||0;});
+      var nCode=String(usedA.length?(Math.max.apply(null,usedA)+10):1010);
+      c.accounts.push({id:uid(),code:nCode,name:aname,type:'Asset',cat:aname});
+      c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
+    }
+    sv();
+    bankSel.innerHTML=_billBankSelectOptions(c);
+    bankSel.value=String(c.bankAccounts.indexOf(newBank));
+    if(afterFn)afterFn();
+    return;
+  }
+  if(val.indexOf('coaasset:')===0){
+    var coaId=val.slice(9);
+    var coaAcct=(c.accounts||[]).find(function(a){return a.id===coaId;});
+    if(coaAcct){
+      if(!c.bankAccounts)c.bankAccounts=[];
+      var promoted={id:uid(),name:coaAcct.name,type:'bank',last4:''};
+      c.bankAccounts.push(promoted);
+      sv();
+      bankSel.innerHTML=_billBankSelectOptions(c);
+      bankSel.value=String(c.bankAccounts.indexOf(promoted));
+    }
+    if(afterFn)afterFn();
+    return;
+  }
+  if(afterFn)afterFn();
+}
 function payBill(i){
   var c=gc();if(!c.bills[i])return;
   var b=c.bills[i];
@@ -674,10 +764,8 @@ function payBill(i){
   var sum=g('pb-summary');if(sum)sum.textContent='Pay "'+b.vendor+'" — '+fmt(b.amt)+(b.desc?' ('+b.desc+')':'');
   var bankSel=g('pb-bank');
   if(bankSel){
-    var banks=c.bankAccounts||[];
-    bankSel.innerHTML=banks.length
-      ?banks.map(function(bk,bi){return'<option value="'+bi+'">'+escHtml(bk.name)+'</option>';}).join('')
-      :'<option value="">— No bank accounts set up —</option>';
+    bankSel.innerHTML=_billBankSelectOptions(c);
+    bankSel.onchange=function(){_billBankSelectOnChange(bankSel,c,_payBillBankChanged);};
   }
   if(g('pb-refnum'))g('pb-refnum').value='';
   if(g('pb-method'))g('pb-method').value='check';
@@ -695,6 +783,30 @@ function _payBillBankChanged(){
   var bank=(c.bankAccounts||[])[Number(bankSel.value)];
   var checkNumEl=g('pb-checknum');
   if(checkNumEl&&bank)checkNumEl.value=bank.nextCheckNum||'';
+}
+// _payOneBill(c, b, method, instrNum, bank): the core "what happens when one bill is paid"
+// step — marks the bill paid, pushes its resulting expense record (checkNum stored as
+// structured data, not just in the memo string, so the bank feed can show "Check #1472" when
+// offering a match, and so printCheck() has a real field to read/write; checkPrinted — not
+// bankId, which is the pre-existing general "Paid from account" field set for any payment
+// method — is the actual signal a real check was issued and can be reprinted, see rb() in
+// renders.js), and posts the AP-clearing ledger entry (Dr AP / Cr Cash). Shared by the
+// single "Pay bill" flow (confirmPayBill) and the batch flow (confirmPayBillsBatch) so this
+// accounting logic lives in exactly one place. Does not advance the bank account's check
+// sequence, run the calibration checkpoint, save/render, or print — callers own those since
+// batch handles them once for the whole run instead of once per bill. Returns the pushed
+// expense record.
+function _payOneBill(c,b,method,instrNum,bank){
+  var memo=b.vendor+(b.desc?' — '+b.desc:'')+(instrNum?' ['+instrNum+']':'');
+  b.status='Paid';b.paidDate=todayNum();b.instrNum=instrNum||'';
+  if(!c.expenses)c.expenses=[];
+  var expId=uid();
+  var expItem={id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null,bankId:(method==='check'&&bank)?bank.id:null,checkPrinted:method==='check'&&!!bank};
+  c.expenses.push(expItem);
+  // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
+  var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
+  postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);
+  return expItem;
 }
 // confirmPayBill(): the "Mark paid" action in the m-pay-bill modal. Same accounting behavior
 // as the old window.prompt()-based payBill() (Dr AP / Cr Cash, checkNum on the resulting
@@ -725,23 +837,8 @@ function confirmPayBill(){
   }else{
     instrNum=(g('pb-refnum')&&g('pb-refnum').value||'').trim();
   }
-  var memo=b.vendor+(b.desc?' — '+b.desc:'')+(instrNum?' ['+instrNum+']':'');
   if(!confirm('Mark "'+b.vendor+'" bill for '+fmt(b.amt)+' as paid and post to expenses?'))return;
-  b.status='Paid';b.paidDate=todayNum();b.instrNum=instrNum||'';
-  if(!c.expenses)c.expenses=[];
-  var expId=uid();
-  // checkNum stored as structured data (not just in the memo string) so the
-  // bank feed can show "Check #1472" when offering a match, and so printCheck()
-  // has a real field to read/write.
-  // matchId stays unset until a bank transaction is matched to this expense —
-  // see bankMatchOne() in bank.js.
-  // checkPrinted (not bankId — that's the pre-existing general "Paid from account" field, set
-  // for any payment method, not just checks) is the actual signal that a real check was issued
-  // through this flow and can be reprinted. See rb() in renders.js.
-  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null,bankId:(method==='check'&&bank)?bank.id:null,checkPrinted:method==='check'&&!!bank});
-  // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
-  var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
-  postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);
+  _payOneBill(c,b,method,instrNum,bank);
   // Advance the bank account's check sequence so the next bill/expense suggests the next number.
   if(method==='check'&&bank){
     var bankIdx=c.bankAccounts.indexOf(bank);
@@ -754,6 +851,97 @@ function confirmPayBill(){
     var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===b.vendor.toLowerCase();});
     if(typeof printCheck==='function')printCheck(c,bank,{payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum});
   }
+}
+// PAY_BILLS_BATCH_IDS: bill ids currently loaded into the m-pay-bills-batch modal, snapshotted
+// when the modal opens (from AP_SELECTED) so the list stays stable while the modal is open.
+var PAY_BILLS_BATCH_IDS=[];
+function payBillsBatch(){
+  var c=gc();if(!c)return;
+  var ids=Object.keys(AP_SELECTED).filter(function(id){return AP_SELECTED[id];});
+  var bills=ids.map(function(id){return(c.bills||[]).find(function(b){return b.id===id&&b.status!=='Paid';});}).filter(Boolean);
+  if(!bills.length){alert('Select at least one unpaid bill first.');return;}
+  if(isDateLocked(c,todayNum())){periodLockAlert(c.closedThrough);return;}
+  PAY_BILLS_BATCH_IDS=bills.map(function(b){return b.id;});
+  var tot=bills.reduce(function(s,b){return s+Number(b.amt||0);},0);
+  var list=g('pbb-list');
+  if(list)list.innerHTML=bills.map(function(b){return'<div>'+escHtml(b.vendor||'—')+' — '+fmt(b.amt)+(b.desc?' ('+escHtml(b.desc)+')':'')+'</div>';}).join('');
+  var totEl=g('pbb-total');if(totEl)totEl.textContent=bills.length+' bill'+(bills.length===1?'':'s')+' — total '+fmt(tot);
+  var bankSel=g('pbb-bank');
+  if(bankSel){
+    bankSel.innerHTML=_billBankSelectOptions(c);
+    bankSel.onchange=function(){_billBankSelectOnChange(bankSel,c,_payBillsBatchBankChanged);};
+  }
+  if(g('pbb-refnum'))g('pbb-refnum').value='';
+  if(g('pbb-method'))g('pbb-method').value='check';
+  _payBillsBatchMethodChanged();
+  _payBillsBatchBankChanged();
+  openM('m-pay-bills-batch');
+}
+function _payBillsBatchMethodChanged(){
+  var method=g('pbb-method')&&g('pbb-method').value;
+  var checkFields=g('pbb-check-fields');if(checkFields)checkFields.style.display=method==='check'?'block':'none';
+  var refRow=g('pbb-ref-row');if(refRow)refRow.style.display=method==='check'?'none':'block';
+}
+function _payBillsBatchBankChanged(){
+  var c=gc();var bankSel=g('pbb-bank');if(!c||!bankSel||bankSel.value==='')return;
+  var bank=(c.bankAccounts||[])[Number(bankSel.value)];
+  var startEl=g('pbb-startnum');
+  if(startEl&&bank)startEl.value=bank.nextCheckNum||'';
+  _payBillsBatchRenderNums();
+}
+// Assigned check numbers are a display-only readout (starting number + index) — matches how
+// a real check run works, no per-row editing.
+function _payBillsBatchRenderNums(){
+  var c=gc();if(!c)return;
+  var numList=g('pbb-numlist');if(!numList)return;
+  var start=parseInt(g('pbb-startnum')&&g('pbb-startnum').value,10);
+  var bills=PAY_BILLS_BATCH_IDS.map(function(id){return(c.bills||[]).find(function(b){return b.id===id;});}).filter(Boolean);
+  if(isNaN(start)){numList.innerHTML='';return;}
+  numList.innerHTML=bills.map(function(b,i){return escHtml(b.vendor||'—')+': check #'+(start+i);}).join('<br>');
+}
+// confirmPayBillsBatch(): the "Mark all paid" action in m-pay-bills-batch. Runs the same
+// calibration checkpoint as confirmPayBill() once for the whole batch (not per bill), pays
+// each selected bill via the shared _payOneBill() helper with sequential check numbers, then
+// advances the bank account's check sequence once and prints all checks in a single job via
+// printChecksBatch() (checks.js).
+function confirmPayBillsBatch(){
+  var c=gc();if(!c)return;
+  var bills=PAY_BILLS_BATCH_IDS.map(function(id){return(c.bills||[]).find(function(b){return b.id===id&&b.status!=='Paid';});}).filter(Boolean);
+  if(!bills.length){closeM('m-pay-bills-batch');return;}
+  var method=g('pbb-method')&&g('pbb-method').value||'other';
+  var bank=null,startNum=NaN;
+  if(method==='check'){
+    var bankSel=g('pbb-bank');
+    if(!bankSel||bankSel.value===''){alert('Please add a bank account first (Reconciliation tab) before paying by check.');return;}
+    bank=(c.bankAccounts||[])[Number(bankSel.value)];
+    startNum=parseInt(g('pbb-startnum')&&g('pbb-startnum').value,10);
+    if(isNaN(startNum)){alert('Please enter a starting check number.');return;}
+    if(!bank.checkCalibrated){
+      if(confirm('You haven\'t printed a test alignment page for "'+bank.name+'" yet.\n\nOK = print a free test page first (nothing else happens — come back and click Mark all paid when it lines up)\nCancel = skip this and print the real checks now')){
+        printCheckAlignmentTest(bank.checkOffsetX||0,bank.checkOffsetY||0,bank.checkFormat||'voucher2');
+        return;
+      }
+    }
+  }
+  var refnum=(g('pbb-refnum')&&g('pbb-refnum').value||'').trim();
+  var tot=bills.reduce(function(s,b){return s+Number(b.amt||0);},0);
+  if(!confirm('Mark '+bills.length+' bill'+(bills.length===1?'':'s')+' totaling '+fmt(tot)+' as paid and post to expenses?'))return;
+  var checksToPrint=[];
+  bills.forEach(function(b,i){
+    var instrNum=method==='check'?String(startNum+i):refnum;
+    _payOneBill(c,b,method,instrNum,bank);
+    if(method==='check'&&bank){
+      var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===b.vendor.toLowerCase();});
+      checksToPrint.push({payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum});
+    }
+  });
+  if(method==='check'&&bank){
+    var bankIdx=c.bankAccounts.indexOf(bank);
+    if(bankIdx>=0)c.bankAccounts[bankIdx].nextCheckNum=startNum+bills.length;
+  }
+  AP_SELECTED={};PAY_BILLS_BATCH_IDS=[];
+  sv();renderAll();closeM('m-pay-bills-batch');
+  if(checksToPrint.length&&typeof printChecksBatch==='function')printChecksBatch(c,bank,checksToPrint);
 }
 function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';_billPopulateAcctOptions(b.acctCode||'');openM('m-bill');}
 function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;c.bills.splice(i,1);sv();renderAll();}
