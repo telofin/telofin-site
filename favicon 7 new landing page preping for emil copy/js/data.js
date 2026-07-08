@@ -310,6 +310,9 @@ function migrateD(){
       // ── MIGRATION: heal donations logged via the Donors tab that never posted to income/ledger
       var donationHealSummary=healMissingDonationIncome(c);
       if(donationHealSummary)_ACCT_HEAL_SUMMARIES.push(donationHealSummary);
+      // ── MIGRATION: heal donation-coded income entries never linked back to the Donors tab
+      var donorLinkHealSummary=healMissingDonorLinks(c);
+      if(donorLinkHealSummary)_ACCT_HEAL_SUMMARIES.push(donorLinkHealSummary);
     });
   // Deduplicate: remove empty default clients if a data-filled one of same type exists
   var seen={};D.clients=D.clients.filter(function(cl){var k=cl.type;if(seen[k]){var hasD=(cl.income&&cl.income.length)||(cl.expenses&&cl.expenses.length)||(cl.revenue&&cl.revenue.length)||(cl.grants&&cl.grants.length)||(cl.donors&&cl.donors.length);return hasD;}seen[k]=true;return true;});
@@ -685,6 +688,78 @@ function healMissingDonationIncome(c){
   };
 }
 
+// ── MISSING DONOR-LINK HEALING ───────────────────────────────────────────────
+// One-time-per-client repair for a bug (now fixed — see _syncIncomeToDonorTab in renders.js)
+// where income entries added directly on the Income tab and coded to the "Individual
+// Donations" account never created or linked a Donors-tab record — so they showed up
+// correctly on financial statements but were invisible to donor reports, LYBUNT, thank-you
+// letter tracking, and Schedule B. Explicitly skips anything already covered by another path
+// (fromBank, donationRef, inkindRef) so this never creates a duplicate alongside a donation
+// the Bank tab or Donors tab already linked their own way.
+// Idempotent — guarded by c._donorLinkHealedV2, safe to call on every load.
+// (V2, not V1: the detection logic underneath this — _isDonationAcct — was broadened after the
+// first version shipped, from matching only the default "Individual Donations" label to also
+// catching common custom variants like "Donations". Anyone whose books already burned the V1
+// guard flag before that broadening would otherwise never get re-scanned with the better logic,
+// even though nothing was actually fixed for them yet — so this is a fresh flag, not a reuse.)
+// Returns a summary object if it did real work, or null if there was nothing to fix.
+function healMissingDonorLinks(c){
+  if(!c||c._donorLinkHealedV2)return null;
+  c._donorLinkHealedV2=true;
+  if(c.type!=='np')return null;
+  if(!c.income||!c.income.length)return null;
+  if(!c.donors)c.donors=[];
+
+  var linked=0,created=[],needsReview=[];
+  c.income.forEach(function(item){
+    if(item.grantId)return;
+    if(item.fromBank||item.donationRef||item.inkindRef)return;// already covered elsewhere
+    if(typeof _isDonationAcct!=='function'||!_isDonationAcct(c,item.acctCode))return;
+    var donorName=(item.name||'').trim();
+    if(!donorName)return;
+    var amt=Number(item.recv||item.proj||0);
+    if(!amt)return;
+    var donorNameLc=donorName.toLowerCase();
+    // Only link against a donor who already exists by that exact name — never invent a new
+    // donor from historical data. A income entry's "name" field on this account isn't always
+    // a person (e.g. a batch "Annual Fund Drive" total), and there's no bookkeeper present to
+    // ask right now, unlike the live saveInc() sync where the entry was just typed on purpose.
+    var existingDonor=c.donors.find(function(d){return d.name.toLowerCase()===donorNameLc;});
+    if(!existingDonor){
+      needsReview.push({amt:amt,name:donorName});
+      return;
+    }
+    // Look for a plausible existing donation already logged separately pre-fix, so this
+    // links instead of duplicating — same heuristic as the other healers' duplicate-checks.
+    var match=null;
+    (existingDonor.donations||[]).forEach(function(dn){
+      if(match||dn.incomeRef)return;
+      var amtMatch=Math.abs(Number(dn.amt||0)-amt)<0.01;
+      var dateDiff=dn.date&&item.date?Math.abs(new Date(dn.date)-new Date(item.date))/(1000*60*60*24):999;
+      if(amtMatch&&dateDiff<=5)match=dn;
+    });
+    if(match){
+      match.incomeRef=item.id;
+      item.donorId=existingDonor.id;
+      item.donationRef=true;
+      linked++;
+    }else if(typeof _syncIncomeToDonorTab==='function'){
+      _syncIncomeToDonorTab(c,item);
+      created.push({amt:amt,donor:donorName});
+    }
+  });
+
+  if(!linked&&!created.length&&!needsReview.length)return null;
+  return{
+    clientId:c.id,clientName:c.name,recoded:[],
+    donorLinksCreated:created.length,
+    donorLinksCreatedTotal:created.reduce(function(s,x){return s+x.amt;},0),
+    donorLinksMatched:linked,
+    donorLinksNeedReview:needsReview.length,
+    donorLinksNeedReviewTotal:needsReview.reduce(function(s,x){return s+x.amt;},0)
+  };
+}
+
 function renderApp(){
   // New user: show welcome, no clients
   if(!D.clients||!D.clients.length){
@@ -798,6 +873,15 @@ function _acctHealShowNotice(){
     }
     if(s.inkindFundraisingCount){
       lines+='<div style="font-size:12px;color:var(--amber,#b45309);margin-top:.4rem"><i class="fas fa-triangle-exclamation"></i> '+s.inkindFundraisingCount+' existing in-kind expense(s) totaling '+fmtAmt(s.inkindFundraisingTotal)+' are tagged "Fundraising" by default from before this was selectable. Review these on the Functional Expenses report and reclassify any that were actually used for programs or management.</div>';
+    }
+    if(s.donorLinksCreated){
+      lines+='<div style="font-size:12px;color:var(--text);margin-top:.4rem"><i class="fas fa-circle-info"></i> '+s.donorLinksCreated+' donation(s) totaling '+fmtAmt(s.donorLinksCreatedTotal)+' logged through the Income tab were never linked to the Donors tab — added there now, so donor reports, LYBUNT, and thank-you letters see them too.</div>';
+    }
+    if(s.donorLinksMatched){
+      lines+='<div style="font-size:12px;color:var(--text);margin-top:.4rem"><i class="fas fa-circle-info"></i> '+s.donorLinksMatched+' donation(s) logged through the Income tab were matched up to an existing Donors-tab record instead of creating a duplicate.</div>';
+    }
+    if(s.donorLinksNeedReview){
+      lines+='<div style="font-size:12px;color:var(--amber,#b45309);margin-top:.4rem"><i class="fas fa-triangle-exclamation"></i> '+s.donorLinksNeedReview+' income entr'+(s.donorLinksNeedReview===1?'y':'ies')+' totaling '+fmtAmt(s.donorLinksNeedReviewTotal)+' coded to Individual Donations don\'t match any name already on your Donors tab — could be a specific donor who needs to be added there, or a batch/campaign total that isn\'t tied to one person. Nothing was changed automatically; review these on the Income tab.</div>';
     }
     return'<div style="border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;margin-bottom:.75rem">'
       +'<div style="font-weight:600;font-size:13px;margin-bottom:.4rem">'+escHtml(s.clientName)+'</div>'
