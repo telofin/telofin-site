@@ -453,6 +453,7 @@ tr:hover td{background:var(--bg)}
             <button id="mob-pin-btn" class="add-btn" onclick="pinCurrentClient()" style="display:none"></button>
             <button id="wc-bookmark-btn" class="add-btn" onclick="if(typeof wcBookmark==='function')wcBookmark()" title="Bookmark current position"><i class="fas fa-bookmark"></i></button>
             <button class="add-btn" onclick="showAddClient()">+ New client</button>
+            <button class="add-btn" onclick="openHelp()" style="font-weight:600" title="Help &amp; Guidance">? Help</button>
             <button class="add-btn" onclick="(function(){var c=gc();if(c){var k='fye-checked-'+c.id+'-'+new Date().getFullYear();try{localStorage.removeItem(k);}catch(e){}checkFYEExpiry(c);}})()" title="Review unreconciled transactions at fiscal year end">FYE review</button>
             <button class="add-btn" onclick="clearSampleData()" style="color:var(--red);border-color:var(--red-bg)">Clear data</button>
             <button class="add-btn" onclick="removeClient()" style="color:var(--red);border-color:var(--red-bg)">Remove</button>
