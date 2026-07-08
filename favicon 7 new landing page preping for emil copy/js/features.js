@@ -36,23 +36,23 @@ function renderProjectsHTML(c){
   if(PROJ_VIEW==='summary'){
     var rows=projects.map(function(pr){
       var t=projTotals(pr);var pct=t.budget>0?Math.min(100,Math.round((t.spent/t.budget)*100)):0;
-      return'<tr><td style="font-weight:500">'+escHtml(pr.name)+'</td><td style="color:var(--muted);font-size:11px">'+(pr.desc||'—')+'</td><td>'+fmt(t.budget)+'</td><td class="vr">'+fmt(t.spent)+'</td><td class="vg">'+fmt(t.received)+'</td><td class="'+(t.remaining>=0?'vb':'vr')+'">'+fmt(t.remaining)+'</td>'
+      return'<tr><td style="font-weight:500">'+escHtml(pr.name)+'</td><td style="color:var(--muted);font-size:11px">'+escHtml(pr.desc||'—')+'</td><td>'+fmt(t.budget)+'</td><td class="vr">'+fmt(t.spent)+'</td><td class="vg">'+fmt(t.received)+'</td><td class="'+(t.remaining>=0?'vb':'vr')+'">'+fmt(t.remaining)+'</td>'
       +'<td><div class="pbar" style="min-width:60px"><div class="pfill" style="width:'+pct+'%;background:'+(pct>90?'var(--red)':pct>70?'var(--amber)':'var(--green)')+'"></div></div><div style="font-size:10px;color:var(--muted);text-align:right">'+pct+'%</div></td>'
       +'<td><button class="add-btn" style="font-size:10px;padding:3px 8px" onclick="PROJ_SEL=\''+pr.id+'\';PROJ_VIEW=\'detail\';renderBudgetMultiYear()">View →</button></td></tr>';
     }).join('');
     html='<div class="card"><div class="c-head"><span class="c-title">All projects</span></div><div style="overflow-x:auto"><table><thead><tr><th style="width:18%">Project</th><th style="width:16%">Description</th><th style="width:10%">Budget</th><th style="width:9%">Spent</th><th style="width:9%">Received</th><th style="width:9%">Remaining</th><th style="width:14%">Burn</th><th style="width:15%"></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }else if(PROJ_VIEW==='detail'){
     html=projSel+metrics;
-    if(selProj.desc)html+='<div style="font-size:12px;color:var(--muted);margin-bottom:1rem;padding:.75rem;background:var(--bg);border-radius:8px">'+selProj.desc+'</div>';
+    if(selProj.desc)html+='<div style="font-size:12px;color:var(--muted);margin-bottom:1rem;padding:.75rem;background:var(--bg);border-radius:8px">'+escHtml(selProj.desc)+'</div>';
     var pct2=st.budget>0?Math.min(100,Math.round((st.spent/st.budget)*100)):0;
-    html+='<div class="card"><div class="c-title" style="margin-bottom:.5rem">Budget burn rate</div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>Spent</span><span>'+pct2+'%</span></div><div class="pbar" style="height:10px;margin-bottom:.75rem"><div class="pfill" style="width:'+pct2+'%;background:'+(pct2>90?'var(--red)':pct2>70?'var(--amber)':'var(--green)')+'"></div></div>'+(selProj.notes?'<div style="font-size:12px;color:var(--muted)">'+selProj.notes+'</div>':'')+'</div>';
+    html+='<div class="card"><div class="c-title" style="margin-bottom:.5rem">Budget burn rate</div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>Spent</span><span>'+pct2+'%</span></div><div class="pbar" style="height:10px;margin-bottom:.75rem"><div class="pfill" style="width:'+pct2+'%;background:'+(pct2>90?'var(--red)':pct2>70?'var(--amber)':'var(--green)')+'"></div></div>'+(selProj.notes?'<div style="font-size:12px;color:var(--muted)">'+escHtml(selProj.notes)+'</div>':'')+'</div>';
   }else if(PROJ_VIEW==='budget'){
     html=projSel;
     var fy=getFiscalYear(c.fiscalYearEnd);
     var bvLabels=selProj.isMultiYear?[['proposed','Proposed'],['current','Current period'],['past','Past periods']]:[['proposed','Proposed'],['current','Current ('+fy.label+')'],['past','Past adopted']];
     var bvBar='<div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">'+bvLabels.map(function(v){return'<button class="'+(PROJ_BUDGET_VIEW===v[0]?'sv-btn':'add-btn')+'" style="font-size:11px;padding:4px 12px" onclick="PROJ_BUDGET_VIEW=\''+v[0]+'\';renderBudgetMultiYear()">'+v[1]+'</button>';}).join('')+'</div>';
     html+=bvBar;
-    if(c.type==='np'){var grants=c.grants||[];var linkedGrant=selProj.grantId?grants.find(function(gr){return gr.id===selProj.grantId;}):null;if(linkedGrant)html+='<div style="font-size:11px;color:var(--np);margin-bottom:.75rem;padding:.5rem .75rem;background:var(--bg);border-radius:8px;display:inline-block">&#128196; Linked grant: <strong>'+linkedGrant.name+'</strong></div>';}
+    if(c.type==='np'){var grants=c.grants||[];var linkedGrant=selProj.grantId?grants.find(function(gr){return gr.id===selProj.grantId;}):null;if(linkedGrant)html+='<div style="font-size:11px;color:var(--np);margin-bottom:.75rem;padding:.5rem .75rem;background:var(--bg);border-radius:8px;display:inline-block">&#128196; Linked grant: <strong>'+escHtml(linkedGrant.name)+'</strong></div>';}
     if(PROJ_BUDGET_VIEW==='current'){
       var curLines=[],periodLabel='',pExp2=(c.expenses||[]).filter(function(e){return e.projectId===selProj.id;}),pInc2=c.type==='sb'?(c.revenue||[]).filter(function(r){return r.projectId===selProj.id;}):(c.income||[]).filter(function(r){return r.projectId===selProj.id;});
       if(selProj.isMultiYear){
@@ -248,9 +248,9 @@ function renderCOA(c){
       var isInactive=a.active===false;
       var unusedBadge=uses===0?'<span class="badge b-red" style="margin-left:6px;font-size:9px">unused</span>':'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+uses+' use'+(uses===1?'':'s')+'</span>';
       var inactiveBadge=isInactive?'<span class="badge b-gray" style="margin-left:6px;font-size:9px">inactive</span>':'';
-      return'<tr data-coa-code="'+(a.code||'').toLowerCase()+'" data-coa-name="'+(a.name||'').toLowerCase()+'" style="'+(isInactive?'opacity:0.45':'')+'">'
-      +'<td style="font-weight:500;color:var(--muted);font-size:11px;font-family:monospace">'+a.code+'</td>'
-      +'<td>'+a.name+(a.f990?'<span class="badge b-gray" style="margin-left:6px;font-size:9px">990: '+a.f990+'</span>':'')+unusedBadge+inactiveBadge+'</td>'
+      return'<tr data-coa-code="'+escHtml((a.code||'').toLowerCase())+'" data-coa-name="'+escHtml((a.name||'').toLowerCase())+'" style="'+(isInactive?'opacity:0.45':'')+'">'
+      +'<td style="font-weight:500;color:var(--muted);font-size:11px;font-family:monospace">'+escHtml(a.code)+'</td>'
+      +'<td>'+escHtml(a.name)+(a.f990?'<span class="badge b-gray" style="margin-left:6px;font-size:9px">990: '+escHtml(a.f990)+'</span>':'')+unusedBadge+inactiveBadge+'</td>'
       +'<td><span class="badge '+typeColors[t]+'">'+t+'</span></td>'
       +'<td><button class="e-btn" onclick="openGLAccount(\''+a.code+'\')" title="View ledger">&#128196;</button>'
       +'<button class="e-btn" onclick="toggleAcctActive('+oi+')" title="'+(isInactive?'Mark active':'Mark inactive')+'" style="color:'+(isInactive?'var(--green)':'var(--muted)')+'">&#9679;</button>'
@@ -373,7 +373,7 @@ function renderGL(c){
   var p=g('p-gl');if(!p||!c)return;
   var accts=c.accounts||[];
   var txns=[];
-  function addTxns(items,amtKey,sign,panel){(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat)||('CAT:'+(r.cat||'Uncategorized'));txns.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
+  function addTxns(items,amtKey,sign,panel){var acctType=panel==='Expense'?'Expense':'Income';(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat,acctType)||('CAT:'+(r.cat||'Uncategorized'));txns.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
   if(c.type==='np'){addTxns(c.income||[],'recv',1,'Income');addTxns(c.expenses||[],'amt',1,'Expense');}
   else if(c.type==='sb'){addTxns(c.revenue||[],'act',1,'Revenue');addTxns(c.expenses||[],'amt',1,'Expense');}
   else{addTxns(c.income||[],'amt',1,'Income');addTxns(c.expenses||[],'amt',1,'Expense');}
@@ -399,7 +399,7 @@ function renderGL(c){
   }
 
   // Only show COA accounts in the filter dropdown (not virtual CAT: codes)
-  var selOpts='<option value="">All accounts</option>'+accts.map(function(a){return'<option value="'+a.code+'"'+(GL_ACCT===a.code?' selected':'')+'>'+a.code+' '+a.name+'</option>';}).join('');
+  var selOpts='<option value="">All accounts</option>'+accts.map(function(a){return'<option value="'+a.code+'"'+(GL_ACCT===a.code?' selected':'')+'>'+a.code+' '+escHtml(a.name)+'</option>';}).join('');
   var totalTxns=0,grandTotal=0,totalDebits=0,totalCredits=0;
 
   var sections=acctCodes.map(function(code){
@@ -410,7 +410,7 @@ function renderGL(c){
     var rows=items.map(function(t){
       running+=t.amt;
       return'<tr><td style="color:var(--muted);font-size:11px">'+(t.date||'—')+'</td>'
-      +'<td>'+t.desc+'</td>'
+      +'<td>'+escHtml(t.desc)+'</td>'
       +'<td style="color:var(--muted);font-size:11px">'+t.panel+'</td>'
       +'<td class="'+(t.amt>=0?'vg':'vr')+'">'+fmt(t.amt)+'</td>'
       +'<td style="font-size:11px;color:var(--muted)">'+fmt(running)+'</td></tr>';
@@ -419,7 +419,7 @@ function renderGL(c){
     items.forEach(function(t){var isInc=t.panel==='Income'||t.panel==='Revenue';if(isInc)totalCredits+=Math.abs(t.amt);else totalDebits+=Math.abs(t.amt);});
     return'<div class="card" style="margin-bottom:1rem">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">'
-    +'<div>'+(acct.code?'<span style="font-size:12px;font-weight:500;color:var(--muted)">'+acct.code+'</span> ':'')+' <span style="font-size:14px;font-weight:500">'+acct.name+'</span>'+(acct.type?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">'+acct.type+'</span>':'')+(isCat?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">Untagged</span>':'')+'</div>'
+    +'<div>'+(acct.code?'<span style="font-size:12px;font-weight:500;color:var(--muted)">'+acct.code+'</span> ':'')+' <span style="font-size:14px;font-weight:500">'+escHtml(acct.name)+'</span>'+(acct.type?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">'+acct.type+'</span>':'')+(isCat?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">Untagged</span>':'')+'</div>'
     +'<div style="font-size:13px;font-weight:500" class="'+(running>=0?'vg':'vr')+'">Balance: '+fmt(running)+'</div></div>'
     +'<table><thead><tr><th style="width:11%">Date</th><th style="width:40%">Description</th><th style="width:16%">Source</th><th style="width:14%">Amount</th><th style="width:19%">Running balance</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }).join('');
@@ -638,7 +638,7 @@ function _billPopulateAcctOptions(selectedCode){
   var expAccts=(c.accounts||[]).filter(function(a){return a.type==='Expense'&&a.active!==false;});
   sel.innerHTML='<option value="">— Select expense account —</option>'
     +expAccts.map(function(a){
-      return '<option value="'+a.code+'"'+(selectedCode===a.code?' selected':'')+'>'+a.code+' '+a.name+'</option>';
+      return '<option value="'+a.code+'"'+(selectedCode===a.code?' selected':'')+'>'+a.code+' '+escHtml(a.name)+'</option>';
     }).join('');
 }
 function billOpenNew(){BILL_EI=-1;resetBillForm();_billPopulateAcctOptions('');openM('m-bill');}
@@ -715,7 +715,7 @@ function printAPAging(){
     {label:'Current',bills:ag.cur,cls:'color:#1D9E75'}
   ];
   var body='<h2 style="margin:0 0 4px">Accounts Payable Aging Schedule</h2>';
-  body+='<div style="color:#888;font-size:11px;margin-bottom:1.5rem">As of '+today()+' &nbsp;·&nbsp; '+c.name+'</div>';
+  body+='<div style="color:#888;font-size:11px;margin-bottom:1.5rem">As of '+today()+' &nbsp;·&nbsp; '+escHtml(c.name)+'</div>';
   // Summary table
   body+='<table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:12px">';
   body+='<thead><tr style="background:#f5f3ee"><th style="padding:6px 8px;text-align:left">Bucket</th><th style="padding:6px 8px;text-align:right">Amount</th><th style="padding:6px 8px;text-align:right">Bills</th></tr></thead><tbody>';
@@ -760,7 +760,7 @@ function renderCC(c){
       +'<td><div class="row-acts"><button class="e-btn" style="color:var(--green)" onclick="markCCPaid('+oi+')" title="Mark cleared">\u2713</button><button class="d-btn" onclick="delItem(\'expenses\','+oi+')" title="Delete">&#215;</button></div></td></tr>';
     }).join('');
     html+='<div class="card" style="border-left:3px solid var(--blue);margin-bottom:1.25rem">'
-    +'<div class="c-head"><span class="c-title">'+cc.name+(cc.last4?' \u00b7\u00b7\u00b7'+cc.last4:'')+'</span>'
+    +'<div class="c-head"><span class="c-title">'+escHtml(cc.name)+(cc.last4?' \u00b7\u00b7\u00b7'+cc.last4:'')+'</span>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +(limit?'<span style="font-size:11px;color:var(--muted)">'+fmt(balance)+' / '+fmt(limit)+'</span>':'<span style="font-size:11px;color:var(--muted)">Balance: '+fmt(balance)+'</span>')
     +'<button class="add-btn" onclick="openCCCharge(\''+cc.id+'\')">+ Charge</button>'
@@ -817,7 +817,7 @@ function renderAmortization(c){
   var loan=loans[LOAN_VIEW];
   var amort=calcAmort(Number(loan.principal),Number(loan.rate),Number(loan.term));
   var posted=loan.posted||[];
-  var loanOpts=loans.map(function(l,i){return'<option value="'+i+'"'+(LOAN_VIEW===i?' selected':'')+'>'+l.name+'</option>';}).join('');
+  var loanOpts=loans.map(function(l,i){return'<option value="'+i+'"'+(LOAN_VIEW===i?' selected':'')+'>'+escHtml(l.name)+'</option>';}).join('');
   var remaining=Number(loan.principal)-amort.rows.filter(function(r){return posted.indexOf(r.num)>=0;}).reduce(function(s,r){return s+r.principal;},0);
   var rows=amort.rows.map(function(r){
     var isPosted=posted.indexOf(r.num)>=0;
@@ -894,11 +894,11 @@ function renderProcurement(c){
     var fedFlag=b.federal&&bidCount<3&&b.status!=='Sole source'&&b.status!=='Awarded'&&b.status!=='Rejected';
     return'<tr'+(fedFlag?' style="background:rgba(192,57,43,.06)"':'')+'>'
     +'<td style="font-weight:500">'+escHtml(b.vendor||'—')+'</td>'
-    +'<td>'+(b.scope||'—')+'</td>'
+    +'<td>'+escHtml(b.scope||'—')+'</td>'
     +'<td>'+fmt(b.bidAmt)+'</td>'
     +'<td style="color:var(--muted)">'+(b.bidDate||'—')+'</td>'
     +'<td>'+SB(b.status||'Soliciting')+'</td>'
-    +'<td>'+(b.grantId?'<span class="badge b-green" style="font-size:9px;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block">'+grantName(b.grantId).slice(0,22)+'</span>':b.fund?'<span class="badge '+(b.fund?'b-blue':'b-gray')+'">'+b.fund+'</span>':'—')+'</td>'
+    +'<td>'+(b.grantId?'<span class="badge b-green" style="font-size:9px;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block">'+escHtml(grantName(b.grantId).slice(0,22))+'</span>':b.fund?'<span class="badge '+(b.fund?'b-blue':'b-gray')+'">'+escHtml(b.fund)+'</span>':'—')+'</td>'
     +'<td>'+(b.federal?'<span class="badge b-blue">Federal</span>':'—')+'</td>'
     +'<td><div class="row-acts"><button class="e-btn" onclick="editProc('+oi+')" title="Edit">&#9998;</button>'
     +(b.docRef?'<a href="'+b.docRef+'" target="_blank" class="e-btn" title="View document" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">&#128196;</a>':'')
@@ -2944,13 +2944,13 @@ function renderChecklistHTML(listType,type,c){
   html+='<div style="margin-top:1rem;padding:.75rem;background:var(--bg);border-radius:10px">';
   html+='<div style="font-size:12px;font-weight:600;margin-bottom:.5rem">Sign-off</div>';
   if(data.selfSign){
-    html+='<div style="font-size:12px;color:var(--green);margin-bottom:.5rem"><i class="fas fa-check"></i> Signed off by <strong>'+data.selfSign.name+'</strong> on '+data.selfSign.date+'</div>';
+    html+='<div style="font-size:12px;color:var(--green);margin-bottom:.5rem"><i class="fas fa-check"></i> Signed off by <strong>'+escHtml(data.selfSign.name)+'</strong> on '+data.selfSign.date+'</div>';
   } else {
     html+='<button class="sv-btn" style="font-size:12px;margin-bottom:.5rem" onclick="selfSignOff(\''+period+'\')"><i class="fas fa-check"></i> Sign off as preparer</button>';
   }
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:.5rem">';
   if(data.bossName){
-    html+='<span style="font-size:12px;color:var(--muted)">Reviewed by: <strong>'+data.bossName+'</strong>'+(data.bossDate?' on '+data.bossDate:'')+'</span>';
+    html+='<span style="font-size:12px;color:var(--muted)">Reviewed by: <strong>'+escHtml(data.bossName)+'</strong>'+(data.bossDate?' on '+data.bossDate:'')+'</span>';
     html+='<button class="add-btn" style="font-size:11px;padding:3px 10px" onclick="clearBossSignoff(\''+period+'\')">Edit</button>';
   } else {
     html+='<input type="text" id="boss-name-'+period+'" placeholder="Reviewer / boss name" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);width:170px">';
@@ -3796,7 +3796,7 @@ function openReimbModal(){
     +'<div class="fl"><label>Or receipt URL</label>'
     +'<input type="text" id="reimb-url" placeholder="https://..." value="'+escHtml(r.receiptUrl||'')+'"></div>'
     +'<div class="fl"><label>Notes</label>'
-    +'<textarea id="reimb-notes" placeholder="Additional context...">'+(r.notes||'')+'</textarea></div>'
+    +'<textarea id="reimb-notes" placeholder="Additional context...">'+escHtml(r.notes||'')+'</textarea></div>'
     +'<button class="sv-btn" onclick="saveReimb()">Save request</button>'
     +'</div></div>';
   document.body.appendChild(mo);
@@ -3989,7 +3989,7 @@ function openWorkplaceGivingLetter(di){
   var mo=g('m-ty-letter');
   var bodyEl=g('ty-letter-text')||g('ty-letter-body');
   if(bodyEl){bodyEl.value=letter;if(mo)mo.classList.add('open');}
-  else{var win=window.open('','_blank');if(win){win.document.write('<pre style="font-family:Georgia;font-size:14px;line-height:1.8;max-width:600px;margin:2rem auto;white-space:pre-wrap">'+letter+'</pre>');win.document.close();}}
+  else{var win=window.open('','_blank');if(win){win.document.write('<pre style="font-family:Georgia;font-size:14px;line-height:1.8;max-width:600px;margin:2rem auto;white-space:pre-wrap">'+escHtml(letter)+'</pre>');win.document.close();}}
 }
 
 // ══════════════════════════════════════════

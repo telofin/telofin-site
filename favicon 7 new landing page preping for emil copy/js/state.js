@@ -49,14 +49,14 @@ function _nextAcctCode(c,coaType){
 function getFunds(){var c=gc();return c&&c.funds?c.funds:[];}
 function fundOpts(selectedVal,includeBlank){
   var opts=includeBlank?'<option value="">— None —</option>':'';
-  getFunds().forEach(function(f){opts+='<option value="'+f.name+'"'+(f.name===selectedVal?' selected':'')+'>'+f.name+(f.type?' ('+f.type+')':'')+'</option>';});
+  getFunds().forEach(function(f){opts+='<option value="'+escHtml(f.name)+'"'+(f.name===selectedVal?' selected':'')+'>'+escHtml(f.name)+(f.type?' ('+f.type+')':'')+'</option>';});
   return opts;
 }
 function renderFundsManager(){
   var c=gc();if(!c)return;
   var funds=c.funds||[];
   var p=g('p-funds');if(!p)return;
-  var rows=funds.map(function(f,i){return'<tr><td style="font-weight:500">'+f.name+'</td><td><span class="badge '+(f.type==='Restricted'?'b-amber':f.type==='Capital'?'b-blue':'b-green')+'">'+f.type+'</span></td><td style="color:var(--muted);font-size:11px">'+(f.desc||'—')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editFund('+i+')">&#9998;</button><button class="d-btn" onclick="deleteFund('+i+')">&#215;</button></div></td></tr>';}).join('');
+  var rows=funds.map(function(f,i){return'<tr><td style="font-weight:500">'+escHtml(f.name)+'</td><td><span class="badge '+(f.type==='Restricted'?'b-amber':f.type==='Capital'?'b-blue':'b-green')+'">'+f.type+'</span></td><td style="color:var(--muted);font-size:11px">'+escHtml(f.desc||'—')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editFund('+i+')">&#9998;</button><button class="d-btn" onclick="deleteFund('+i+')">&#215;</button></div></td></tr>';}).join('');
   p.innerHTML=FB()+XB()+'<div class="xbar" style="margin-bottom:.75rem"><button class="xbtn p" onclick="FUND_EI=-1;resetFundForm();openM(\'m-fund\')">+ Add fund</button></div>'
   +'<div class="card"><div class="c-head"><span class="c-title">Funds</span><span style="font-size:11px;color:var(--muted)">Define unrestricted, restricted, and capital funds</span></div>'
   +(funds.length?'<table><thead><tr><th>Fund name</th><th>Type</th><th>Description</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No funds defined yet','Add General Operating, Restricted, or Capital funds to track money across your organization.','FUND_EI=-1;openM(\'m-fund\')'))
@@ -553,9 +553,36 @@ function getCashFlowStatement(c,startDate,endDate){
 }
 
 
+// Splits currently-uncosed income (all unsuperseded ledger lines hitting Income-type accounts)
+// by net-asset restriction class, using the netClass tag saved on the originating c.income[]/
+// c.revenue[] record (see _postDonationLedger in renders.js). Entries with no matching source
+// record (manual journal entries, bank imports, invoices, etc.) default to 'without_restriction' —
+// the standard assumption for exchange/program-service revenue. Uses the exact same ledger-line
+// universe as getTrialBalance() (unsuperseded, no date filter) so the buckets sum to exactly
+// lbs.totalIncome — required for the closing entry's debits to still equal its credits.
+function _splitIncomeByRestriction(c){
+  var buckets={without_restriction:0,with_restriction:0,with_restriction_perm:0};
+  var srcById={};
+  (c.income||[]).forEach(function(r){srcById[r.id]=r;});
+  (c.revenue||[]).forEach(function(r){srcById[r.id]=r;});
+  (c.ledgerEntries||[]).forEach(function(e){
+    if(e.superseded)return;
+    var src=srcById[e.sourceId];
+    var cls=(src&&src.netClass)||'without_restriction';
+    (e.lines||[]).forEach(function(l){
+      if(!l.accountCode)return;
+      var a=(c.accounts||[]).find(function(x){return x.code===l.accountCode;});
+      if(!a||(a.type||'').toLowerCase()!=='income')return;
+      var net=Number(l.cr||0)-Number(l.dr||0);// income is credit-normal
+      if(!net)return;
+      buckets[cls]=(buckets[cls]||0)+net;
+    });
+  });
+  return buckets;
+}
 // Posts GAAP year-end closing entries to ledgerEntries[].
 // Zeroes all Income and Expense account balances into the appropriate equity account.
-//   NP:  Cr/Dr → 3010 Unrestricted net assets
+//   NP:  Cr/Dr → split across 3010/3020/3030 by donor-restriction class (see _splitIncomeByRestriction)
 //   SB:  Cr/Dr → 3020 Retained earnings
 //   PE:  Cr/Dr → 3010 Net worth
 // Also records a human-readable summary in c.journalEntries[] for the JE panel.
@@ -610,8 +637,27 @@ function postClosingEntries(c, fyLabel){
     // Expense balance is dr-side; to close: credit expense acct, debit retained earnings
     lines.push({accountCode:r.code,dr:0,cr:r.balance,_note:r.name});
   });
-  // Plug: net income → retained earnings (credit net income, debit net loss)
-  if(Math.abs(netIncome)>=0.01){
+  // Plug: net income → net-asset account(s).
+  // NP: split by donor-restriction class so restricted contributions don't get swept into
+  // "without donor restrictions" — expenses reduce unrestricted net assets by default.
+  // SB/PE: single plug to retained earnings / net worth, unchanged.
+  if(c.type==='np'){
+    var _restrictBuckets=_splitIncomeByRestriction(c);
+    var _plugTargets=[
+      {code:'3010',amt:(_restrictBuckets.without_restriction||0)-lbs.totalExpense},
+      {code:'3020',amt:_restrictBuckets.with_restriction||0},
+      {code:'3030',amt:_restrictBuckets.with_restriction_perm||0}
+    ];
+    _plugTargets.forEach(function(t){
+      if(Math.abs(t.amt)<0.01)return;
+      var tAcct=(c.accounts||[]).find(function(a){return a.code===t.code;})||{name:t.code};
+      if(t.amt>0){
+        lines.push({accountCode:t.code,dr:0,cr:t.amt,_note:tAcct.name+' (net income)'});
+      }else{
+        lines.push({accountCode:t.code,dr:Math.abs(t.amt),cr:0,_note:tAcct.name+' (net loss)'});
+      }
+    });
+  }else if(Math.abs(netIncome)>=0.01){
     if(netIncome>0){
       lines.push({accountCode:retainedCode,dr:0,cr:netIncome,_note:retainedName.name+' (net income)'});
     }else{
@@ -643,17 +689,21 @@ function postClosingEntries(c, fyLabel){
   // Post readable summary to journalEntries[] for the JE panel
   if(!c.journalEntries)c.journalEntries=[];
   var jeMemo='Year-end closing entries — '+fyLabel+' (Net '+(netIncome>=0?'income':'loss')+': $'+Math.abs(netIncome).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+')';
+  var _naLines=lines.filter(function(l){return l.accountCode==='3010'||l.accountCode==='3020'||l.accountCode==='3030';});
+  var _closeCreditLabel=c.type==='np'&&_naLines.length
+    ?_naLines.map(function(l){var a=(c.accounts||[]).find(function(x){return x.code===l.accountCode;});return a?a.code+' '+a.name:l.accountCode;}).join(', ')
+    :retainedCode+' '+retainedName.name;
   c.journalEntries.push({
     id:uid(),
     date:closeDate,
     type:'Year-end closing',
     memo:jeMemo,
     debitAcct:incomeAccts.length?incomeAccts.map(function(r){return r.code+' '+r.name;}).join(', '):'—',
-    creditAcct:retainedCode+' '+retainedName.name,
+    creditAcct:_closeCreditLabel,
     debitCode:retainedCode,
     creditCode:'',
     amt:Math.abs(netIncome),
-    notes:'Auto-posted by Clarity year-end close. '+lines.length+' accounts closed.',
+    notes:'Auto-posted by Clarity year-end close. '+lines.length+' accounts closed.'+(c.type==='np'?' Split across net-asset classes by donor restriction.':''),
     audit:[{field:'created',oldValue:'',newValue:'Year-end closing entry auto-posted',timestamp:new Date().toISOString()}],
     isClosingEntry:true,
     closingFY:fyLabel
@@ -662,7 +712,8 @@ function postClosingEntries(c, fyLabel){
   // Record in closing history
   c.closingHistory.push({fy:fyLabel,postedOn:todayNum(),netIncome:netIncome,accountsClosed:lines.length,closeDate:closeDate,ledgerEntryId:closingEntry.id});
 
-  return{ok:true,message:'Closing entries posted for '+fyLabel+'. Net '+(netIncome>=0?'income':'loss')+': $'+Math.abs(netIncome).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'. '+lines.length+' account(s) zeroed to '+retainedName.name+'.',netIncome:netIncome,closeDate:closeDate};
+  var _closeSummaryLabel=c.type==='np'?'the appropriate net-asset accounts (by donor restriction)':retainedName.name;
+  return{ok:true,message:'Closing entries posted for '+fyLabel+'. Net '+(netIncome>=0?'income':'loss')+': $'+Math.abs(netIncome).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'. '+lines.length+' account(s) zeroed to '+_closeSummaryLabel+'.',netIncome:netIncome,closeDate:closeDate};
 }
 
 // postDepreciation(c): compute and post one period of depreciation for each fixed asset.
@@ -817,9 +868,13 @@ np:[
   {code:'2100',name:'Accrued liabilities',type:'Liability',cat:'Accrued'},
   // 3010/3020/3030 net-asset codes left untagged (cf undefined -> falls back to 'operating' in _cfSection):
   // net assets roll up from net income, already captured in the operating section, so they're not their own financing flow.
-  {code:'3010',name:'Unrestricted net assets',type:'Equity',cat:'Net Assets'},
-  {code:'3020',name:'Temp. restricted net assets',type:'Equity',cat:'Net Assets'},
-  {code:'3030',name:'Perm. restricted net assets',type:'Equity',cat:'Net Assets'},
+  // GAAP (ASU 2016-14) presents net assets in two classes on the face of the statements —
+  // "without donor restrictions" and "with donor restrictions." 3030 is kept as internal detail
+  // for permanently-restricted/endowment corpus; the Balance Sheet subtotals 3020+3030 together
+  // as "Net assets with donor restrictions" to satisfy the 2-class presentation requirement.
+  {code:'3010',name:'Net assets without donor restrictions',type:'Equity',cat:'Net Assets'},
+  {code:'3020',name:'Net assets with donor restrictions',type:'Equity',cat:'Net Assets'},
+  {code:'3030',name:'Net assets with donor restrictions — endowment',type:'Equity',cat:'Net Assets'},
   {code:'3999',name:'Opening balance equity',type:'Equity',cat:'Equity'},
   {code:'4010',name:'Individual donations',type:'Income',cat:'Individual Donations',f990:'Part VIII Line 1'},
   {code:'4020',name:'Corporate sponsorships',type:'Income',cat:'Corporate',f990:'Part VIII Line 1'},
@@ -918,7 +973,7 @@ function acctByCode(c,code){return(c.accounts||[]).find(function(a){return a.cod
 function acctOpts(c,typeFilter){
   var accts=(c.accounts||[]).filter(function(a){return a.active!==false;});// hide inactive
   if(typeFilter)accts=accts.filter(function(a){return a.type===typeFilter;});
-  return'<option value="">— No account —</option>'+accts.map(function(a){return'<option value="'+a.code+'">'+a.code+' '+a.name+(a.f990?' (990: '+a.f990+')':'')+'</option>';}).join('');
+  return'<option value="">— No account —</option>'+accts.map(function(a){return'<option value="'+a.code+'">'+a.code+' '+escHtml(a.name)+(a.f990?' (990: '+escHtml(a.f990)+')':'')+'</option>';}).join('');
 }
 function isPro(){return _plan==='pro';}
 function requirePro(msg){if(isPro())return true;g('upgrade-reason').textContent=msg||'This is a Pro feature.';openM('m-upgrade');return false;}
@@ -964,7 +1019,7 @@ function openFYEModal(c,unreconExp,unreconInc,lastKey){
   var errors=unreconExp.filter(function(e){return outChecks.indexOf(e)<0;});
   var deposits=unreconInc;
   var total=unreconExp.length+unreconInc.length;
-  var html='<p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Fiscal year end has passed for <strong>'+c.name+'</strong>. <strong>'+total+' unreconciled transaction'+(total===1?'':'s')+'</strong> need attention:</p>';
+  var html='<p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Fiscal year end has passed for <strong>'+escHtml(c.name)+'</strong>. <strong>'+total+' unreconciled transaction'+(total===1?'':'s')+'</strong> need attention:</p>';
   // Breakdown
   html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px">';
   if(outChecks.length)html+='<div style="background:var(--bg);border-radius:8px;padding:.5rem .75rem"><span class="badge b-amber">Outstanding checks</span> <strong>'+outChecks.length+'</strong> — issued but not cleared. <em>Carry forward.</em></div>';
@@ -1059,7 +1114,13 @@ function addMonths(s,n){var d=parseDate(s);if(!d)return todayNum();d.setMonth(d.
 function nextSched(r,f){if(r==='Weekly')return addDays(f,7);if(r==='Bi-weekly')return addDays(f,14);if(r==='Monthly')return addMonths(f,1);if(r==='Quarterly')return addMonths(f,3);if(r==='Annual')return addMonths(f,12);return null;}
 function fmtDate(s){if(!s)return'—';var d=parseDate(s);if(!d||isNaN(d))return String(s);return(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')+'/'+d.getFullYear();}
 function lookupAcctByCode(c,code){if(!code)return null;var a=(c.accounts||[]).find(function(a){return a.code===String(code).trim();});return a?a.code:null;}
-function lookupAcctByCAT(c,cat){if(!cat)return null;var a=(c.accounts||[]).find(function(a){return a.cat===cat||a.name===cat;});return a?a.code:null;}
+// type (optional): when given ('Income'|'Expense'|...), only matches an
+// account of that type — prevents e.g. an expense whose category name is
+// shared with an income account (common for fundraiser events: "Winter
+// Bash" income vs "Winter Bash" costs) from silently attaching to the
+// wrong side of the books. Omit type to match any account by name (old
+// behavior, kept for callers that don't know/care about type).
+function lookupAcctByCAT(c,cat,type){if(!cat)return null;var a=(c.accounts||[]).find(function(a){return(a.cat===cat||a.name===cat)&&(!type||a.type===type);});return a?a.code:null;}
 function quickAddAcctFromImport(c,nameOrCode,defaultType){
   // Silent auto-create — don't prompt during bulk import, just create
   if(!c.accounts)c.accounts=[];

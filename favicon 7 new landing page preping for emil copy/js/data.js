@@ -195,9 +195,9 @@ function migrateD(){
       // Sync all existing budget lines to COA (retroactive)
       (c.budgetItems||[]).forEach(function(b){syncBudgetToCOA(c,b.cat,b.type,b.group||b.type);});
       // Backfill acctCode on existing transactions where blank but category matches COA
-      (c.expenses||[]).forEach(function(e){if(!e.acctCode&&e.cat){var code=lookupAcctByCAT(c,e.cat);if(code)e.acctCode=code;}});
-      (c.income||[]).forEach(function(r){if(!r.acctCode&&r.cat){var code=lookupAcctByCAT(c,r.cat);if(code)r.acctCode=code;}});
-      (c.revenue||[]).forEach(function(r){if(!r.acctCode&&r.cat){var code=lookupAcctByCAT(c,r.cat);if(code)r.acctCode=code;}});
+      (c.expenses||[]).forEach(function(e){if(!e.acctCode&&e.cat){var code=lookupAcctByCAT(c,e.cat,'Expense');if(code)e.acctCode=code;}});
+      (c.income||[]).forEach(function(r){if(!r.acctCode&&r.cat){var code=lookupAcctByCAT(c,r.cat,'Income');if(code)r.acctCode=code;}});
+      (c.revenue||[]).forEach(function(r){if(!r.acctCode&&r.cat){var code=lookupAcctByCAT(c,r.cat,'Income');if(code)r.acctCode=code;}});
       // Normalize all transaction dates (fix any Excel serial numbers stored)
       (c.expenses||[]).forEach(function(e){if(e.date&&/^\d{4,5}$/.test(String(e.date))){var d=parseDate(e.date);if(d)e.date=fmtDate(e.date);}});
       (c.income||[]).forEach(function(r){if(r.date&&/^\d{4,5}$/.test(String(r.date))){var d=parseDate(r.date);if(d)r.date=fmtDate(r.date);}});
@@ -288,10 +288,28 @@ function migrateD(){
       if(!c.fiscalSponsorships)c.fiscalSponsorships=[];
       // ── MIGRATION: Invoice URL/path on bills
       (c.bills||[]).forEach(function(b){if(b.invoiceUrl===undefined)b.invoiceUrl='';if(b.invoicePath===undefined)b.invoicePath='';});
+      // ── MIGRATION: relabel net-asset accounts to GAAP (ASU 2016-14) 2-class terminology.
+      // Only renames if the name still matches the old default exactly, so a user's own
+      // custom account name is never overwritten. Codes are unchanged — no data migration needed.
+      (function(){
+        var relabel={'3010':{from:'Unrestricted net assets',to:'Net assets without donor restrictions'},
+          '3020':{from:'Temp. restricted net assets',to:'Net assets with donor restrictions'},
+          '3030':{from:'Perm. restricted net assets',to:'Net assets with donor restrictions — endowment'}};
+        (c.accounts||[]).forEach(function(a){
+          var r=relabel[a.code];
+          if(r&&a.name===r.from)a.name=r.to;
+        });
+      })();
       if(!c.ledgerEntries.length)migrateToLedger(c);
       // ── MIGRATION: heal duplicate Chart-of-Accounts codes (one-time per client)
       var healSummary=healAcctCodeDuplicates(c);
       if(healSummary)_ACCT_HEAL_SUMMARIES.push(healSummary);
+      // ── MIGRATION: heal expense/income records coded to the wrong account type
+      var typeHealSummary=healAcctTypeMismatches(c);
+      if(typeHealSummary)_ACCT_HEAL_SUMMARIES.push(typeHealSummary);
+      // ── MIGRATION: heal donations logged via the Donors tab that never posted to income/ledger
+      var donationHealSummary=healMissingDonationIncome(c);
+      if(donationHealSummary)_ACCT_HEAL_SUMMARIES.push(donationHealSummary);
     });
   // Deduplicate: remove empty default clients if a data-filled one of same type exists
   var seen={};D.clients=D.clients.filter(function(cl){var k=cl.type;if(seen[k]){var hasD=(cl.income&&cl.income.length)||(cl.expenses&&cl.expenses.length)||(cl.revenue&&cl.revenue.length)||(cl.grants&&cl.grants.length)||(cl.donors&&cl.donors.length);return hasD;}seen[k]=true;return true;});
@@ -459,9 +477,10 @@ function healAcctCodeDuplicates(c){
   var oldSharedCodes=Object.keys(byCode).filter(function(code){return byCode[code].length>1;});
   if(oldSharedCodes.length){
     ['expenses','income','revenue'].forEach(function(arrName){
+      var acctType=arrName==='expenses'?'Expense':'Income';
       (c[arrName]||[]).forEach(function(item){
         if(oldSharedCodes.indexOf(item.acctCode)<0)return;
-        var match=lookupAcctByCAT(c,item.cat);
+        var match=lookupAcctByCAT(c,item.cat,acctType);
         if(!match||match===item.acctCode)return;
         var oldCode=item.acctCode;
         item.acctCode=match;
@@ -525,6 +544,144 @@ function healAcctCodeDuplicates(c){
     recoded:recoded,
     newlyPostedCount:newEntries.length,
     newlyPostedTotal:newlyPostedTotal
+  };
+}
+
+// ── ACCOUNT-TYPE MISMATCH HEALING ───────────────────────────────────────────
+// One-time-per-client repair for a bug (now fixed — lookupAcctByCAT in
+// state.js is type-aware) where an expense/income/revenue record could get
+// silently coded to an account of the WRONG type — e.g. an expense (buying
+// supplies for a fundraiser) attaching to that same-named event's INCOME
+// account instead of a distinct expense account, because the lookup only
+// matched on category name and never checked Income vs Expense. This is a
+// different root cause from the duplicate-code bug (healAcctCodeDuplicates
+// above) — that one was many accounts sharing one code; this one is a
+// record pointed at a real, valid, but wrong-type account.
+// Idempotent — guarded by c._acctTypeMismatchHealed, safe to call on every
+// load, a no-op for clients that were never affected.
+function healAcctTypeMismatches(c){
+  if(!c||c._acctTypeMismatchHealed)return null;
+  c._acctTypeMismatchHealed=true;
+  if(!c.accounts||!c.accounts.length)return null;
+
+  var acctByCode={};c.accounts.forEach(function(a){acctByCode[a.code]=a;});
+  var typeFor={expenses:'Expense',income:'Income',revenue:'Income'};
+  var recoded=[];
+
+  ['expenses','income','revenue'].forEach(function(arrName){
+    var correctType=typeFor[arrName];
+    (c[arrName]||[]).forEach(function(item){
+      if(!item.acctCode||!item.cat)return;
+      var curAcct=acctByCode[item.acctCode];
+      // No account, or already the right type — nothing to fix. A wrong
+      // account with a DIFFERENT category name is a separate, deliberate
+      // choice (e.g. manually recoded) — only type mismatches are in scope.
+      if(!curAcct||curAcct.type===correctType)return;
+      var correct=c.accounts.find(function(a){return a.type===correctType&&(a.cat===item.cat||a.name===item.cat);});
+      if(!correct){
+        correct={id:uid(),code:_nextAcctCode(c,correctType),name:item.cat,type:correctType,cat:item.cat,fromBudget:true};
+        c.accounts.push(correct);
+        acctByCode[correct.code]=correct;
+      }
+      var oldCode=item.acctCode;
+      item.acctCode=correct.code;
+      (c.ledgerEntries||[]).forEach(function(le){
+        if(le.sourceId!==item.id)return;
+        (le.lines||[]).forEach(function(l){if(l.accountCode===oldCode)l.accountCode=correct.code;});
+      });
+      recoded.push({desc:item.desc||item.name||'',cat:item.cat,amt:Number(item.amt||item.recv||item.act||0),oldCode:oldCode,newCode:correct.code});
+    });
+  });
+  if(recoded.length)c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
+
+  if(!recoded.length)return null;
+  return{
+    clientId:c.id,clientName:c.name,
+    backfilledIds:0,
+    recoded:recoded,
+    newlyPostedCount:0,
+    newlyPostedTotal:0
+  };
+}
+
+// ── MISSING DONATION INCOME HEALING ──────────────────────────────────────────
+// One-time-per-client repair for a bug (now fixed — see _postDonationLedger in
+// renders.js) where donations logged through the main Donors tab never created
+// an income entry or ledger posting — they only lived in c.donors[].donations[],
+// so they showed up correctly in donor reports/LYBUNT/thank-you letters but never
+// reached the Trial Balance, Balance Sheet, P&L, or 990 gross-receipts figures.
+// Idempotent — guarded by c._donationIncomeHealed, safe to call on every load,
+// and a no-op for clients that were never affected.
+// Returns a summary object if it did real work, or null if there was nothing to fix.
+function healMissingDonationIncome(c){
+  if(!c||c._donationIncomeHealed)return null;
+  c._donationIncomeHealed=true;
+  if(!c.donors||!c.donors.length)return null;
+  if(!c.income)c.income=[];
+
+  // Backfill incomeRef/expenseRef links on legacy in-kind donations (they already posted
+  // income/expense entries under the old code, just without a link back to find them by
+  // later — matched the same way the old edit-in-place code used to, by description).
+  c.donors.forEach(function(d){
+    (d.donations||[]).forEach(function(dn){
+      if(dn.inkind==='Yes'&&!dn.incomeRef){
+        var desc=(dn.itemDescription||'In-kind donation')+' — '+(d.name||'Unknown donor');
+        var incMatch=(c.income||[]).find(function(r){return r.inkindRef&&r.name===desc;});
+        if(incMatch)dn.incomeRef=incMatch.id;
+        var expMatch=(c.expenses||[]).find(function(e){return e.inkindRef&&e.desc===desc;});
+        if(expMatch)dn.expenseRef=expMatch.id;
+      }
+    });
+  });
+
+  // Backfill missing income entries for cash donations logged via the Donors tab.
+  var backfilled=[],linked=0;
+  c.donors.forEach(function(d){
+    (d.donations||[]).forEach(function(dn){
+      if(dn.incomeRef)return;// already linked
+      if(dn.inkind==='Yes')return;// handled above
+      var donorName=d.name||'Unknown donor';
+      var amt=Number(dn.amt||0);
+      if(!amt)return;
+      // Look for a plausible existing match first (e.g. also entered via bank import)
+      // so this doesn't create a duplicate — same heuristic as the live duplicate-check
+      // in saveDonation().
+      var donorNameLc=donorName.toLowerCase();
+      var match=(c.income||[]).find(function(r){
+        if(r.donationRef||r.inkindRef)return false;// don't match against entries this healer/fix already created
+        var amtMatch=Math.abs(Number(r.recv||r.amt||0)-amt)<0.01;
+        var dateDiff=r.date&&dn.date?Math.abs(new Date(r.date)-new Date(dn.date))/(1000*60*60*24):999;
+        var rName=(r.vendor1099||r.name||'').toLowerCase();
+        var nameMatch=!donorNameLc||rName.indexOf(donorNameLc)>=0||donorNameLc.indexOf(rName)>=0;
+        return amtMatch&&dateDiff<=5&&nameMatch;
+      });
+      if(match){dn.incomeRef=match.id;linked++;return;}
+      var _n=(typeof normalizeRst==='function')?normalizeRst(dn.rst):(dn.rst||'unrestricted');
+      var netClass=_n==='permanently_restricted'?'with_restriction_perm':_n==='temporarily_restricted'?'with_restriction':'without_restriction';
+      var incItem={id:uid(),name:donorName,cat:'Individual donation',status:'Received',proj:amt,recv:amt,date:dn.date||'',fund:dn.fund||'',acctCode:'4010',donationRef:true,netClass:netClass,donorId:d.id,audit:[]};
+      c.income.push(incItem);
+      dn.incomeRef=incItem.id;
+      backfilled.push({amt:amt,donor:donorName});
+    });
+  });
+
+  // Post ledger entries for everything just created (migrateToLedger is idempotent).
+  if(backfilled.length)migrateToLedger(c);
+
+  // Flag existing in-kind expenses hardcoded to 'fundraising' before the functional-category
+  // selector existed (see saveDonation() in renders.js), so the user can review and reclassify —
+  // not auto-changed here, since there's no way to know the correct category retroactively.
+  var inkindFundraising=(c.expenses||[]).filter(function(e){return e.inkindRef&&e.functional==='fundraising';});
+  var inkindFundraisingTotal=inkindFundraising.reduce(function(s,e){return s+Number(e.amt||0);},0);
+
+  if(!backfilled.length&&!linked&&!inkindFundraising.length)return null;
+  return{
+    clientId:c.id,clientName:c.name,recoded:[],
+    donationsBackfilled:backfilled.length,
+    donationsBackfilledTotal:backfilled.reduce(function(s,b){return s+b.amt;},0),
+    donationsLinked:linked,
+    inkindFundraisingCount:inkindFundraising.length,
+    inkindFundraisingTotal:inkindFundraisingTotal
   };
 }
 
@@ -635,6 +792,12 @@ function _acctHealShowNotice(){
     }
     if(s.newlyPostedCount){
       lines+='<div style="font-size:12px;color:var(--text)"><i class="fas fa-circle-info"></i> '+s.newlyPostedCount+' expense(s) totaling '+fmtAmt(s.newlyPostedTotal)+' had never been added to your books (saved before records had permanent IDs) — they\'ve now been posted.</div>';
+    }
+    if(s.donationsBackfilled){
+      lines+='<div style="font-size:12px;color:var(--text);margin-top:.4rem"><i class="fas fa-circle-info"></i> '+s.donationsBackfilled+' donation(s) totaling '+fmtAmt(s.donationsBackfilledTotal)+' logged through the Donors tab had never been added to your financial statements (Trial Balance, Balance Sheet, P&amp;L) — they\'ve now been posted to your books. They were already showing correctly in donor reports and thank-you letters.</div>';
+    }
+    if(s.inkindFundraisingCount){
+      lines+='<div style="font-size:12px;color:var(--amber,#b45309);margin-top:.4rem"><i class="fas fa-triangle-exclamation"></i> '+s.inkindFundraisingCount+' existing in-kind expense(s) totaling '+fmtAmt(s.inkindFundraisingTotal)+' are tagged "Fundraising" by default from before this was selectable. Review these on the Functional Expenses report and reclassify any that were actually used for programs or management.</div>';
     }
     return'<div style="border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;margin-bottom:.75rem">'
       +'<div style="font-weight:600;font-size:13px;margin-bottom:.4rem">'+escHtml(s.clientName)+'</div>'

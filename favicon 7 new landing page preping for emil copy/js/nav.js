@@ -66,7 +66,7 @@ function renderSB(){
     var ip=c.id===pin;
     return'<div class="client-item'+(c.id===CID?' active':'')+'" onclick="openClient(\''+c.id+'\')">'
       +'<div class="av '+avc(c.type)+'">'+ini(c.name)+'</div>'
-      +'<div class="cl-info"><div class="cl-name">'+c.name+(ip?' <span style="font-size:9px;color:var(--amber)"><i class="fas fa-star"></i></span>':'')+'</div><div class="cl-type">'+tl(c.type)+'</div></div>'
+      +'<div class="cl-info"><div class="cl-name">'+escHtml(c.name)+(ip?' <span style="font-size:9px;color:var(--amber)"><i class="fas fa-star"></i></span>':'')+'</div><div class="cl-type">'+tl(c.type)+'</div></div>'
       +'<button class="pin-btn'+(ip?' pinned':'')+'" onclick="togglePin(\''+c.id+'\',event)" title="'+(ip?'Remove default':'Set as default')+'">'+(ip?'<i class="fas fa-star"></i>':'<i class="far fa-star"></i>')+'</button></div>'
       +(c.id===CID?'<div style="padding:2px 12px 6px;display:flex;flex-direction:column;gap:3px">'        +'<button onclick="event.stopPropagation();var t=document.querySelector(\'[data-panel=vault]\');if(t)switchTab({target:t},\'vault\')" style="width:100%;text-align:left;background:var(--soft);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="fas fa-paperclip"></i> Document Vault</button>'        +'<button onclick="event.stopPropagation();if(typeof ttOpenFullLog===\'function\')ttOpenFullLog()" style="width:100%;text-align:left;background:var(--soft);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="far fa-clock"></i> Time log'+(c.timeLog&&c.timeLog.length?' ('+c.timeLog.length+')':'')+' </button>'        +'</div>':'');
   }).join('');
@@ -271,8 +271,8 @@ function globalSearch(q){
       var idx=results.indexOf(r);
       html+='<div class="srch-result" data-srch-idx="'+idx+'" style="padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--soft)">'
         +'<span style="font-size:16px">'+r.icon+'</span>'
-        +'<div><div style="font-size:13px;font-weight:500">'+r.label+'</div>'
-        +(r.sub?'<div style="font-size:11px;color:var(--muted)">'+r.sub+'</div>':'')
+        +'<div><div style="font-size:13px;font-weight:500">'+escHtml(r.label)+'</div>'
+        +(r.sub?'<div style="font-size:11px;color:var(--muted)">'+escHtml(r.sub)+'</div>':'')
         +'</div></div>';
     });
   });

@@ -899,7 +899,7 @@ function confirmImport(){
         return;
       }
       var eacct=String(row[fk(['account','acct','coa'])]||'');
-      var eacctCode=eacct?lookupAcctByCode(c,eacct)||lookupAcctByCAT(c,eacct)||'':'';
+      var eacctCode=eacct?lookupAcctByCode(c,eacct)||lookupAcctByCAT(c,eacct,'Expense')||'':'';
       if(eacct&&!eacctCode){eacctCode=quickAddAcctFromImport(c,eacct,'Expense')||'';}
       var impBankVal=g('imp-bank')&&g('imp-bank').value||'';
       var impBankId=impBankVal.indexOf('bank:')=== 0?impBankVal.slice(5):'';
@@ -914,7 +914,7 @@ function confirmImport(){
     else if(type==='income'){
       var amt=Number(row[fk(['amount','amt','actual','recv'])]||0),name=String(row[fk(['name','source'])]||'Imported'),cat=String(row[fk(['cat','category'])]||'Imported');
       var iacct=String(row[fk(['account','acct','coa'])]||'');
-      var iacctCode=iacct?lookupAcctByCode(c,iacct)||lookupAcctByCAT(c,iacct)||'':'';
+      var iacctCode=iacct?lookupAcctByCode(c,iacct)||lookupAcctByCAT(c,iacct,'Income')||'':'';
       if(iacct&&!iacctCode){iacctCode=quickAddAcctFromImport(c,iacct,'Income')||'';}
       var impBankVal2=g('imp-bank')&&g('imp-bank').value||'';
       var impBankId2=impBankVal2.indexOf('bank:')=== 0?impBankVal2.slice(5):'';
@@ -930,7 +930,7 @@ function confirmImport(){
       var ccAmt=Math.abs(Number(row[fk(['amount','amt','charge','debit'])]||0));
       var ccCat=String(row[fk(['cat','category','type'])]||'Uncategorized');
       if(!ccAmt)return;
-      var ccAcct=lookupAcctByCAT(c,ccCat)||'';
+      var ccAcct=lookupAcctByCAT(c,ccCat,'Expense')||'';
       var ccItem={id:uid(),desc:ccDesc,cat:ccCat,amt:ccAmt,date:ccDate,acctCode:ccAcct,ccId:ccSel,reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable'};
       applyFlag(ccItem,checkSuspiciousActivity(c,ccItem,ccItem.desc,ccItem.amt));
       c.expenses.push(ccItem);
@@ -1052,7 +1052,7 @@ function saveSplitRow(){
   var hasLines=sp.lines.filter(function(l){return l.cat&&Number(l.amt||0)>0;});
   if(!hasLines.length){alert('Add at least one category line with an amount.');return;}
   hasLines.forEach(function(line){
-    var eitem={id:uid(),desc:sp.desc,cat:line.cat,amt:Number(line.amt),date:sp.date,checkNum:sp.checkNum||'',fund:'',acctCode:lookupAcctByCAT(c,line.cat)||'',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable'};
+    var eitem={id:uid(),desc:sp.desc,cat:line.cat,amt:Number(line.amt),date:sp.date,checkNum:sp.checkNum||'',fund:'',acctCode:lookupAcctByCAT(c,line.cat,'Expense')||'',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable'};
     if(sp.bankId)eitem.bankId=sp.bankId;
     if(sp.ccId)eitem.ccId=sp.ccId;
     applyFlag(eitem,checkSuspiciousActivity(c,eitem,eitem.desc,eitem.amt));

@@ -383,7 +383,7 @@ function exportTab(type){
   }else if(type==='gl'){
     rows=[['Account Code','Account','Date','Description','Source','Amount','Running Balance']];
     var accts=c.accounts||[];var txns2=[];
-    function addT(items,amtKey,sign,panel){(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat)||('CAT:'+(r.cat||'Uncategorized'));txns2.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
+    function addT(items,amtKey,sign,panel){var acctType=panel==='Expense'?'Expense':'Income';(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat,acctType)||('CAT:'+(r.cat||'Uncategorized'));txns2.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
     if(c.type==='np'){addT((c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),'recv',1,'Income');addT((c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),'amt',-1,'Expense');}
     else if(c.type==='sb'){addT((c.revenue||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),'act',1,'Revenue');addT((c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),'amt',-1,'Expense');}
     else{addT((c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),'amt',1,'Income');addT((c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),'amt',-1,'Expense');}
@@ -477,7 +477,7 @@ function renderGrants(cc){
   if(!c.grants.length){p.innerHTML=FB()+XB('grants')+ES('No grants yet','Add your first grant to track funding, deadlines, and expenses.','EI=-1;openM(\'m-grant\')')+(typeof renderFiscalSponsorships==='function'?renderFiscalSponsorships(c):'')+(typeof renderComplianceBanner==='function'?renderComplianceBanner(c):'');return;}
   if(!AG||!c.grants.find(function(x){return x.id===AG;}))AG=c.grants[0].id;
   var gr=c.grants.find(function(x){return x.id===AG;})||c.grants[0];
-  var opts=c.grants.map(function(x){return'<option value="'+x.id+'"'+(x.id===AG?' selected':'')+'>'+x.name+'</option>';}).join('');
+  var opts=c.grants.map(function(x){return'<option value="'+x.id+'"'+(x.id===AG?' selected':'')+'>'+escHtml(x.name)+'</option>';}).join('');
   var gExp=(c.expenses||[]).filter(function(e){return!e.deleted&&!e.voided&&!e.isReversal&&e.grantId===AG;});
   var gInc=(c.income||[]).filter(function(r){return!r.deleted&&!r.voided&&r.grantId===AG;});
   var spent=gExp.reduce(function(s,e){var pct=e.grantPct!=null?Number(e.grantPct)/100:1;return s+Number(e.amt||0)*pct;},0),awarded=Number(gr.awarded||0);
@@ -512,11 +512,11 @@ function renderGrants(cc){
   p.innerHTML=FB()+XB('grants')+'<div class="g-sel-row"><div class="sw"><select style="max-width:220px;font-size:13px;padding:8px 28px 8px 12px" onchange="AG=this.value;renderGrants()">'+opts+'</select></div><button class="add-btn" onclick="EI=-1;window._gReqTemp=[{id:uid(),label:\'Submit final report to funder\',done:false},{id:uid(),label:\'Collect and file all receipts\',done:false},{id:uid(),label:\'Verify match requirement met\',done:false},{id:uid(),label:\'Send thank-you letter to funder\',done:false},{id:uid(),label:\'Confirm all funds spent per restrictions\',done:false}];_renderGrantReqList(window._gReqTemp);openM(\'m-grant\')">+ Add grant</button><button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:14px;color:var(--text)" onclick="editGrant(\''+AG+'\')" title="Edit this grant">&#9998;</button></div>'
   +'<div class="metrics"><div class="metric"><div class="m-lbl">Awarded</div><div class="m-val vg">'+fmt(awarded)+'</div></div><div class="metric"><div class="m-lbl">Received</div><div class="m-val vb">'+fmt(incRecv)+'</div></div><div class="metric"><div class="m-lbl">Spent</div><div class="m-val vr">'+fmt(spent)+'</div></div><div class="metric"><div class="m-lbl">Remaining</div><div class="m-val '+(rem>=0?'vb':'vr')+'">'+fmt(rem)+'</div></div></div>'
   +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="font-size:13px;font-weight:500">'+escHtml(gr.name)+'</span>'+SB(gr.status||'Applied')+(gr.reconciled?'<span class="badge b-green" title="Grant reconciled"><i class="fas fa-check"></i> Reconciled</span>':'')+'</div><button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:4px 9px;font-size:14px;color:var(--text);flex-shrink:0" onclick="editGrant(\''+AG+'\')" title="Edit this grant">&#9998;</button></div>'
-  +(gr.funder?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Funder: <span style="color:var(--text)">'+gr.funder+'</span></div>':'')
+  +(gr.funder?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Funder: <span style="color:var(--text)">'+escHtml(gr.funder)+'</span></div>':'')
   +(gr.portalUrl?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Portal: <a href="'+escHtml(gr.portalUrl)+'" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">Open grant portal ↗</a></div>':'')
   +(gr.appDeadline?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Application deadline: '+dlBadge(gr.appDeadline,'Apply')+'</div>':'')
   +(gr.deadline?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Reporting deadline: '+dlBadge(gr.deadline,'Report')+rptDeadlineFYFlag(gr.deadline)+'</div>':'')
-  +(gr.match?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Match requirement: <span style="color:var(--text)">'+gr.match+'</span>'+(function(){
+  +(gr.match?'<div style="font-size:12px;color:var(--muted);margin-bottom:3px">Match requirement: <span style="color:var(--text)">'+escHtml(gr.match)+'</span>'+(function(){
     if(!gr.matchRequired||Number(gr.matchRequired)<=0)return'';
     var req=Number(gr.matchRequired);
     var matched=(c.income||[]).filter(function(r){return r.grantId===AG&&!r.deleted&&!r.voided;}).reduce(function(s,r){return s+Number(r.recv||0);},0);
@@ -524,7 +524,7 @@ function renderGrants(cc){
     var met=matched>=req;
     return' <span class="badge '+(met?'b-green':'b-amber')+'" style="font-size:10px">'+(met?'<i class="fas fa-check"></i> Match met':'Match: '+fmt(matched)+' / '+fmt(req)+' ('+pct+'%)')+'</span>';
   })()+  '</div>':'')
-  +(gr.restrict?'<div style="font-size:12px;margin-top:6px;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.5"><strong>Restrictions: </strong><span style="color:var(--muted)">'+gr.restrict+'</span></div>':'')
+  +(gr.restrict?'<div style="font-size:12px;margin-top:6px;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.5"><strong>Restrictions: </strong><span style="color:var(--muted)">'+escHtml(gr.restrict)+'</span></div>':'')
   +(function(){
     var now=new Date(),gaps=[];
     var dl=gr.deadline?parseDate(gr.deadline):null;
@@ -822,9 +822,9 @@ function renderDonors(cc){
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:.75rem">'
       +'<div><div style="font-size:14px;font-weight:500">'+escHtml(d.name)+schedBBadge+'</div>'
       +'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">'+tierBadge+stageBadge+wpBadge+lapsedFlag+consecFlag+upgradeFlag+'</div>'
-      +(d.email?'<div style="font-size:12px;color:var(--muted);margin-top:4px">'+d.email+'</div>':'')
-      +(d.phone?'<div style="font-size:12px;color:var(--muted)">'+d.phone+'</div>':'')
-      +(d.address?'<div style="font-size:12px;color:var(--muted)">'+d.address+'</div>':'')
+      +(d.email?'<div style="font-size:12px;color:var(--muted);margin-top:4px">'+escHtml(d.email)+'</div>':'')
+      +(d.phone?'<div style="font-size:12px;color:var(--muted)">'+escHtml(d.phone)+'</div>':'')
+      +(d.address?'<div style="font-size:12px;color:var(--muted)">'+escHtml(d.address)+'</div>':'')
       +(d.solicitor?'<div style="font-size:11px;color:var(--muted);margin-top:3px">Solicitor: <span style="color:var(--text)">'+escHtml(d.solicitor)+'</span></div>':'')
       +(d.constituentType==='workplace'&&d.platform?'<div style="font-size:11px;color:var(--muted)">Platform: <span style="color:var(--text)">'+escHtml(d.platform)+'</span>'+(d.employer?' · '+escHtml(d.employer):'')+'</div>':'')
       +'</div>'
@@ -845,7 +845,7 @@ function renderDonors(cc){
       +'<button style="border:none;border-radius:7px;padding:5px 12px;font-size:12px;background:var(--red,#c0392b);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:500" title="Remove donor" onclick="delDonor('+di+')">&#215; Remove</button></div>'
       +((d.donations||[]).length
         ?'<table><thead><tr><th style="width:12%">Amount</th><th style="width:13%">Date</th><th style="width:14%">Campaign</th><th style="width:12%">Project</th><th style="width:8%">Recurring</th><th style="width:10%">Restricted</th><th style="width:10%">TY Sent</th><th style="width:21%"></th></tr></thead><tbody>'
-        +(function(){var _rows=[];(d.donations||[]).forEach(function(dn,dni){if(RST_F!=='all'&&normalizeRst(dn.rst)!==RST_F)return;_rows.push('<tr><td class="vg" style="font-weight:500">'+fmt(dn.amt)+(dn.inkind==='Yes'?' <span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:9px">In-kind</span>':'')+(dn.qpq>0?' <span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:9px">QPQ</span><span style="font-size:10px;color:var(--muted);margin-left:3px">'+fmt(Math.max(0,Number(dn.amt||0)-dn.qpq))+' deductible</span>':'')+'</td><td style="color:var(--muted)">'+(dn.date||'—')+'</td><td>'+(dn.fund||'—')+'</td><td style="font-size:11px;color:var(--muted)">'+(dn.proj?(function(){var _pr=(c&&c.projects||[]).find(function(p){return p.id===dn.proj||p.name===dn.proj;});return escHtml(_pr?_pr.name:dn.proj);})():'—')+'</td><td>'+(dn.rec==='Yes'?'<span class="badge b-rec">↻ Yes</span>':'—')+'</td><td>'+rstBadge(dn.rst)+'</td><td>'+(dn.ty==='Yes'?'<span class="badge b-green"><i class="fas fa-check"></i> Sent</span>':'<span class="badge b-amber">Pending</span>')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editDonation('+di+','+dni+')" title="Edit donation">&#9998;</button><button class="e-btn" onclick="openAuditLog('+di+','+dni+')" title="Edit history">&#128221;</button><button class="e-btn" onclick="openTYLetter('+di+','+dni+')" title="Generate thank you letter"><i class="fas fa-envelope"></i></button><button class="e-btn" onclick="toggleTY('+di+','+dni+')" title="Toggle TY sent"><i class="fas fa-check"></i></button><button class="d-btn" title="Delete donation" onclick="delDonation('+di+','+dni+')">&#215;</button></div></td></tr>');});return _rows.join('');})()+(!((d.donations||[]).some(function(dn){return RST_F==='all'||normalizeRst(dn.rst)===RST_F;}))?'<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--muted);font-size:12px">No donations match this filter.</td></tr>':'')+'</tbody></table>'
+        +(function(){var _rows=[];(d.donations||[]).forEach(function(dn,dni){if(RST_F!=='all'&&normalizeRst(dn.rst)!==RST_F)return;_rows.push('<tr><td class="vg" style="font-weight:500">'+fmt(dn.amt)+(dn.inkind==='Yes'?' <span class="badge" style="background:#e8f5e9;color:#2e7d32;font-size:9px">In-kind</span>':'')+(dn.qpq>0?' <span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:9px">QPQ</span><span style="font-size:10px;color:var(--muted);margin-left:3px">'+fmt(Math.max(0,Number(dn.amt||0)-dn.qpq))+' deductible</span>':'')+'</td><td style="color:var(--muted)">'+(dn.date||'—')+'</td><td>'+escHtml(dn.fund||'—')+'</td><td style="font-size:11px;color:var(--muted)">'+(dn.proj?(function(){var _pr=(c&&c.projects||[]).find(function(p){return p.id===dn.proj||p.name===dn.proj;});return escHtml(_pr?_pr.name:dn.proj);})():'—')+'</td><td>'+(dn.rec==='Yes'?'<span class="badge b-rec">↻ Yes</span>':'—')+'</td><td>'+rstBadge(dn.rst)+'</td><td>'+(dn.ty==='Yes'?'<span class="badge b-green"><i class="fas fa-check"></i> Sent</span>':'<span class="badge b-amber">Pending</span>')+'</td><td><div class="row-acts"><button class="e-btn" onclick="editDonation('+di+','+dni+')" title="Edit donation">&#9998;</button><button class="e-btn" onclick="openAuditLog('+di+','+dni+')" title="Edit history">&#128221;</button><button class="e-btn" onclick="openTYLetter('+di+','+dni+')" title="Generate thank you letter"><i class="fas fa-envelope"></i></button><button class="e-btn" onclick="toggleTY('+di+','+dni+')" title="Toggle TY sent"><i class="fas fa-check"></i></button><button class="d-btn" title="Delete donation" onclick="delDonation('+di+','+dni+')">&#215;</button></div></td></tr>');});return _rows.join('');})()+(!((d.donations||[]).some(function(dn){return RST_F==='all'||normalizeRst(dn.rst)===RST_F;}))?'<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--muted);font-size:12px">No donations match this filter.</td></tr>':'')+'</tbody></table>'
         :'<div style="font-size:12px;color:var(--muted);padding:.5rem 0">No donations logged yet.</div>')
       +(d.notes?'<div style="font-size:12px;color:var(--muted);margin-top:.75rem;padding:.75rem;background:var(--bg);border-radius:8px;line-height:1.5"><strong style="color:var(--text)">Notes: </strong>'+escHtml(d.notes)+'</div>':'')
       +_renderActivityLog(d,di)
@@ -978,7 +978,7 @@ function _populateDonationProjDropdown(c, selectedProj) {
     + projects.map(function(p){ return '<option value="'+escHtml(p.id||p.name)+'"'+(( selectedProj===p.id||selectedProj===p.name)?' selected':'')+'>'+escHtml(p.name)+'</option>'; }).join('');
 }
 
-function openAddDonation(di){var c=gc();g('dnt-donor-id').value=di;['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});g('dnt-rec').value='No';g('dnt-ty').value='No';g('dnt-rst').value='unrestricted';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';_populateDonationProjDropdown(c,'');toggleInkindFMV();toggleQpq();DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');}
+function openAddDonation(di){var c=gc();g('dnt-donor-id').value=di;['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-inkind-func','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});g('dnt-rec').value='No';g('dnt-ty').value='No';g('dnt-rst').value='unrestricted';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';_populateDonationProjDropdown(c,'');toggleInkindFMV();toggleQpq();DONATION_EI=-1;g('m-donation-title').textContent='Log donation';openM('m-donation');}
 // editDonation: pre-fills the existing m-donation modal with the selected donation's
 // values, sets DONATION_EI so saveDonation() updates in place instead of pushing.
 // Follows the exact same pattern as editDonor().
@@ -996,6 +996,7 @@ function editDonation(di,dni){
   if(g('dnt-inkind'))g('dnt-inkind').value=dn.inkind||'No';
   if(g('dnt-fmv'))g('dnt-fmv').value=dn.fmv||'';
   if(g('dnt-item-desc'))g('dnt-item-desc').value=dn.itemDescription||'';
+  if(g('dnt-inkind-func'))g('dnt-inkind-func').value=dn.inkindFunctional||'';
   if(g('dnt-auctioned'))g('dnt-auctioned').value=dn.auctioned?'Yes':'No';
   if(g('dnt-auction-date'))g('dnt-auction-date').value=dn.auctionDate||'';
   if(g('dnt-auction-sale'))g('dnt-auction-sale').value=dn.auctionSalePrice||'';
@@ -1049,7 +1050,7 @@ function copyTYLetter(){
   else{g('ty-letter-body').select();document.execCommand('copy');g('ty-copy-ok').style.display='block';setTimeout(function(){g('ty-copy-ok').style.display='none';},2000);}
 }
 function printTYLetter(){
-  var txt=g('ty-letter-body').value.replace(/\n/g,'<br>');
+  var txt=escHtml(g('ty-letter-body').value).replace(/\n/g,'<br>');
   var w=window.open('','_blank');
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Thank You Letter</title><style>body{font-family:Georgia,serif;max-width:640px;margin:60px auto;color:#1a1814;font-size:14px;line-height:1.8}@media print{.no-print{display:none}}</style></head><body>');
   w.document.write('<div>'+txt+'</div>');
@@ -1089,7 +1090,7 @@ function openAnnualLetter(di){
   openM('m-ty-letter');
 }
 function toggleTY(di,dni){var c=gc();if(!c||!c.donors[di]||!c.donors[di].donations[dni])return;var dn=c.donors[di].donations[dni];dn.ty=dn.ty==='Yes'?'No':'Yes';sv();renderDonors(c);}
-function delDonation(di,dni){var c=gc();if(!confirm('Delete this donation?'))return;c.donors[di].donations.splice(dni,1);sv();renderDonors(c);}
+function delDonation(di,dni){var c=gc();if(!confirm('Delete this donation?'))return;var _rec=c.donors[di].donations[dni];_voidDonationLedger(c,_rec);c.donors[di].donations.splice(dni,1);sv();renderDonors(c);renderBalanceSheet(c);}
 function delDonor(di){var c=gc();if(!confirm('Remove this donor and all their donation history? Cannot be undone.'))return;c.donors.splice(di,1);sv();renderDonors(c);}
 function editDonor(di){
   var c=gc();if(!c||!c.donors[di])return;DONOR_EI=di;var d=c.donors[di];
@@ -1196,6 +1197,104 @@ function openDonorAuditLog(di){
   w.document.close();
 }
 
+// ── DONATION LEDGER SYNC ─────────────────────────────────────
+// Maps a donation's restriction status to which net-asset class its income
+// belongs to at year-end close (see postClosingEntries). Canonicalized via
+// normalizeRst() so legacy 'Restricted'/'Nonrestricted' values still map correctly.
+function _donationNetClass(rst){
+  var n=normalizeRst(rst);
+  if(n==='permanently_restricted')return'with_restriction_perm';
+  if(n==='temporarily_restricted')return'with_restriction';
+  return'without_restriction';
+}
+// Creates the income (and, for in-kind, expense) entries for a brand-new donation and
+// posts them to the ledger immediately, linking back via incomeRef/expenseRef on the
+// donation record so later edits/deletes can find and update the right rows.
+function _postDonationLedger(c,di,record){
+  var donorName=(c.donors[di]&&c.donors[di].name)||'Unknown donor';
+  var donorId=c.donors[di]&&c.donors[di].id;
+  var netClass=_donationNetClass(record.rst);
+  var cashCode=_defaultCashCode(c);
+  if(!c.income)c.income=[];
+  if(record.inkind==='Yes'){
+    var inkindDesc=(record.itemDescription||'In-kind donation')+' — '+donorName;
+    var inkindAmt=Number(record.fmv||0);
+    // Income entry: In-kind contributions (COA 4050, Part VIII Line 1)
+    var incItem={id:uid(),name:inkindDesc,cat:'In-Kind',status:'Received',proj:inkindAmt,recv:inkindAmt,date:record.date,fund:record.fund||'',acctCode:'4050',inkindRef:true,netClass:netClass,donorId:donorId,audit:[]};
+    c.income.push(incItem);
+    record.incomeRef=incItem.id;
+    if(typeof postToLedger==='function')postToLedger(c,cashCode,'4050',inkindAmt,'In-kind donation: '+donorName,'income',incItem.id);
+    // Expense entry: In-kind expense allocated per the functional category the user selected
+    if(!c.expenses)c.expenses=[];
+    var expItem={id:uid(),desc:inkindDesc,cat:'In-Kind Expense',amt:inkindAmt,date:record.date,fund:record.fund||'',functional:record.inkindFunctional||'fundraising',acctCode:'5400',inkindRef:true,reconciled:true,audit:[]};
+    c.expenses.push(expItem);
+    record.expenseRef=expItem.id;
+    if(typeof postToLedger==='function')postToLedger(c,'5400',cashCode,inkindAmt,'In-kind expense: '+inkindDesc,'expense',expItem.id);
+    // If auctioned: also log auction sale proceeds as event revenue
+    if(record.auctioned&&record.auctionSalePrice>0){
+      var saleDesc='Auction sale: '+(record.itemDescription||'In-kind item')+' (buyer: '+(record.auctionBuyerName||'unknown')+')';
+      var saleItem={id:uid(),name:saleDesc,cat:'Events',status:'Received',proj:record.auctionSalePrice,recv:record.auctionSalePrice,date:record.auctionDate||record.date,fund:record.fund||'',acctCode:'4040',auctionRef:true,netClass:'without_restriction',audit:[]};
+      c.income.push(saleItem);
+      if(typeof postToLedger==='function')postToLedger(c,cashCode,'4040',record.auctionSalePrice,saleDesc,'income',saleItem.id);
+    }
+  }else{
+    var amt=Number(record.amt||0);
+    var incItem2={id:uid(),name:donorName,cat:'Individual donation',status:'Received',proj:amt,recv:amt,date:record.date,fund:record.fund||'',acctCode:'4010',donationRef:true,netClass:netClass,donorId:donorId,audit:[]};
+    c.income.push(incItem2);
+    record.incomeRef=incItem2.id;
+    if(typeof postToLedger==='function')postToLedger(c,cashCode,'4010',amt,'Donation: '+donorName,'income',incItem2.id);
+  }
+}
+// Keeps the linked income/expense entries in sync when an existing donation is edited.
+// If the cash/in-kind type itself changed, voids whatever was linked before and posts
+// fresh entries rather than trying to morph an income row into an expense row in place.
+function _syncDonationLedger(c,di,record,old){
+  var donorName=(c.donors[di]&&c.donors[di].name)||'Unknown donor';
+  var netClass=_donationNetClass(record.rst);
+  record.incomeRef=old.incomeRef||'';
+  record.expenseRef=old.expenseRef||'';
+  if((old.inkind||'No')!==record.inkind){
+    _voidDonationLedger(c,old);
+    record.incomeRef='';record.expenseRef='';
+    _postDonationLedger(c,di,record);
+    return;
+  }
+  var cashCode=_defaultCashCode(c);
+  if(record.inkind==='Yes'){
+    var inkindDesc=(record.itemDescription||'In-kind donation')+' — '+donorName;
+    var inkindAmt=Number(record.fmv||0);
+    var incRow=record.incomeRef&&(c.income||[]).filter(function(r){return r.id===record.incomeRef;})[0];
+    if(incRow){
+      incRow.name=inkindDesc;incRow.proj=inkindAmt;incRow.recv=inkindAmt;incRow.date=record.date;incRow.fund=record.fund||'';incRow.netClass=netClass;
+      if(typeof updateLedgerEntry==='function')updateLedgerEntry(c,incRow.id,cashCode,'4050',inkindAmt,'In-kind donation: '+donorName,'income');
+    }
+    var expRow=record.expenseRef&&(c.expenses||[]).filter(function(e){return e.id===record.expenseRef;})[0];
+    if(expRow){
+      expRow.desc=inkindDesc;expRow.amt=inkindAmt;expRow.date=record.date;expRow.fund=record.fund||'';expRow.functional=record.inkindFunctional||expRow.functional||'fundraising';
+      if(typeof updateLedgerEntry==='function')updateLedgerEntry(c,expRow.id,'5400',cashCode,inkindAmt,'In-kind expense: '+inkindDesc,'expense');
+    }
+  }else{
+    var amt=Number(record.amt||0);
+    var incRow2=record.incomeRef&&(c.income||[]).filter(function(r){return r.id===record.incomeRef;})[0];
+    if(incRow2){
+      incRow2.name=donorName;incRow2.proj=amt;incRow2.recv=amt;incRow2.date=record.date;incRow2.fund=record.fund||'';incRow2.netClass=netClass;
+      if(typeof updateLedgerEntry==='function')updateLedgerEntry(c,incRow2.id,cashCode,'4010',amt,'Donation: '+donorName,'income');
+    }
+  }
+}
+// Voids the ledger postings and removes the income/expense rows linked to a donation —
+// used on delete, and when an edit switches a donation between cash and in-kind.
+function _voidDonationLedger(c,record){
+  if(!record)return;
+  if(record.incomeRef){
+    if(typeof voidLedgerEntry==='function')voidLedgerEntry(c,record.incomeRef);
+    c.income=(c.income||[]).filter(function(r){return r.id!==record.incomeRef;});
+  }
+  if(record.expenseRef){
+    if(typeof voidLedgerEntry==='function')voidLedgerEntry(c,record.expenseRef);
+    c.expenses=(c.expenses||[]).filter(function(e){return e.id!==record.expenseRef;});
+  }
+}
 function saveDonation(){
   var c=gc();if(!c.donors)c.donors=[];
   // PERIOD LOCK GUARD
@@ -1214,9 +1313,10 @@ function saveDonation(){
   var di=parseInt(g('dnt-donor-id').value);if(isNaN(di)||!c.donors[di])return;
   if(!c.donors[di].donations)c.donors[di].donations=[];
 
-  var record={amt:amt,date:dateVal,fund:g('dnt-fund').value,proj:g('dnt-proj')&&g('dnt-proj').value||'',rec:g('dnt-rec').value,ty:g('dnt-ty').value,rst:g('dnt-rst').value,inkind:g('dnt-inkind')&&g('dnt-inkind').value||'No',fmv:g('dnt-fmv')&&Number(g('dnt-fmv').value||0)||0,itemDescription:g('dnt-item-desc')&&g('dnt-item-desc').value.trim()||'',auctioned:g('dnt-auctioned')&&g('dnt-auctioned').value==='Yes',auctionDate:g('dnt-auction-date')&&g('dnt-auction-date').value||'',auctionSalePrice:g('dnt-auction-sale')&&Number(g('dnt-auction-sale').value||0)||0,auctionBuyerName:g('dnt-auction-buyer')&&g('dnt-auction-buyer').value.trim()||'',qpq:g('dnt-hasqpq')&&g('dnt-hasqpq').value==='Yes'?Number(g('dnt-qpq')&&g('dnt-qpq').value||0):0};
+  var record={amt:amt,date:dateVal,fund:g('dnt-fund').value,proj:g('dnt-proj')&&g('dnt-proj').value||'',rec:g('dnt-rec').value,ty:g('dnt-ty').value,rst:g('dnt-rst').value,inkind:g('dnt-inkind')&&g('dnt-inkind').value||'No',fmv:g('dnt-fmv')&&Number(g('dnt-fmv').value||0)||0,itemDescription:g('dnt-item-desc')&&g('dnt-item-desc').value.trim()||'',inkindFunctional:g('dnt-inkind-func')&&g('dnt-inkind-func').value||'',auctioned:g('dnt-auctioned')&&g('dnt-auctioned').value==='Yes',auctionDate:g('dnt-auction-date')&&g('dnt-auction-date').value||'',auctionSalePrice:g('dnt-auction-sale')&&Number(g('dnt-auction-sale').value||0)||0,auctionBuyerName:g('dnt-auction-buyer')&&g('dnt-auction-buyer').value.trim()||'',qpq:g('dnt-hasqpq')&&g('dnt-hasqpq').value==='Yes'?Number(g('dnt-qpq')&&g('dnt-qpq').value||0):0};
   if(record.inkind==='Yes'&&!record.fmv){alert('Please enter the fair market value for this in-kind donation.');return;}
   if(record.inkind==='Yes'&&!record.itemDescription){alert('Please describe the donated item or service.');return;}
+  if(record.inkind==='Yes'&&!record.inkindFunctional){alert('Please select a functional category (Program, Management & General, or Fundraising) for this in-kind donation — it determines how it appears on the Statement of Functional Expenses.');return;}
 
   // Scenario B: Check for existing bank-imported income entry that matches this donation
   if(DONATION_EI<0){
@@ -1265,40 +1365,14 @@ function saveDonation(){
     });
     record.audit=auditLog;
     c.donors[di].donations[DONATION_EI]=record;
-    // Update orphaned inkindRef auto-entries when FMV/description/date/fund changed
-    if(record.inkind==='Yes'){
-      var _oldDesc=(old.itemDescription||'In-kind donation')+' — '+(c.donors[di].name||'Unknown donor');
-      var _newDesc=(record.itemDescription||'In-kind donation')+' — '+(c.donors[di].name||'Unknown donor');
-      var _newAmt=Number(record.fmv||0);
-      (c.income||[]).forEach(function(r){if(r.inkindRef&&r.name===_oldDesc){r.name=_newDesc;r.proj=_newAmt;r.recv=_newAmt;r.date=record.date;r.fund=record.fund||'';}});
-      (c.expenses||[]).forEach(function(e){if(e.inkindRef&&e.desc===_oldDesc){e.desc=_newDesc;e.amt=_newAmt;e.date=record.date;e.fund=record.fund||'';}});
-    }
+    _syncDonationLedger(c,di,record,old);
   }else{
     // Add new — no audit on create
     c.donors[di].donations.push(record);
+    _postDonationLedger(c,di,record);
   }
 
-  // ── IN-KIND DOUBLE-ENTRY ─────────────────────────────────────
-  // New in-kind donations (not edits) auto-create matching income + expense entries
-  // so 990 Part VIII (contribution revenue) and Part IX (in-kind expense) gross up correctly.
-  if(record.inkind==='Yes'&&DONATION_EI<0){
-    var donorName=c.donors[di].name||'Unknown donor';
-    var inkindDesc=(record.itemDescription||'In-kind donation')+' — '+donorName;
-    var inkindAmt=Number(record.fmv||0);
-    // Income entry: In-kind contributions (COA 4050, Part VIII Line 1)
-    if(!c.income)c.income=[];
-    c.income.push({id:uid(),name:inkindDesc,cat:'In-Kind',status:'Received',proj:inkindAmt,recv:inkindAmt,date:record.date,fund:record.fund||'',acctCode:'4050',inkindRef:true,audit:[]});
-    // Expense entry: In-kind expense allocated to fundraising (Part IX)
-    if(!c.expenses)c.expenses=[];
-    c.expenses.push({id:uid(),desc:inkindDesc,cat:'In-Kind Expense',amt:inkindAmt,date:record.date,fund:record.fund||'',functional:'fundraising',acctCode:'5400',inkindRef:true,reconciled:true,audit:[]});
-    // If auctioned: also log auction sale proceeds as event revenue
-    if(record.auctioned&&record.auctionSalePrice>0){
-      var saleDesc='Auction sale: '+(record.itemDescription||'In-kind item')+' (buyer: '+(record.auctionBuyerName||'unknown')+')';
-      c.income.push({id:uid(),name:saleDesc,cat:'Events',status:'Received',proj:record.auctionSalePrice,recv:record.auctionSalePrice,date:record.auctionDate||record.date,fund:record.fund||'',acctCode:'4040',auctionRef:true,audit:[]});
-    }
-  }
-
-  sv();renderDonors(c);closeM('m-donation');['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});var _dp=g('dnt-proj');if(_dp)_dp.value='';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';toggleInkindFMV();toggleQpq();
+  sv();renderDonors(c);closeM('m-donation');['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-inkind-func','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});var _dp=g('dnt-proj');if(_dp)_dp.value='';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';toggleInkindFMV();toggleQpq();
 }
 
 // ── SB REVENUE ──────────────────────────
@@ -2296,7 +2370,7 @@ function _renderExecSummaryBody(el,c){
         if(activePeriod){var fyS=getFiscalYear(c.fiscalYearEnd,new Date(activePeriod.start)).label,fyE=getFiscalYear(c.fiscalYearEnd,new Date(activePeriod.end)).label;periodCtx='<div style="font-size:10px;color:var(--muted)">Current period: '+activePeriod.label+(fyS!==fyE?' (spans '+fyS+'–'+fyE+')':' ('+fyS+')')+'</div>';}
       }
       return'<div class="card" style="margin:0;padding:.75rem"><div style="font-weight:600;font-size:13px">'+escHtml(pr.name)+multiYearFlag+'</div>'
-      +(linkedGrant?'<div style="font-size:10px;color:var(--np);margin-top:2px">&#128196; '+linkedGrant.name+'</div>':'')
+      +(linkedGrant?'<div style="font-size:10px;color:var(--np);margin-top:2px">&#128196; '+escHtml(linkedGrant.name)+'</div>':'')
       +periodCtx
       +'<div style="display:flex;gap:12px;margin-top:.4rem"><span style="font-size:11px"><span style="color:var(--muted)">Spent:</span> <span class="vr">'+fmt(pExp)+'</span></span><span style="font-size:11px"><span style="color:var(--muted)">In:</span> <span class="vg">'+fmt(pInc)+'</span></span></div>'
       +(burn!==null?'<div style="margin-top:.4rem"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>Budget burn</span><span>'+burn+'%</span></div><div class="pbar" style="height:6px;margin-top:2px"><div class="pfill" style="width:'+Math.min(burn,100)+'%;background:'+(burn>90?'var(--red)':burn>70?'var(--amber)':'var(--green)')+'"></div></div></div>':'')+'</div>';
@@ -2364,7 +2438,7 @@ function _renderExecSummaryBody(el,c){
   // ── ASSEMBLE ─────────────────────────────
   // Board ready version
   var logoHtml2=c.logo?'<img src="'+c.logo+'" style="max-height:40px;max-width:140px;object-fit:contain;margin-bottom:.25rem" alt="logo">':'';
-  var boardHTML='<div style="max-width:700px;margin:0 auto;font-family:var(--font,sans-serif)">'  +'<div style="text-align:center;padding:1.5rem 0 1rem;border-bottom:2px solid var(--text);margin-bottom:1.5rem">'  +(logoHtml2?'<div style="margin-bottom:.5rem">'+logoHtml2+'</div>':'')  +'<div style="font-family:serif;font-size:24px;font-weight:400">'+c.name+'</div>'  +'<div style="font-size:12px;color:var(--muted);margin-top:4px">Financial Executive Summary · '+tl(c.type)+' · '+today()+'</div></div>'  +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;text-align:center">'  +'<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+(c.type==='np'?'Total Income':'Revenue')+'</div><div style="font-size:22px;font-weight:700;color:var(--green)">'+fmt(iT)+'</div></div>'  +'<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Total Expenses</div><div style="font-size:22px;font-weight:700;color:var(--red)">'+fmt(eT)+'</div></div>'  +'<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+(c.type==='np'?'Net Surplus':'Net Income')+'</div><div style="font-size:22px;font-weight:700;color:'+(net>=0?'var(--green)':'var(--red)')+'">'+fmt(net)+'</div></div>'  +'</div>'  +(budgetedInc||budgetedExp?'<div style="margin-bottom:1.5rem"><div style="font-size:13px;font-weight:600;margin-bottom:.5rem;padding-bottom:.25rem;border-bottom:1px solid var(--border)">Budget Performance</div>'  +(incVar!==null?'<div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:13px"><span>'+(c.type==='np'?'Income':'Revenue')+' vs Budget</span><span style="color:'+(incVar>=0?'var(--green)':'var(--red)')+';">'+(incVar>=0?'+':'')+incVar+'%</span></div>':'')  +(expVar!==null?'<div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:13px"><span>Expenses vs Budget</span><span style="color:'+(expVar<=5?'var(--green)':'var(--red)')+';">'+(expVar>=0?'+':'')+expVar+'%</span></div>':'')  +'</div>':'')
+  var boardHTML='<div style="max-width:700px;margin:0 auto;font-family:var(--font,sans-serif)">'  +'<div style="text-align:center;padding:1.5rem 0 1rem;border-bottom:2px solid var(--text);margin-bottom:1.5rem">'  +(logoHtml2?'<div style="margin-bottom:.5rem">'+logoHtml2+'</div>':'')  +'<div style="font-family:serif;font-size:24px;font-weight:400">'+escHtml(c.name)+'</div>'  +'<div style="font-size:12px;color:var(--muted);margin-top:4px">Financial Executive Summary · '+tl(c.type)+' · '+today()+'</div></div>'  +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;text-align:center">'  +'<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+(c.type==='np'?'Total Income':'Revenue')+'</div><div style="font-size:22px;font-weight:700;color:var(--green)">'+fmt(iT)+'</div></div>'  +'<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Total Expenses</div><div style="font-size:22px;font-weight:700;color:var(--red)">'+fmt(eT)+'</div></div>'  +'<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">'+(c.type==='np'?'Net Surplus':'Net Income')+'</div><div style="font-size:22px;font-weight:700;color:'+(net>=0?'var(--green)':'var(--red)')+'">'+fmt(net)+'</div></div>'  +'</div>'  +(budgetedInc||budgetedExp?'<div style="margin-bottom:1.5rem"><div style="font-size:13px;font-weight:600;margin-bottom:.5rem;padding-bottom:.25rem;border-bottom:1px solid var(--border)">Budget Performance</div>'  +(incVar!==null?'<div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:13px"><span>'+(c.type==='np'?'Income':'Revenue')+' vs Budget</span><span style="color:'+(incVar>=0?'var(--green)':'var(--red)')+';">'+(incVar>=0?'+':'')+incVar+'%</span></div>':'')  +(expVar!==null?'<div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:13px"><span>Expenses vs Budget</span><span style="color:'+(expVar<=5?'var(--green)':'var(--red)')+';">'+(expVar>=0?'+':'')+expVar+'%</span></div>':'')  +'</div>':'')
   +(h7?'<div style="margin-bottom:1.5rem"><div style="font-size:13px;font-weight:600;margin-bottom:.5rem;padding-bottom:.25rem;border-bottom:1px solid var(--border)">Projects / Events</div>'+h7+'</div>':'')
   +(h8?'<div style="margin-bottom:1.5rem"><div style="font-size:13px;font-weight:600;margin-bottom:.5rem;padding-bottom:.25rem;border-bottom:1px solid var(--border)">Grants</div>'+h8+'</div>':'')
   +'<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border)">Prepared with Clarity by Telofin™ · '+today()+'</div></div>';
@@ -2373,7 +2447,7 @@ function _renderExecSummaryBody(el,c){
   window._clarityScoreData={score:clarityScore,scores:scores,hasData:totalSignals>=3};
   renderScoreBar(clarityScore,scores);
 
-  el.innerHTML='<div class="rpt-sec">'  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">'  +'<div><div style="font-family:serif;font-size:20px">Executive Summary</div><div style="font-size:11px;color:var(--muted)">'+c.name+' · '+tl(c.type)+' · '+today()+'</div></div>'  +'<div style="display:flex;gap:8px">'  +'<button class="sv-btn" id="exec-internal-btn" style="font-size:11px;padding:4px 12px" onclick="switchExecView(\'internal\')">Internal</button>'  +'<button class="add-btn" id="exec-board-btn" style="font-size:11px;padding:4px 12px" onclick="switchExecView(\'board\')">Board Ready</button>'  +'<label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="exec-include-score" checked style="cursor:pointer"> Include score</label>'+'<button class="add-btn" style="font-size:11px;padding:4px 12px" onclick="exportExecutiveSummary()">&#128438; Export PDF</button>'  +'</div></div>'  +'<div id="exec-internal">'  +scoreHTML  +'<hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">'  +h1+h2+h3+h4+h5+hCCC+stressHTML+h6+h7+h8  +_rptDisclaimer('This executive summary is an internal management tool only. The Clarity Score and all metrics are derived solely from user-entered data and do not constitute a professional financial opinion, audit, or compilation.')
+  el.innerHTML='<div class="rpt-sec">'  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">'  +'<div><div style="font-family:serif;font-size:20px">Executive Summary</div><div style="font-size:11px;color:var(--muted)">'+escHtml(c.name)+' · '+tl(c.type)+' · '+today()+'</div></div>'  +'<div style="display:flex;gap:8px">'  +'<button class="sv-btn" id="exec-internal-btn" style="font-size:11px;padding:4px 12px" onclick="switchExecView(\'internal\')">Internal</button>'  +'<button class="add-btn" id="exec-board-btn" style="font-size:11px;padding:4px 12px" onclick="switchExecView(\'board\')">Board Ready</button>'  +'<label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="exec-include-score" checked style="cursor:pointer"> Include score</label>'+'<button class="add-btn" style="font-size:11px;padding:4px 12px" onclick="exportExecutiveSummary()">&#128438; Export PDF</button>'  +'</div></div>'  +'<div id="exec-internal">'  +scoreHTML  +'<hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">'  +h1+h2+h3+h4+h5+hCCC+stressHTML+h6+h7+h8  +_rptDisclaimer('This executive summary is an internal management tool only. The Clarity Score and all metrics are derived solely from user-entered data and do not constitute a professional financial opinion, audit, or compilation.')
   +'<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border)">Generated by Clarity by Telofin™ · All calculations based on data entered in this system</div>'  +'</div>'  +'<div id="exec-board" style="display:none">'+boardHTML+'</div>'  +'</div>';
 }
 
@@ -2412,8 +2486,8 @@ function switchExecView(mode){
 }
 
 function rptFmt(n){return'$'+Number(n||0).toLocaleString();}
-function rptRow(label,val,cls){return'<div class="rpt-row"><span>'+label+'</span><span class="'+(cls||'')+'">'+rptFmt(val)+'</span></div>';}
-function rptTotal(label,val,cls){return'<div class="rpt-total"><span>'+label+'</span><span class="'+(cls||'')+'">'+rptFmt(val)+'</span></div>';}
+function rptRow(label,val,cls){return'<div class="rpt-row"><span>'+escHtml(label)+'</span><span class="'+(cls||'')+'">'+rptFmt(val)+'</span></div>';}
+function rptTotal(label,val,cls){return'<div class="rpt-total"><span>'+escHtml(label)+'</span><span class="'+(cls||'')+'">'+rptFmt(val)+'</span></div>';}
 
 function renderExpDetailRpt(){
   var c=gc();if(!c)return;var el=g('rpt-expdetail');if(!el)return;
@@ -2518,7 +2592,7 @@ function renderDonorRpt(){
   var yoyChange=totalPrior>0?Math.round(((totalCur-totalPrior)/totalPrior)*100):null;
 
   function rptRow(label,val,color){
-    return'<div class="rpt-row"><span style="color:var(--muted)">'+label+'</span><span style="font-weight:600;color:'+(color||'var(--text)')+'">'+val+'</span></div>';
+    return'<div class="rpt-row"><span style="color:var(--muted)">'+escHtml(label)+'</span><span style="font-weight:600;color:'+(color||'var(--text)')+'">'+val+'</span></div>';
   }
   function donorRow(dd,showPrior){
     var yoy=dd.priorAmt>0&&dd.curAmt>0?Math.round(((dd.curAmt-dd.priorAmt)/dd.priorAmt)*100):null;
@@ -4180,7 +4254,7 @@ function saveInc(){var c=gc();if(!c.income)c.income=[];
   var iBsAssetId=bv.indexOf('bsasset:')=== 0?bv.slice(8):'';
   var _oldInc=_rEI>=0?c.income[_rEI]:null;
   var _iAmtErr=validateAmt(g('i-r').value,{allowZero:true,label:'Amount received'});if(_iAmtErr){alert(_iAmtErr);if(g('i-r'))g('i-r').focus();return;}
-  var cat=g('i-c').value;var _iRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _iRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var item={id:_rEI>=0?(c.income[_rEI].id||uid()):uid(),name:n,cat:cat,status:g('i-s').value,proj:Number(g('i-p').value||0),recv:Number(g('i-r').value||0),date:g('i-dt')&&g('i-dt').value||'',fund:g('i-fund')&&g('i-fund').value||'',acctCode:g('i-acct')&&g('i-acct').value||lookupAcctByCAT(c,cat)||'',recurring:g('f-rec').value,grantId:g('i-gid')&&g('i-gid').value||''};
+  var cat=g('i-c').value;var _iRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _iRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var item={id:_rEI>=0?(c.income[_rEI].id||uid()):uid(),name:n,cat:cat,status:g('i-s').value,proj:Number(g('i-p').value||0),recv:Number(g('i-r').value||0),date:g('i-dt')&&g('i-dt').value||'',fund:g('i-fund')&&g('i-fund').value||'',acctCode:g('i-acct')&&g('i-acct').value||lookupAcctByCAT(c,cat,'Income')||'',recurring:g('f-rec').value,grantId:g('i-gid')&&g('i-gid').value||''};
   if(item.recurring&&item.recurring!=='None'){if(_iRecurEnd)item.recurEndDate=_iRecurEnd;if(_iRecurCnt>0){item.recurCount=_iRecurCnt;item.recurPostedCount=0;}}
   if(pid)item.projectId=pid;
   if(bv.indexOf('bank:')=== 0)item.bankId=bv.slice(5);
@@ -4203,7 +4277,7 @@ function saveRev(){var c=gc();if(!c.revenue)c.revenue=[];
   var _oldRev=_rREI>=0?c.revenue[_rREI]:null;
   var _rAmtErr=validateAmt(g('r-a').value,{allowZero:true,label:'Actual revenue'});if(_rAmtErr){alert(_rAmtErr);if(g('r-a'))g('r-a').focus();return;}
   var cat=g('r-c').value;var _taxRate=Number(g('r-taxrate')&&g('r-taxrate').value||0);var _taxAmt=Number(g('r-taxamt')&&g('r-taxamt').value||0);
-  var _taxJur=g('r-taxjur')&&g('r-taxjur').value||'';var _rRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _rRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var customerName2=sanitizeInput(g('r-cust')&&g('r-cust').value.trim()||'');var item={id:_rREI>=0?(c.revenue[_rREI].id||uid()):uid(),name:n,cat:cat,conf:g('r-cf').value,proj:Number(g('r-p').value||0),act:Number(g('r-a').value||0),date:g('r-dt')&&g('r-dt').value||'',acctCode:g('r-acct')&&g('r-acct').value||lookupAcctByCAT(c,cat)||'',recurring:g('f-rec').value};
+  var _taxJur=g('r-taxjur')&&g('r-taxjur').value||'';var _rRecurEnd=g('f-rec-end')&&g('f-rec-end').value.trim()||'';var _rRecurCnt=g('f-rec-count')&&Number(g('f-rec-count').value)||0;var customerName2=sanitizeInput(g('r-cust')&&g('r-cust').value.trim()||'');var item={id:_rREI>=0?(c.revenue[_rREI].id||uid()):uid(),name:n,cat:cat,conf:g('r-cf').value,proj:Number(g('r-p').value||0),act:Number(g('r-a').value||0),date:g('r-dt')&&g('r-dt').value||'',acctCode:g('r-acct')&&g('r-acct').value||lookupAcctByCAT(c,cat,'Income')||'',recurring:g('f-rec').value};
   if(customerName2)item.customerName=customerName2;if(item.recurring&&item.recurring!=='None'){if(_rRecurEnd)item.recurEndDate=_rRecurEnd;if(_rRecurCnt>0){item.recurCount=_rRecurCnt;item.recurPostedCount=0;}}
   if(_taxRate>0){item.taxRate=_taxRate;item.taxAmt=_taxAmt;}
   if(_taxJur){item.taxJurisdiction=_taxJur;}
@@ -4355,7 +4429,7 @@ function saveExp(){
   var bankId=bankVal.indexOf('bank:')=== 0?bankVal.slice(5):'';
   var ccId=bankVal.indexOf('cc:')=== 0?bankVal.slice(3):'';
   var bsAssetId=bankVal.indexOf('bsasset:')=== 0?bankVal.slice(8):'';
-function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat)||'';}
+function resolveAcct(cat,explicit){return explicit||lookupAcctByCAT(c,cat,'Expense')||'';}
   // Helper: get the old expense's bsAssetId before overwriting
   var _oldExp=_rXEI>=0?c.expenses[_rXEI]:null;
   // ── FIX-C: Restricted fund check helper ─────────────────────────────────
@@ -4724,6 +4798,7 @@ function _donForceLog(){
   if(!window._donPendingRecord)return;
   var _p=window._donPendingRecord;
   _p.c.donors[_p.di].donations.push(_p.record);
+  _postDonationLedger(_p.c,_p.di,_p.record);
   sv();renderDonors(_p.c);closeM('m-donation');
   window._donPendingRecord=null;
 }
@@ -4856,14 +4931,14 @@ function renderConsolidatedPL(){
 
   // Build table header: Category | Client1 | Client2 | ... | Total
   var colHdr='<th style="text-align:left;padding:6px 8px">Category</th>'
-    +rows.map(function(r){return'<th style="text-align:right;padding:6px 8px;max-width:90px;overflow:hidden;text-overflow:ellipsis" title="'+r.c.name+'">'+r.c.name+'</th>';}).join('')
+    +rows.map(function(r){return'<th style="text-align:right;padding:6px 8px;max-width:90px;overflow:hidden;text-overflow:ellipsis" title="'+escHtml(r.c.name)+'">'+escHtml(r.c.name)+'</th>';}).join('')
     +'<th style="text-align:right;padding:6px 8px;font-weight:700">Total</th>';
 
   function catRow(cat,catMaps,isInc){
     var vals=rows.map(function(r){return r[catMaps][cat]||0;});
     var tot=vals.reduce(function(s,v){return s+v;},0);
     if(tot===0)return'';
-    return'<tr><td style="padding:5px 8px;font-size:12px">'+cat+'</td>'
+    return'<tr><td style="padding:5px 8px;font-size:12px">'+escHtml(cat)+'</td>'
       +vals.map(function(v){return'<td style="text-align:right;padding:5px 8px;font-size:12px;color:'+(isInc?'var(--green)':'var(--red)')+'">'+fmt(v)+'</td>';}).join('')
       +'<td style="text-align:right;padding:5px 8px;font-size:12px;font-weight:600;color:'+(isInc?'var(--green)':'var(--red)')+'">'+fmt(tot)+'</td></tr>';
   }
@@ -4884,7 +4959,7 @@ function renderConsolidatedPL(){
 
   // Summary metric tiles
   var tiles='<div class="metrics">'
-    +rows.map(function(r){return'<div class="metric"><div class="m-lbl">'+r.c.name+'</div><div class="m-val '+(r.net>=0?'vg':'vr')+'">'+fmt(r.net)+'</div></div>';}).join('')
+    +rows.map(function(r){return'<div class="metric"><div class="m-lbl">'+escHtml(r.c.name)+'</div><div class="m-val '+(r.net>=0?'vg':'vr')+'">'+fmt(r.net)+'</div></div>';}).join('')
     +'<div class="metric"><div class="m-lbl">Combined Net</div><div class="m-val '+(grandN>=0?'vg':'vr')+'">'+fmt(grandN)+'</div></div>'
     +'</div>';
 
@@ -4949,12 +5024,12 @@ function renderRecurBanner(){
 
   var postedHtml=posted.length?'<div style="margin-bottom:6px"><strong>Auto-posted today ('+posted.length+'):</strong> '
     +posted.map(function(p){return'<span style="background:rgba(0,0,0,.12);border-radius:4px;padding:1px 6px;font-size:11px;margin:1px">'
-      +(p.type==='expense'?'▼':'▲')+' '+(p.clientName?p.clientName+' · ':'')+p.desc+' '+(p.amt?'$'+Number(p.amt).toLocaleString():'')+'</span>';}).join(' ')
+      +(p.type==='expense'?'▼':'▲')+' '+(p.clientName?escHtml(p.clientName)+' · ':'')+escHtml(p.desc)+' '+(p.amt?'$'+Number(p.amt).toLocaleString():'')+'</span>';}).join(' ')
     +'</div>':'';
 
   var upcomingHtml=upcoming.length?'<div><strong>Coming up ('+upcoming.length+'):</strong> '
     +upcoming.map(function(u){return'<span style="background:rgba(0,0,0,.12);border-radius:4px;padding:1px 6px;font-size:11px;margin:1px">'
-      +(u.type==='expense'?'▼':'▲')+' '+(u.clientName?u.clientName+' · ':'')+u.desc+' · '+u.date+'</span>';}).join(' ')
+      +(u.type==='expense'?'▼':'▲')+' '+(u.clientName?escHtml(u.clientName)+' · ':'')+escHtml(u.desc)+' · '+u.date+'</span>';}).join(' ')
     +'</div>':'';
 
   banner.style.display='block';
