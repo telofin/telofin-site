@@ -21,8 +21,11 @@ function openM(id){
     'm-rev':{'sel':'r-acct','cat':'r-c','filter':'Income'},
     'm-peinc':{'sel':'pi-acct','cat':'pi-c','filter':'Income'},
     'm-grant':{'sel':'g-acct','cat':null,'filter':null},
-    'm-je':{'sel':'je-acct','cat':null,'filter':null},
-    'm-bill':{'sel':'bill-acct','cat':'bill-cat','filter':'Liability'}
+    'm-je':{'sel':'je-acct','cat':null,'filter':null}
+    // m-bill intentionally not listed here — bill-acct is populated by the dedicated
+    // _billPopulateAcctOptions() (features.js), which groups Asset/Liability/Expense
+    // accounts by type. That used to run first and then get silently overwritten by this
+    // generic Liability-only populator every time openM('m-bill') fired.
   };
   if(acctMods[id]){
     var c2=gc();var cfg=acctMods[id];var sel2=g(cfg.sel);

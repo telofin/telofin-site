@@ -71,13 +71,15 @@ function _checkPrintBar(label){
     +'</div>';
 }
 
-// printCheck(c, bankAcct, opts): opens a print-ready window for a single check, using
-// whichever page format bankAcct.checkFormat is set to (defaults to 1 check + 2 vouchers).
-// opts: {payee, address, amount, date, memo, checkNum}.
+// _checkPageHtml(bankAcct, opts, pageBreak): builds one check-page block (the check strip
+// plus whatever stubs the format calls for). opts: {payee, address, amount, date, memo,
+// checkNum}. pageBreak forces a page break after this block, for batch printing multiple
+// checks in one print job. Shared by printCheck() (single) and printChecksBatch().
 // Note: for the "3 checks, no vouchers" format this always prints into the top check
 // position on the page — printing into the 2nd/3rd slot of a partially-used sheet isn't
-// supported yet.
-function printCheck(c,bankAcct,opts){
+// supported yet, including in the batch case (each check in a batch still consumes its own
+// full physical page).
+function _checkPageHtml(bankAcct,opts,pageBreak){
   var fmt=_checkFormat(bankAcct);
   var L=CHECK_FIELDS;
   var offX=Number(bankAcct&&bankAcct.checkOffsetX||0);
@@ -86,7 +88,7 @@ function printCheck(c,bankAcct,opts){
   var amountWordsStr=numToWords(opts.amount)+' Dollars';
   var stubsHtml='';
   for(var i=0;i<fmt.stubCount;i++)stubsHtml+=_checkStubHtml(opts.payee,opts.date,opts.amount,opts.memo,opts.checkNum);
-  var body='<div class="check-page">'
+  return '<div class="check-page"'+(pageBreak?' style="page-break-after:always"':'')+'>'
     +'<div class="check-top">'
     +'<div style="'+pos(L.date)+'font-size:11px">'+escHtml(_fmtCheckDate(opts.date))+'</div>'
     +'<div style="'+pos(L.payee)+'font-size:12px;border-bottom:1px solid #000;padding-bottom:2px"><span style="font-size:9px;color:#555">PAY TO THE ORDER OF&nbsp;&nbsp;</span>'+escHtml(opts.payee||'')+'</div>'
@@ -98,11 +100,33 @@ function printCheck(c,bankAcct,opts){
     +'</div>'
     +(stubsHtml?'<div class="check-stubs">'+stubsHtml+'</div>':'')
     +'</div>';
+}
+// printCheck(c, bankAcct, opts): opens a print-ready window for a single check, using
+// whichever page format bankAcct.checkFormat is set to (defaults to 1 check + 2 vouchers).
+// opts: {payee, address, amount, date, memo, checkNum}.
+function printCheck(c,bankAcct,opts){
+  var fmt=_checkFormat(bankAcct);
+  var body=_checkPageHtml(bankAcct,opts,false);
   var w=window.open('','_blank');
   if(!w){alert('Please allow pop-ups to print a check.');return;}
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Check #'+escHtml(opts.checkNum)+' — '+escHtml(opts.payee||'')+'</title>'+_checkStyles(fmt.checkHeight)+'</head><body>');
   w.document.write(body);
   w.document.write(_checkPrintBar('Print check'));
+  w.document.write('</body></html>');
+  w.document.close();
+}
+// printChecksBatch(c, bankAcct, checksArray): same as printCheck() but for a whole batch —
+// one print window, one check-page per entry in checksArray (each {payee, address, amount,
+// date, memo, checkNum}), in order, with a page break between them so they print as one job.
+function printChecksBatch(c,bankAcct,checksArray){
+  if(!checksArray||!checksArray.length)return;
+  var fmt=_checkFormat(bankAcct);
+  var body=checksArray.map(function(opts,i){return _checkPageHtml(bankAcct,opts,i<checksArray.length-1);}).join('');
+  var w=window.open('','_blank');
+  if(!w){alert('Please allow pop-ups to print checks.');return;}
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+checksArray.length+' checks</title>'+_checkStyles(fmt.checkHeight)+'</head><body>');
+  w.document.write(body);
+  w.document.write(_checkPrintBar('Print '+checksArray.length+' checks'));
   w.document.write('</body></html>');
   w.document.close();
 }
