@@ -726,7 +726,7 @@ function healMissingDonorLinks(c){
     // ask right now, unlike the live saveInc() sync where the entry was just typed on purpose.
     var existingDonor=c.donors.find(function(d){return d.name.toLowerCase()===donorNameLc;});
     if(!existingDonor){
-      needsReview.push({amt:amt,name:donorName});
+      needsReview.push({amt:amt,name:donorName,date:item.date||''});
       return;
     }
     // Look for a plausible existing donation already logged separately pre-fix, so this
@@ -756,7 +756,8 @@ function healMissingDonorLinks(c){
     donorLinksCreatedTotal:created.reduce(function(s,x){return s+x.amt;},0),
     donorLinksMatched:linked,
     donorLinksNeedReview:needsReview.length,
-    donorLinksNeedReviewTotal:needsReview.reduce(function(s,x){return s+x.amt;},0)
+    donorLinksNeedReviewTotal:needsReview.reduce(function(s,x){return s+x.amt;},0),
+    donorLinksNeedReviewItems:needsReview
   };
 }
 
@@ -881,7 +882,12 @@ function _acctHealShowNotice(){
       lines+='<div style="font-size:12px;color:var(--text);margin-top:.4rem"><i class="fas fa-circle-info"></i> '+s.donorLinksMatched+' donation(s) logged through the Income tab were matched up to an existing Donors-tab record instead of creating a duplicate.</div>';
     }
     if(s.donorLinksNeedReview){
-      lines+='<div style="font-size:12px;color:var(--amber,#b45309);margin-top:.4rem"><i class="fas fa-triangle-exclamation"></i> '+s.donorLinksNeedReview+' income entr'+(s.donorLinksNeedReview===1?'y':'ies')+' totaling '+fmtAmt(s.donorLinksNeedReviewTotal)+' coded to Individual Donations don\'t match any name already on your Donors tab — could be a specific donor who needs to be added there, or a batch/campaign total that isn\'t tied to one person. Nothing was changed automatically; review these on the Income tab.</div>';
+      var _reviewRows=(s.donorLinksNeedReviewItems||[]).map(function(x){
+        return'<div style="display:flex;justify-content:space-between;padding:2px 0 2px 1rem;font-size:11px"><span>'+escHtml(x.name)+(x.date?' — '+escHtml(x.date):'')+'</span><span>'+fmtAmt(x.amt)+'</span></div>';
+      }).join('');
+      lines+='<div style="font-size:12px;color:var(--amber,#b45309);margin-top:.4rem"><i class="fas fa-triangle-exclamation"></i> '+s.donorLinksNeedReview+' income entr'+(s.donorLinksNeedReview===1?'y':'ies')+' totaling '+fmtAmt(s.donorLinksNeedReviewTotal)+' coded to Individual Donations don\'t match any name already on your Donors tab — could be a specific donor who needs to be added there, or a batch/campaign total that isn\'t tied to one person. Nothing was changed automatically.</div>'
+        +_reviewRows
+        +'<div style="font-size:11px;color:var(--muted);margin-top:.4rem;padding-left:1rem;line-height:1.6"><strong>To link one:</strong> go to the Income tab, open that entry, set "Link to" (next to Source name) to <strong>Donor</strong>, then save. That creates or links the donor immediately.</div>';
     }
     return'<div style="border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;margin-bottom:.75rem">'
       +'<div style="font-weight:600;font-size:13px;margin-bottom:.4rem">'+escHtml(s.clientName)+'</div>'

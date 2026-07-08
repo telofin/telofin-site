@@ -513,8 +513,9 @@ function _bankForcePushIncome(){
     if(!_dor){_dor={id:uid(),name:_dn,donations:[]};_p.c.donors.push(_dor);}
     if(!_dor.donations)_dor.donations=[];
     if(!_dor.donations.find(function(dn){return dn.bankTxnId===_p.t.id;})){
-      _dor.donations.push({amt:_p.t.amount,date:_p.t.date||'',fund:'',rec:'Yes',ty:'No',rst:'Unrestricted',inkind:'No',fmv:0,itemDescription:'',qpq:0,bankTxnId:_p.t.id,fromBank:true});
+      _dor.donations.push({amt:_p.t.amount,date:_p.t.date||'',fund:'',rec:'Yes',ty:'No',rst:'Unrestricted',inkind:'No',fmv:0,itemDescription:'',qpq:0,bankTxnId:_p.t.id,fromBank:true,incomeRef:_p.incItem&&_p.incItem.id});
     }
+    if(_p.incItem){_p.incItem.donorId=_dor.id;_p.incItem.donationRef=true;}
   }
   sv();renderBank(_p.c);
   window._bankPendingDupInc=null;
@@ -986,6 +987,9 @@ function _bankPost(c, t) {
       // Only add the donation record if it hasn't already been linked (avoid re-post duplicates)
       var _alreadyLinked = _donor.donations.find(function(dn){ return dn.bankTxnId === t.id; });
       if (!_alreadyLinked) {
+        // incItem may be undefined here if this bank transaction hit the "possible duplicate
+        // donation" flow above and returned early — in that case linking happens later in
+        // _bankForcePushIncome() instead, keyed the same way (incomeRef -> the pushed income id).
         _donor.donations.push({
           amt: t.amount,
           date: t.date || '',
@@ -998,9 +1002,11 @@ function _bankPost(c, t) {
           itemDescription: '',
           qpq: 0,
           bankTxnId: t.id,  // link back to the bank transaction for dedup
-          fromBank: true
+          fromBank: true,
+          incomeRef: (typeof incItem!=='undefined'&&incItem)?incItem.id:undefined
         });
       }
+      if (typeof incItem!=='undefined'&&incItem){incItem.donorId=_donor.id;incItem.donationRef=true;}
     }
   } else {
     // Expense

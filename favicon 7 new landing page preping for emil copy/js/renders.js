@@ -1353,7 +1353,12 @@ function _syncIncomeToDonorTab(c,item){
   });
   if(!donor){
     donor=c.donors.find(function(d){return d.name.toLowerCase()===donorName.toLowerCase();});
-    if(!donor){donor={id:uid(),name:donorName,donations:[]};c.donors.push(donor);}
+    // autoCreated marks donors that exist only because of this income link, so
+    // _unlinkIncomeFromDonor can safely remove the whole contact (not just the gift) if it's
+    // ever unlinked with no other donations — never applies to a donor the bookkeeper added or
+    // edited directly (saveDonor() rebuilds a fresh object on every save and doesn't carry this
+    // flag forward, so touching the donor's own record "graduates" it automatically).
+    if(!donor){donor={id:uid(),name:donorName,donations:[],autoCreated:true};c.donors.push(donor);}
   }
   if(!donor.donations)donor.donations=[];
   item.donorId=donor.id;
@@ -1372,6 +1377,13 @@ function _unlinkIncomeFromDonor(c,item){
   if(!c||!item)return;
   (c.donors||[]).forEach(function(d){
     d.donations=(d.donations||[]).filter(function(dn){return dn.incomeRef!==item.id;});
+  });
+  // If that left an auto-created donor with no gifts at all, remove the whole contact — not
+  // just the donation — so unlinking a mistaken entry doesn't leave an empty "ghost" donor
+  // behind that has to be cleaned up by hand. Never touches a donor the bookkeeper actually
+  // added or edited (autoCreated only survives until saveDonor() rebuilds the record).
+  c.donors=(c.donors||[]).filter(function(d){
+    return!(d.autoCreated&&(!d.donations||!d.donations.length));
   });
   delete item.donorId;
   delete item.donationRef;
