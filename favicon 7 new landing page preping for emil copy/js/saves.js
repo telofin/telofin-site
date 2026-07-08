@@ -1610,9 +1610,11 @@ function renderReconciliation(c){
   }
 
   var _bankLink='<button class="add-btn" style="font-size:11px;padding:4px 10px" onclick="var b=document.querySelector(\'[data-panel=bank]\');if(b)switchTab({target:b},\'bank\')"><i class="fas fa-building-columns"></i> Import via Bank tab</button>';
+  var _bankIdx=selAcct.type==='bank'&&selAcct.ref?(c.bankAccounts||[]).indexOf(selAcct.ref):-1;
+  var _checkSettingsLink=_bankIdx>=0?'<button class="add-btn" style="font-size:11px;padding:4px 10px" onclick="editBankAcct('+_bankIdx+')" title="Set check numbering for printing checks from this account"><i class="fas fa-gear"></i> Check settings</button>':'';
   var acctPicker=allAccts.length>1?'<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap"><span style="font-size:12px;color:var(--muted)">Account:</span><div class="sw"><select onchange="RECON_ACCT=this.value;renderReconciliation(gc())">'+allAccts.map(function(a){return'<option value="'+a.id+'"'+(RECON_ACCT===a.id?' selected':'')+'>'+escHtml(a.name)+'</option>';}).join('')+'</select></div>'
-  +_bankLink
-  +'</div>':'<div style="margin-bottom:.75rem;display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:var(--muted)">Account: <strong>'+escHtml(selAcct.name)+'</strong></span>'+_bankLink+'</div>';
+  +_bankLink+_checkSettingsLink
+  +'</div>':'<div style="margin-bottom:.75rem;display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:var(--muted)">Account: <strong>'+escHtml(selAcct.name)+'</strong></span>'+_bankLink+_checkSettingsLink+'</div>';
 
   // Get per-account recon state
   var stateKey='reconState_'+RECON_ACCT;
@@ -2093,13 +2095,46 @@ var BANK_ACCT_EI=-1;
 function saveBankAcct(){
   var c=gc();if(!c.bankAccounts)c.bankAccounts=[];
   var name=g('ba-name').value.trim();if(!name){alert('Please enter an account name.');return;}
-  var item={id:BANK_ACCT_EI>=0?(c.bankAccounts[BANK_ACCT_EI].id||uid()):uid(),name:name,type:g('ba-type').value,last4:g('ba-last4').value.trim()};
+  var old=BANK_ACCT_EI>=0?c.bankAccounts[BANK_ACCT_EI]:null;
+  var nextCheckVal=g('ba-next-check')&&g('ba-next-check').value.trim();
+  var item={id:old?(old.id||uid()):uid(),name:name,type:g('ba-type').value,last4:g('ba-last4').value.trim(),nextCheckNum:nextCheckVal?Number(nextCheckVal):(old&&old.nextCheckNum||''),checkFormat:g('ba-check-format')&&g('ba-check-format').value||'voucher2',checkOffsetX:Number(g('ba-check-offx')&&g('ba-check-offx').value||0),checkOffsetY:Number(g('ba-check-offy')&&g('ba-check-offy').value||0)};
   if(BANK_ACCT_EI>=0)c.bankAccounts[BANK_ACCT_EI]=item;else c.bankAccounts.push(item);
   // Auto-create COA account for this bank
   if(!c.accounts)c.accounts=[];
   var coaExists=c.accounts.find(function(a){return a.name===name&&a.type==='Asset';});
   if(!coaExists){var nextCode=_nextAcctCode(c,'Asset');c.accounts.push({id:uid(),code:nextCode,name:name,type:'Asset',cat:name});c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});}
-  BANK_ACCT_EI=-1;sv();renderReconciliation(c);closeM('m-bank-acct');['ba-name','ba-last4'].forEach(function(id){var el=g(id);if(el)el.value='';});
+  BANK_ACCT_EI=-1;sv();renderReconciliation(c);closeM('m-bank-acct');['ba-name','ba-last4','ba-next-check'].forEach(function(id){var el=g(id);if(el)el.value='';});
+  if(g('ba-check-offx'))g('ba-check-offx').value=0;
+  if(g('ba-check-offy'))g('ba-check-offy').value=0;
+  _checkOffsetReadout();
+}
+// _nudgeCheckOffset(axis, delta): the calibration arrow buttons in the bank-account modal.
+// Adjusts the hidden ba-check-offx/y input by a fixed step (inches) instead of making the
+// bookkeeper type decimals, then updates the visible readout.
+function _nudgeCheckOffset(axis,delta){
+  var input=g('ba-check-off'+axis);if(!input)return;
+  input.value=Math.round((Number(input.value||0)+delta)*100)/100;
+  _checkOffsetReadout();
+}
+function _checkOffsetReadout(){
+  var x=g('ba-check-offx'),y=g('ba-check-offy'),readout=g('ba-check-offset-readout');
+  if(!readout)return;
+  readout.textContent=Number((x&&x.value)||0).toFixed(2)+'", '+Number((y&&y.value)||0).toFixed(2)+'"';
+}
+function editBankAcct(i){
+  var c=gc();if(!c||!c.bankAccounts||!c.bankAccounts[i])return;
+  BANK_ACCT_EI=i;
+  var b=c.bankAccounts[i];
+  g('ba-name').value=b.name||'';
+  g('ba-type').value=b.type||'checking';
+  g('ba-last4').value=b.last4||'';
+  if(g('ba-next-check'))g('ba-next-check').value=b.nextCheckNum||'';
+  if(g('ba-check-format'))g('ba-check-format').value=b.checkFormat||'voucher2';
+  if(g('ba-check-offx'))g('ba-check-offx').value=b.checkOffsetX||0;
+  if(g('ba-check-offy'))g('ba-check-offy').value=b.checkOffsetY||0;
+  _checkOffsetReadout();
+  var t=g('m-bank-acct-title');if(t)t.textContent='Edit bank account';
+  openM('m-bank-acct');
 }
 function deleteBankAcct(id){
   var c=gc();if(!confirm('Remove this bank account?'))return;

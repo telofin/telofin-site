@@ -619,7 +619,7 @@ function renderAP(c){
   var rows=bills.map(function(b){
     var oi=(c.bills||[]).indexOf(b);
     return'<tr><td style="font-weight:500">'+escHtml(b.vendor||'—')+'</td><td>'+escHtml(b.desc||'—')+'</td><td class="vr">'+fmt(b.amt)+'</td><td style="color:var(--muted)">'+(b.due||'—')+'</td><td>'+apAgeBadge(b.due,b.status)+'</td>'
-    +'<td><div class="row-acts">'+billRcptCell(oi,b)+'<button class="e-btn" onclick="payBill('+oi+')" title="Mark paid" style="color:var(--green)"><i class="fas fa-check"></i></button><button class="e-btn" onclick="editBill('+oi+')">&#9998;</button><button class="d-btn" onclick="delBill('+oi+')">&#215;</button></div></td></tr>';
+    +'<td><div class="row-acts">'+billRcptCell(oi,b)+'<button class="e-btn" onclick="payBill('+oi+')" title="Pay this bill" style="color:var(--green);white-space:nowrap"><i class="fas fa-check"></i> Pay bill</button><button class="e-btn" onclick="editBill('+oi+')">&#9998;</button><button class="d-btn" onclick="delBill('+oi+')">&#215;</button></div></td></tr>';
   }).join('');
   return'<div class="card" style="border-left:3px solid var(--amber);margin-bottom:1.25rem">'
   +'<div class="c-head"><span class="c-title">Accounts payable</span><div style="display:flex;gap:6px"><button class="add-btn" onclick="printAPAging()" title="Export aging schedule PDF"><i class="fas fa-print"></i> Print aging</button><button class="add-btn" onclick="billOpenNew()">+ Enter bill</button></div></div>'

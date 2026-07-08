@@ -28,6 +28,38 @@ function sv(){
 }
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 
+// numToWords(amount): the standard legal "amount in words" line printed on a check —
+// e.g. 1234.56 -> "One thousand two hundred thirty-four and 56/100". Cents are always
+// shown as a fraction over 100, never spelled out, per standard check-writing convention.
+function numToWords(amount){
+  var n=Math.floor(Math.abs(Number(amount)||0));
+  var cents=Math.round((Math.abs(Number(amount)||0)-n)*100);
+  var ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten',
+    'Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  var tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  var scales=['','Thousand','Million','Billion'];
+  function threeDigits(x){
+    var s='';
+    if(x>=100){s+=ones[Math.floor(x/100)]+' Hundred';x=x%100;if(x)s+=' ';}
+    if(x>=20){s+=tens[Math.floor(x/10)];if(x%10)s+='-'+ones[x%10].toLowerCase();}
+    else if(x>0){s+=ones[x];}
+    return s;
+  }
+  var words='';
+  if(n===0){
+    words='Zero';
+  }else{
+    var groups=[];
+    var rem=n;
+    while(rem>0){groups.push(rem%1000);rem=Math.floor(rem/1000);}
+    for(var i=groups.length-1;i>=0;i--){
+      if(groups[i]===0)continue;
+      words+=(words?' ':'')+threeDigits(groups[i])+(scales[i]?' '+scales[i]:'');
+    }
+  }
+  return words+' and '+(cents<10?'0':'')+cents+'/100';
+}
+
 // Next available COA code for a given account type. Scoped by a.type (not by
 // string-matching the code's leading digit) so it keeps working correctly
 // once codes cross a thousand boundary (e.g. 5990 -> 6000) — the old
