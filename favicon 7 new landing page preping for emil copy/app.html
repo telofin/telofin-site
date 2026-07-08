@@ -357,6 +357,7 @@ tr:hover td{background:var(--bg)}
       <a href="https://telofin.com" class="mob-btn">← Site</a>
       <select class="mob-sel" id="mob-cl-sel" onchange="openClient(this.value)"></select>
       <button class="mob-btn" onclick="showAddClient()">+ Add</button>
+      <button class="mob-btn" onclick="openHelp()" title="Help &amp; Guidance">? Help</button>
       <button id="mob-signin-btn" class="mob-btn green" onclick="showAuthScreen()">Sign in</button>
       <button id="mob-signout-btn" class="mob-btn" style="display:none" onclick="signOut()">Sign out</button>
     </div>
@@ -455,7 +456,6 @@ tr:hover td{background:var(--bg)}
             <button class="add-btn" onclick="(function(){var c=gc();if(c){var k='fye-checked-'+c.id+'-'+new Date().getFullYear();try{localStorage.removeItem(k);}catch(e){}checkFYEExpiry(c);}})()" title="Review unreconciled transactions at fiscal year end">FYE review</button>
             <button class="add-btn" onclick="clearSampleData()" style="color:var(--red);border-color:var(--red-bg)">Clear data</button>
             <button class="add-btn" onclick="removeClient()" style="color:var(--red);border-color:var(--red-bg)">Remove</button>
-            <button class="add-btn" onclick="openHelp()" style="font-weight:600" title="Help &amp; Guidance">? Help</button>
             <button id="sb-signout-btn" class="add-btn" onclick="signOut()" style="display:none">Sign out</button>
           </div>
         </div>
