@@ -735,7 +735,10 @@ function confirmPayBill(){
   // has a real field to read/write.
   // matchId stays unset until a bank transaction is matched to this expense —
   // see bankMatchOne() in bank.js.
-  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null,bankId:(method==='check'&&bank)?bank.id:null});
+  // checkPrinted (not bankId — that's the pre-existing general "Paid from account" field, set
+  // for any payment method, not just checks) is the actual signal that a real check was issued
+  // through this flow and can be reprinted. See rb() in renders.js.
+  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null,bankId:(method==='check'&&bank)?bank.id:null,checkPrinted:method==='check'&&!!bank});
   // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
   var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
   postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);

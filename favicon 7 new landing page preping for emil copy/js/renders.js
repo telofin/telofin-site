@@ -81,36 +81,55 @@ function showRunReportMenu(btn,panelType){
     document.addEventListener('click',_close);
   },10);
 }
+// rb(type,i): row actions for a transaction row. A single "Actions" dropdown trigger
+// (see showRowActionsMenu below) instead of a row of individual buttons — that many buttons
+// per row was overflowing the column on real data. Voided/reconciled state still shows as an
+// inline badge next to the trigger, same as before.
 function rb(type,i){
   var c=gc();var item=c&&c[type]&&c[type][i];
   if(!item)return'';
   if(item.isReversal)return'<span style="font-size:10px;color:var(--muted)">reversal</span>';
-  var hasAudit=item.audit&&item.audit.length>0;
   if(item.voided){
     return'<div class="row-acts">'
       +'<span style="font-size:10px;color:var(--muted);margin-right:4px">voided</span>'
       +'<button class="e-btn" onclick="unvoidItem(\''+type+'\','+i+')" title="Un-void">↩</button>'
       +'</div>';
   }
-  // checkNum alone isn't enough to show Reprint — it's shared with ACH/Other reference numbers
-  // too (see confirmPayBill(), features.js). bankId is only ever set on the check-payment path,
-  // so requiring both is what actually distinguishes "a real check was printed for this."
-  var reprintBtn=(type==='expenses'&&item.checkNum&&item.bankId)?'<button class="add-btn" onclick="reprintCheck(\''+type+'\','+i+')" title="Reprint this check" style="font-size:11px;padding:3px 9px"><i class="fas fa-print"></i> Reprint</button>':'';
-  if(item.reconciled){
-    return'<div class="row-acts">'
-      +(hasAudit?'<button class="e-btn" onclick="openTxnAuditLog(\''+type+'\','+i+')" title="Edit history">&#128221;</button>':'')
-      +'<button class="add-btn" onclick="editItem(\''+type+'\','+i+')" title="Edit (reconciled — will warn before saving)" style="font-size:11px;padding:3px 9px">&#9998; Edit</button>'
-      +reprintBtn
-      +'<span style="font-size:10px;color:var(--muted)" title="Reconciled"><i class="fas fa-lock"></i></span>'
-      +'</div>';
-  }
   return'<div class="row-acts">'
-    +(hasAudit?'<button class="e-btn" onclick="openTxnAuditLog(\''+type+'\','+i+')" title="Edit history">&#128221;</button>':'')
-    +'<button class="add-btn" onclick="editItem(\''+type+'\','+i+')" title="Edit" style="font-size:11px;padding:3px 9px">&#9998; Edit</button>'
-    +reprintBtn
-    +'<button class="add-btn" onclick="voidItem(\''+type+'\','+i+')" title="Void & reverse" style="font-size:11px;padding:3px 9px;background:none;border:1px solid var(--border);color:var(--amber)">⊘</button>'
-    +'<button class="add-btn" onclick="delItem(\''+type+'\','+i+')" title="Delete" style="font-size:11px;padding:3px 9px;background:none;border:1px solid var(--red-bg);color:var(--red)">&#215; Delete</button>'
+    +'<button class="add-btn" onclick="showRowActionsMenu(this,\''+type+'\','+i+')" title="Actions" style="font-size:11px;padding:3px 10px"><i class="fas fa-ellipsis"></i></button>'
+    +(item.reconciled?'<span style="font-size:10px;color:var(--muted);margin-left:4px" title="Reconciled"><i class="fas fa-lock"></i></span>':'')
     +'</div>';
+}
+// showRowActionsMenu(btn,type,i): the dropdown behind rb()'s "Actions" trigger — same
+// positioned-popup pattern as showRunReportMenu above (fixed position under the trigger
+// button, closes on outside click), just listing per-row actions instead of report links.
+// Rebuilds the exact same conditional item set rb() used to render inline: audit history (if
+// any), Edit (reconciled items get a warning variant), Reprint (checkPrinted expenses only —
+// see confirmPayBill(), features.js), Void, Delete.
+function showRowActionsMenu(btn,type,i){
+  var old=g('row-acts-menu');if(old)old.parentNode.removeChild(old);
+  var c=gc();var item=c&&c[type]&&c[type][i];
+  if(!item)return;
+  var hasAudit=item.audit&&item.audit.length>0;
+  var items=[];
+  if(hasAudit)items.push({label:'Edit history',icon:'<i class="fas fa-clipboard-list"></i>',fn:'openTxnAuditLog(\''+type+'\','+i+')'});
+  items.push({label:item.reconciled?'Edit (reconciled)':'Edit',icon:'<i class="fas fa-pen"></i>',fn:'editItem(\''+type+'\','+i+')'});
+  if(type==='expenses'&&item.checkPrinted)items.push({label:'Reprint check',icon:'<i class="fas fa-print"></i>',fn:'reprintCheck(\''+type+'\','+i+')'});
+  items.push({label:'Void &amp; reverse',icon:'<i class="fas fa-ban"></i>',fn:'voidItem(\''+type+'\','+i+')',color:'var(--amber)'});
+  items.push({label:'Delete',icon:'<i class="fas fa-trash"></i>',fn:'delItem(\''+type+'\','+i+')',color:'var(--red)'});
+  var menuHtml='<div id="row-acts-menu" style="position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:170px;overflow:hidden;animation:fadeIn .12s ease">'
+    +items.map(function(it){return'<div class="rpt-menu-item" style="'+(it.color?'color:'+it.color:'')+'" onclick="'+it.fn+';var m=g(\'row-acts-menu\');if(m)m.parentNode.removeChild(m)">'+it.icon+' '+it.label+'</div>';}).join('')
+    +'</div>';
+  document.body.insertAdjacentHTML('beforeend',menuHtml);
+  var menu=g('row-acts-menu');
+  var rect=btn.getBoundingClientRect();
+  menu.style.top=(rect.bottom+4)+'px';
+  // Right-align to the trigger so the menu doesn't spill off the edge of a right-side action column.
+  menu.style.left=Math.max(4,rect.right-menu.offsetWidth)+'px';
+  setTimeout(function(){
+    function _close(e){if(!menu.contains(e.target)){menu.parentNode&&menu.parentNode.removeChild(menu);document.removeEventListener('click',_close);}};
+    document.addEventListener('click',_close);
+  },10);
 }
 // reprintCheck(type,i): reprints a check that was already issued for this expense (see
 // bankId/checkNum stored in confirmPayBill(), features.js). Asks whether the blank check was
