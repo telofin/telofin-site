@@ -781,6 +781,26 @@ function renderDonors(cc){
       +'</div></div>';
   }
 
+  // ── REVIEW: income entries logged before donor-linking existed, never decided ──
+  var unlinkedInc=_findUnlinkedDonationIncome(c);
+  var reviewCard='';
+  if(unlinkedInc.length){
+    var reviewRows=unlinkedInc.map(function(item){
+      var rid='rvw-'+escHtml(item.id);
+      return'<tr><td style="font-weight:500">'+escHtml(item.name||'—')+'</td>'
+        +'<td style="color:var(--muted);font-size:11px">'+(item.date||'—')+'</td>'
+        +'<td>'+fmt(Number(item.recv||item.proj||0))+'</td>'
+        +'<td><select id="'+rid+'" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)"><option value="">Not linked</option><option value="donor">Donor</option><option value="customer">Customer</option></select></td>'
+        +'<td><button class="add-btn" style="font-size:11px;padding:3px 10px" onclick="_reviewLinkIncome(gc(),\''+escHtml(item.id)+'\',g(\''+rid+'\').value)">Save</button></td></tr>';
+    }).join('');
+    reviewCard='<div class="card" style="margin-bottom:1rem">'
+      +'<div class="c-head"><span class="c-title"><i class="fas fa-triangle-exclamation"></i> Needs review — '+unlinkedInc.length+' income entr'+(unlinkedInc.length===1?'y':'ies')+'</span>'
+      +'<button class="add-btn" style="font-size:11px;padding:3px 10px" onclick="'+unlinkedInc.map(function(item){return'_reviewLinkIncome(gc(),\''+escHtml(item.id)+'\',g(\'rvw-'+escHtml(item.id)+'\').value);';}).join('')+'">Save all</button></div>'
+      +'<div style="font-size:12px;color:var(--muted);padding:0 1rem .5rem">Logged through the Income tab before the donor-linking option existed. Choose where each belongs, or leave "Not linked" and save to dismiss.</div>'
+      +'<table><thead><tr><th>Source name</th><th>Date</th><th>Amount</th><th>Link to</th><th></th></tr></thead><tbody>'+reviewRows+'</tbody></table>'
+      +'</div>';
+  }
+
   var cards=visibleDonors.map(function(d,_vi){
     var di=donors.indexOf(d);
     var dCash=(d.donations||[]).filter(function(dn){return dn.inkind!=='Yes';}).reduce(function(s,dn){return s+Number(dn.amt||0);},0);
@@ -855,7 +875,7 @@ function renderDonors(cc){
   var rstOpts=[['all','All restrictions'],['unrestricted','Unrestricted'],['temporarily_restricted','Temp. restricted'],['permanently_restricted','Perm. restricted']];
   var rstFilter='<div class="cat-filter"><span style="font-size:12px;color:var(--muted)">Restriction:</span><div class="sw"><select onchange="RST_F=this.value;renderDonors()">'+rstOpts.map(function(o){return'<option value="'+o[0]+'"'+(RST_F===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div></div>';
   var donorFilter=donors.length<2?'':'<div class="cat-filter"><span style="font-size:12px;color:var(--muted)">Donor:</span><div class="sw"><select onchange=\"DONOR_F=this.value===\"all\"?\"all\":this.value;renderDonors()\"><option value="all"'+(DONOR_F==='all'?' selected':'')+'>All donors</option>'+donors.map(function(d){return'<option value="'+d.id+'"'+(DONOR_F===d.id?' selected':'')+'>'+escHtml(d.name)+'</option>';}).join('')+'</select></div></div>';
-  p.innerHTML=FB()+XB('donors')+'<div class="xbar" style="margin-top:-8px;margin-bottom:4px"><button class="xbtn p" onclick="exportSchedB()" title="Export Schedule B donor data as CSV for 990 prep"><i class="fas fa-clipboard"></i> Export Schedule B</button>'+(totalInkindFMV>0?'<button class="xbtn p" onclick="exportSchedM()" title="Export Schedule M non-cash contribution detail for 990 prep"><i class="fas fa-clipboard"></i> Export Schedule M</button>':'')+'</div>'+donorFilter+rstFilter+schedBAlert+schedMAlert
+  p.innerHTML=FB()+XB('donors')+'<div class="xbar" style="margin-top:-8px;margin-bottom:4px"><button class="xbtn p" onclick="exportSchedB()" title="Export Schedule B donor data as CSV for 990 prep"><i class="fas fa-clipboard"></i> Export Schedule B</button>'+(totalInkindFMV>0?'<button class="xbtn p" onclick="exportSchedM()" title="Export Schedule M non-cash contribution detail for 990 prep"><i class="fas fa-clipboard"></i> Export Schedule M</button>':'')+'</div>'+donorFilter+rstFilter+schedBAlert+schedMAlert+reviewCard
   +'<div class="metrics"><div class="metric"><div class="m-lbl">Total donors</div><div class="m-val vb">'+donors.length+'</div></div><div class="metric"><div class="m-lbl">Total donated</div><div class="m-val vg">'+fmt(totAmt)+'</div></div><div class="metric"><div class="m-lbl">TY letters pending</div><div class="m-val va">'+pending+'</div></div></div>'
   +'<div style="margin-bottom:1.25rem"><button class="add-btn" onclick="DONOR_EI=-1;resetDonorForm();openM(\'m-donor\')">+ Add donor</button></div>'
   +(donors.length?cards:ES('No donors yet','Add your first donor to track giving history and generate thank you letters.','DONOR_EI=-1;resetDonorForm();openM(\'m-donor\')'));
@@ -1367,6 +1387,33 @@ function _syncIncomeToCustomerTab(c,item){
   if(!c.customers)c.customers=[];
   var existing=c.customers.find(function(cu){return cu.name.toLowerCase()===custName.toLowerCase();});
   if(!existing)c.customers.push({id:uid(),name:custName,email:'',phone:'',address:'',notes:'',added:new Date().toISOString()});
+}
+// Finds income entries still needing a donor/customer decision — the batch-review counterpart
+// to the one-time healMissingDonorLinks() notice (data.js). Only entries with partyType still
+// undefined qualify: every entry saved through the Income tab going forward gets partyType set
+// to at least '' (explicitly "Not linked"), so undefined can only mean a true legacy entry that
+// predates the "Link to" field and was never reviewed — not one a bookkeeper already dismissed.
+// Callable anytime (no one-time guard), which is what makes this a real ongoing editor.
+function _findUnlinkedDonationIncome(c){
+  if(!c||c.type!=='np')return[];
+  return(c.income||[]).filter(function(item){
+    if(item.deleted||item.grantId)return false;
+    if(item.donorId||item.fromBank||item.inkindRef)return false;
+    if(item.partyType!==undefined)return false;
+    return typeof _isDonationAcct==='function'&&_isDonationAcct(c,item.acctCode);
+  });
+}
+// Bulk-friendly entry point for the review card in renderDonors() — sets partyType then reuses
+// the exact same linking logic saveInc() already uses, so behavior is identical whether an
+// entry gets linked from the Income tab or from this review list.
+function _reviewLinkIncome(c,itemId,partyType){
+  var item=(c.income||[]).find(function(r){return r.id===itemId;});
+  if(!item)return;
+  item.partyType=partyType||'';
+  if(partyType==='donor')_syncIncomeToDonorTab(c,item);
+  else if(partyType==='customer')_syncIncomeToCustomerTab(c,item);
+  sv();
+  renderDonors(c);
 }
 function saveDonation(){
   var c=gc();if(!c.donors)c.donors=[];
