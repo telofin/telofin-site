@@ -36,23 +36,23 @@ function renderProjectsHTML(c){
   if(PROJ_VIEW==='summary'){
     var rows=projects.map(function(pr){
       var t=projTotals(pr);var pct=t.budget>0?Math.min(100,Math.round((t.spent/t.budget)*100)):0;
-      return'<tr><td style="font-weight:500">'+escHtml(pr.name)+'</td><td style="color:var(--muted);font-size:11px">'+(pr.desc||'—')+'</td><td>'+fmt(t.budget)+'</td><td class="vr">'+fmt(t.spent)+'</td><td class="vg">'+fmt(t.received)+'</td><td class="'+(t.remaining>=0?'vb':'vr')+'">'+fmt(t.remaining)+'</td>'
+      return'<tr><td style="font-weight:500">'+escHtml(pr.name)+'</td><td style="color:var(--muted);font-size:11px">'+escHtml(pr.desc||'—')+'</td><td>'+fmt(t.budget)+'</td><td class="vr">'+fmt(t.spent)+'</td><td class="vg">'+fmt(t.received)+'</td><td class="'+(t.remaining>=0?'vb':'vr')+'">'+fmt(t.remaining)+'</td>'
       +'<td><div class="pbar" style="min-width:60px"><div class="pfill" style="width:'+pct+'%;background:'+(pct>90?'var(--red)':pct>70?'var(--amber)':'var(--green)')+'"></div></div><div style="font-size:10px;color:var(--muted);text-align:right">'+pct+'%</div></td>'
       +'<td><button class="add-btn" style="font-size:10px;padding:3px 8px" onclick="PROJ_SEL=\''+pr.id+'\';PROJ_VIEW=\'detail\';renderBudgetMultiYear()">View →</button></td></tr>';
     }).join('');
     html='<div class="card"><div class="c-head"><span class="c-title">All projects</span></div><div style="overflow-x:auto"><table><thead><tr><th style="width:18%">Project</th><th style="width:16%">Description</th><th style="width:10%">Budget</th><th style="width:9%">Spent</th><th style="width:9%">Received</th><th style="width:9%">Remaining</th><th style="width:14%">Burn</th><th style="width:15%"></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }else if(PROJ_VIEW==='detail'){
     html=projSel+metrics;
-    if(selProj.desc)html+='<div style="font-size:12px;color:var(--muted);margin-bottom:1rem;padding:.75rem;background:var(--bg);border-radius:8px">'+selProj.desc+'</div>';
+    if(selProj.desc)html+='<div style="font-size:12px;color:var(--muted);margin-bottom:1rem;padding:.75rem;background:var(--bg);border-radius:8px">'+escHtml(selProj.desc)+'</div>';
     var pct2=st.budget>0?Math.min(100,Math.round((st.spent/st.budget)*100)):0;
-    html+='<div class="card"><div class="c-title" style="margin-bottom:.5rem">Budget burn rate</div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>Spent</span><span>'+pct2+'%</span></div><div class="pbar" style="height:10px;margin-bottom:.75rem"><div class="pfill" style="width:'+pct2+'%;background:'+(pct2>90?'var(--red)':pct2>70?'var(--amber)':'var(--green)')+'"></div></div>'+(selProj.notes?'<div style="font-size:12px;color:var(--muted)">'+selProj.notes+'</div>':'')+'</div>';
+    html+='<div class="card"><div class="c-title" style="margin-bottom:.5rem">Budget burn rate</div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>Spent</span><span>'+pct2+'%</span></div><div class="pbar" style="height:10px;margin-bottom:.75rem"><div class="pfill" style="width:'+pct2+'%;background:'+(pct2>90?'var(--red)':pct2>70?'var(--amber)':'var(--green)')+'"></div></div>'+(selProj.notes?'<div style="font-size:12px;color:var(--muted)">'+escHtml(selProj.notes)+'</div>':'')+'</div>';
   }else if(PROJ_VIEW==='budget'){
     html=projSel;
     var fy=getFiscalYear(c.fiscalYearEnd);
     var bvLabels=selProj.isMultiYear?[['proposed','Proposed'],['current','Current period'],['past','Past periods']]:[['proposed','Proposed'],['current','Current ('+fy.label+')'],['past','Past adopted']];
     var bvBar='<div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">'+bvLabels.map(function(v){return'<button class="'+(PROJ_BUDGET_VIEW===v[0]?'sv-btn':'add-btn')+'" style="font-size:11px;padding:4px 12px" onclick="PROJ_BUDGET_VIEW=\''+v[0]+'\';renderBudgetMultiYear()">'+v[1]+'</button>';}).join('')+'</div>';
     html+=bvBar;
-    if(c.type==='np'){var grants=c.grants||[];var linkedGrant=selProj.grantId?grants.find(function(gr){return gr.id===selProj.grantId;}):null;if(linkedGrant)html+='<div style="font-size:11px;color:var(--np);margin-bottom:.75rem;padding:.5rem .75rem;background:var(--bg);border-radius:8px;display:inline-block">&#128196; Linked grant: <strong>'+linkedGrant.name+'</strong></div>';}
+    if(c.type==='np'){var grants=c.grants||[];var linkedGrant=selProj.grantId?grants.find(function(gr){return gr.id===selProj.grantId;}):null;if(linkedGrant)html+='<div style="font-size:11px;color:var(--np);margin-bottom:.75rem;padding:.5rem .75rem;background:var(--bg);border-radius:8px;display:inline-block">&#128196; Linked grant: <strong>'+escHtml(linkedGrant.name)+'</strong></div>';}
     if(PROJ_BUDGET_VIEW==='current'){
       var curLines=[],periodLabel='',pExp2=(c.expenses||[]).filter(function(e){return e.projectId===selProj.id;}),pInc2=c.type==='sb'?(c.revenue||[]).filter(function(r){return r.projectId===selProj.id;}):(c.income||[]).filter(function(r){return r.projectId===selProj.id;});
       if(selProj.isMultiYear){
@@ -248,9 +248,9 @@ function renderCOA(c){
       var isInactive=a.active===false;
       var unusedBadge=uses===0?'<span class="badge b-red" style="margin-left:6px;font-size:9px">unused</span>':'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+uses+' use'+(uses===1?'':'s')+'</span>';
       var inactiveBadge=isInactive?'<span class="badge b-gray" style="margin-left:6px;font-size:9px">inactive</span>':'';
-      return'<tr data-coa-code="'+(a.code||'').toLowerCase()+'" data-coa-name="'+(a.name||'').toLowerCase()+'" style="'+(isInactive?'opacity:0.45':'')+'">'
-      +'<td style="font-weight:500;color:var(--muted);font-size:11px;font-family:monospace">'+a.code+'</td>'
-      +'<td>'+a.name+(a.f990?'<span class="badge b-gray" style="margin-left:6px;font-size:9px">990: '+a.f990+'</span>':'')+unusedBadge+inactiveBadge+'</td>'
+      return'<tr data-coa-code="'+escHtml((a.code||'').toLowerCase())+'" data-coa-name="'+escHtml((a.name||'').toLowerCase())+'" style="'+(isInactive?'opacity:0.45':'')+'">'
+      +'<td style="font-weight:500;color:var(--muted);font-size:11px;font-family:monospace">'+escHtml(a.code)+'</td>'
+      +'<td>'+escHtml(a.name)+(a.f990?'<span class="badge b-gray" style="margin-left:6px;font-size:9px">990: '+escHtml(a.f990)+'</span>':'')+unusedBadge+inactiveBadge+'</td>'
       +'<td><span class="badge '+typeColors[t]+'">'+t+'</span></td>'
       +'<td><button class="e-btn" onclick="openGLAccount(\''+a.code+'\')" title="View ledger">&#128196;</button>'
       +'<button class="e-btn" onclick="toggleAcctActive('+oi+')" title="'+(isInactive?'Mark active':'Mark inactive')+'" style="color:'+(isInactive?'var(--green)':'var(--muted)')+'">&#9679;</button>'
@@ -267,7 +267,7 @@ function renderCOA(c){
   +(inactiveCount>0?'<button class="xbtn" onclick="window._coaShowInactive='+(!_showInactive)+';renderCOA(gc())" style="font-size:11px;color:var(--muted)">'+(_showInactive?'Hide':'Show')+' inactive ('+inactiveCount+')</button>':'')
   +'</div>'
   // Inline search — filters rows without re-rendering the panel
-  +'<div style="padding:.25rem 0 .75rem"><div style="position:relative"><input id="coa-search" type="text" placeholder="Search accounts by code or name…" autocomplete="off" style="width:100%;padding:7px 36px 7px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:DM Sans,sans-serif;outline:none;"><span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none">⌕</span></div></div>'
+  +'<div style="padding:.25rem 0 .75rem"><div style="position:relative"><input id="coa-search" type="text" placeholder="Search accounts by code or name…" autocomplete="off" style="width:100%;padding:7px 36px 7px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:DM Sans,sans-serif;outline:none;"><span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none"><i class="fas fa-magnifying-glass"></i></span></div></div>'
   +'<div class="insight"><div class="ins-lbl">Chart of accounts</div>Select an account when entering transactions. <strong style="color:var(--red)">Unused</strong> accounts have no transactions and can be safely deleted.'+(c.type==='np'?' 990 line references shown for IRS Form 990 reporting.':'')+'</div>'
   +'<div class="card" id="coa-table">'+html+'</div>'
   +loanSection;
@@ -321,16 +321,11 @@ function resetAcctForm(){
   // Auto-suggest next Expense account code
   var c=gc();if(!c||!c.accounts)return;
   var codeEl=g('acct-code');if(!codeEl)return;
-  var used5=c.accounts.filter(function(a){return a.code&&a.code.indexOf('5')===0;}).map(function(a){return parseInt(a.code)||0;});
-  var next=used5.length?(Math.max.apply(null,used5)+10):5010;
-  codeEl.value=String(next);
+  codeEl.value=_nextAcctCode(c,'Expense');
   // Re-suggest when type changes
   var typeEl=g('acct-type');
   if(typeEl){typeEl.onchange=function(){
-    var prefix={Income:'4',Expense:'5',Asset:'1',Liability:'2',Equity:'3'}[typeEl.value]||'5';
-    var used=c.accounts.filter(function(a){return a.code&&a.code.indexOf(prefix)===0;}).map(function(a){return parseInt(a.code)||0;});
-    var nextC=used.length?(Math.max.apply(null,used)+10):parseInt(prefix+'010');
-    codeEl.value=String(nextC);
+    codeEl.value=_nextAcctCode(c,typeEl.value||'Expense');
   };}
 }
 function editAcct(i){var c=gc();if(!c.accounts[i])return;ACCT_EI=i;var a=c.accounts[i];g('acct-code').value=a.code||'';g('acct-name').value=a.name||'';g('acct-type').value=a.type||'Expense';if(g('acct-fund'))g('acct-fund').value=a.fund||'';openM('m-coa');}
@@ -340,6 +335,8 @@ function saveAcct(){
   var code=g('acct-code').value.trim();var name=g('acct-name').value.trim();
   if(!code||!name){alert('Code and name are required.');return;}
   var existing=ACCT_EI>=0?c.accounts[ACCT_EI]:null;
+  var codeClash=c.accounts.find(function(a){return a.code===code&&a!==existing;});
+  if(codeClash&&!confirm('Account code '+code+' is already used by "'+codeClash.name+'". Two accounts sharing a code will get mixed together on Trial Balance and reports.\n\nSave anyway?'))return;
   var item={id:ACCT_EI>=0?(c.accounts[ACCT_EI].id||uid()):uid(),code:code,name:name,type:g('acct-type').value,cat:name,fund:g('acct-fund')&&g('acct-fund').value||''};
   // Preserve active flag — never reset it on edit
   if(existing&&existing.active===false)item.active=false;
@@ -376,7 +373,7 @@ function renderGL(c){
   var p=g('p-gl');if(!p||!c)return;
   var accts=c.accounts||[];
   var txns=[];
-  function addTxns(items,amtKey,sign,panel){(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat)||('CAT:'+(r.cat||'Uncategorized'));txns.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
+  function addTxns(items,amtKey,sign,panel){var acctType=panel==='Expense'?'Expense':'Income';(items||[]).forEach(function(r){var code=r.acctCode||lookupAcctByCAT(c,r.cat,acctType)||('CAT:'+(r.cat||'Uncategorized'));txns.push({code:code,date:fmtDate(r.date||''),desc:r.desc||r.name||'',amt:Number(r[amtKey]||0)*sign,panel:panel});});}
   if(c.type==='np'){addTxns(c.income||[],'recv',1,'Income');addTxns(c.expenses||[],'amt',1,'Expense');}
   else if(c.type==='sb'){addTxns(c.revenue||[],'act',1,'Revenue');addTxns(c.expenses||[],'amt',1,'Expense');}
   else{addTxns(c.income||[],'amt',1,'Income');addTxns(c.expenses||[],'amt',1,'Expense');}
@@ -402,7 +399,7 @@ function renderGL(c){
   }
 
   // Only show COA accounts in the filter dropdown (not virtual CAT: codes)
-  var selOpts='<option value="">All accounts</option>'+accts.map(function(a){return'<option value="'+a.code+'"'+(GL_ACCT===a.code?' selected':'')+'>'+a.code+' '+a.name+'</option>';}).join('');
+  var selOpts='<option value="">All accounts</option>'+accts.map(function(a){return'<option value="'+a.code+'"'+(GL_ACCT===a.code?' selected':'')+'>'+a.code+' '+escHtml(a.name)+'</option>';}).join('');
   var totalTxns=0,grandTotal=0,totalDebits=0,totalCredits=0;
 
   var sections=acctCodes.map(function(code){
@@ -413,16 +410,16 @@ function renderGL(c){
     var rows=items.map(function(t){
       running+=t.amt;
       return'<tr><td style="color:var(--muted);font-size:11px">'+(t.date||'—')+'</td>'
-      +'<td>'+t.desc+'</td>'
+      +'<td>'+escHtml(t.desc)+'</td>'
       +'<td style="color:var(--muted);font-size:11px">'+t.panel+'</td>'
       +'<td class="'+(t.amt>=0?'vg':'vr')+'">'+fmt(t.amt)+'</td>'
       +'<td style="font-size:11px;color:var(--muted)">'+fmt(running)+'</td></tr>';
     }).join('');
     totalTxns+=items.length;grandTotal+=running;
-    items.forEach(function(t){if(t.amt>=0)totalDebits+=t.amt;else totalCredits+=Math.abs(t.amt);});
+    items.forEach(function(t){var isInc=t.panel==='Income'||t.panel==='Revenue';if(isInc)totalCredits+=Math.abs(t.amt);else totalDebits+=Math.abs(t.amt);});
     return'<div class="card" style="margin-bottom:1rem">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">'
-    +'<div>'+(acct.code?'<span style="font-size:12px;font-weight:500;color:var(--muted)">'+acct.code+'</span> ':'')+' <span style="font-size:14px;font-weight:500">'+acct.name+'</span>'+(acct.type?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">'+acct.type+'</span>':'')+(isCat?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">Untagged</span>':'')+'</div>'
+    +'<div>'+(acct.code?'<span style="font-size:12px;font-weight:500;color:var(--muted)">'+acct.code+'</span> ':'')+' <span style="font-size:14px;font-weight:500">'+escHtml(acct.name)+'</span>'+(acct.type?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">'+acct.type+'</span>':'')+(isCat?'<span class="badge b-gray" style="margin-left:8px;font-size:9px">Untagged</span>':'')+'</div>'
     +'<div style="font-size:13px;font-weight:500" class="'+(running>=0?'vg':'vr')+'">Balance: '+fmt(running)+'</div></div>'
     +'<table><thead><tr><th style="width:11%">Date</th><th style="width:40%">Description</th><th style="width:16%">Source</th><th style="width:14%">Amount</th><th style="width:19%">Running balance</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }).join('');
@@ -431,7 +428,7 @@ function renderGL(c){
   +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">'
   +'<span style="font-size:12px;color:var(--muted)">Account:</span>'
   +'<div class="sw"><select onchange="GL_ACCT=this.value||null;renderGL(gc())">'+selOpts+'</select></div>'
-  +(GL_ACCT?'<button class="add-btn" onclick="GL_ACCT=null;renderGL(gc())">✕ All accounts</button>':'')+'</div>'
+  +(GL_ACCT?'<button class="add-btn" onclick="GL_ACCT=null;renderGL(gc())"><i class="fas fa-xmark"></i> All accounts</button>':'')+'</div>'
   +'<div class="metrics"><div class="metric"><div class="m-lbl">Accounts with activity</div><div class="m-val vb">'+acctCodes.length+'</div></div><div class="metric"><div class="m-lbl">Total transactions</div><div class="m-val">'+totalTxns+'</div></div><div class="metric"><div class="m-lbl">Total debits</div><div class="m-val vg">'+fmt(totalDebits)+'</div></div><div class="metric"><div class="m-lbl">Total credits</div><div class="m-val vr">'+fmt(totalCredits)+'</div></div></div>'
   +sections;
 }
@@ -522,7 +519,7 @@ function renderPayroll(c){
   }).join('');
   return'<div class="card" style="border-left:3px solid var(--blue);margin-bottom:1.25rem">'
   +'<div class="c-head"><span class="c-title">Payroll</span>'
-  +'<div style="display:flex;gap:8px"><button class="add-btn" onclick="dlTpl(\'payroll\')">⬇ Template</button><label class="add-btn" style="cursor:pointer">⬆ Upload CSV<input type="file" accept=".csv,.xlsx" style="display:none" onchange="importPayroll(this)"></label></div></div>'
+  +'<div style="display:flex;gap:8px"><button class="add-btn" onclick="dlTpl(\'payroll\')"><i class="fas fa-arrow-down"></i> Template</button><label class="add-btn" style="cursor:pointer"><i class="fas fa-arrow-up"></i> Upload CSV<input type="file" accept=".csv,.xlsx" style="display:none" onchange="importPayroll(this)"></label></div></div>'
   +(runs.length
     ?'<div style="display:flex;gap:16px;margin-bottom:.75rem;font-size:12px">'
     +'<span>Gross wages: <strong>'+fmt(totGross)+'</strong></span>'
@@ -622,55 +619,129 @@ function renderAP(c){
   var rows=bills.map(function(b){
     var oi=(c.bills||[]).indexOf(b);
     return'<tr><td style="font-weight:500">'+escHtml(b.vendor||'—')+'</td><td>'+escHtml(b.desc||'—')+'</td><td class="vr">'+fmt(b.amt)+'</td><td style="color:var(--muted)">'+(b.due||'—')+'</td><td>'+apAgeBadge(b.due,b.status)+'</td>'
-    +'<td><div class="row-acts">'+billRcptCell(oi,b)+'<button class="e-btn" onclick="payBill('+oi+')" title="Mark paid" style="color:var(--green)">✓</button><button class="e-btn" onclick="editBill('+oi+')">&#9998;</button><button class="d-btn" onclick="delBill('+oi+')">&#215;</button></div></td></tr>';
+    +'<td><div class="row-acts">'+billRcptCell(oi,b)+'<button class="e-btn" onclick="payBill('+oi+')" title="Mark paid" style="color:var(--green)"><i class="fas fa-check"></i></button><button class="e-btn" onclick="editBill('+oi+')">&#9998;</button><button class="d-btn" onclick="delBill('+oi+')">&#215;</button></div></td></tr>';
   }).join('');
   return'<div class="card" style="border-left:3px solid var(--amber);margin-bottom:1.25rem">'
-  +'<div class="c-head"><span class="c-title">Accounts payable</span><div style="display:flex;gap:6px"><button class="add-btn" onclick="printAPAging()" title="Export aging schedule PDF">🖨 Print aging</button><button class="add-btn" onclick="BILL_EI=-1;resetBillForm();openM(\'m-bill\')">+ Enter bill</button></div></div>'
+  +'<div class="c-head"><span class="c-title">Accounts payable</span><div style="display:flex;gap:6px"><button class="add-btn" onclick="printAPAging()" title="Export aging schedule PDF"><i class="fas fa-print"></i> Print aging</button><button class="add-btn" onclick="billOpenNew()">+ Enter bill</button></div></div>'
   +agingHtml
   +(bills.length
     ?'<table><thead><tr><th style="width:16%">Vendor</th><th style="width:22%">Description</th><th style="width:10%">Amount</th><th style="width:11%">Due</th><th style="width:12%">Age</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>'
     :'<div style="font-size:12px;color:var(--muted)">No open bills. Enter a bill to track what you owe before it hits your bank.</div>')
   +'</div>';
 }
+// Populate the bill modal's expense-account dropdown with live Expense-type
+// accounts from the COA. Re-run every time the modal opens so newly added
+// accounts show up, and so edits to an existing bill pre-select the right one.
+function _billPopulateAcctOptions(selectedCode){
+  var c=gc();if(!c)return;
+  var sel=g('bill-acct');if(!sel)return;
+  var expAccts=(c.accounts||[]).filter(function(a){return a.type==='Expense'&&a.active!==false;});
+  sel.innerHTML='<option value="">— Select expense account —</option>'
+    +expAccts.map(function(a){
+      return '<option value="'+a.code+'"'+(selectedCode===a.code?' selected':'')+'>'+a.code+' '+escHtml(a.name)+'</option>';
+    }).join('');
+}
+function billOpenNew(){BILL_EI=-1;resetBillForm();_billPopulateAcctOptions('');openM('m-bill');}
 function saveBill(){
   var c=gc();if(!c.bills)c.bills=[];
   // PERIOD LOCK GUARD — check bill received date
   var _billLockDate=g('bill-recv')&&g('bill-recv').value.trim();
   if(_billLockDate&&isDateLocked(c,_billLockDate)){periodLockAlert(c.closedThrough);return;}
   var vendor=sanitizeInput(g('bill-vendor').value.trim());if(!vendor){alert('Please enter a vendor name.');return;}
+  var acctCode=g('bill-acct')&&g('bill-acct').value;
+  if(!acctCode){alert('Please select an expense account for this bill.');return;}
+  var acctObj=(c.accounts||[]).find(function(a){return a.code===acctCode;});
   var billId=BILL_EI>=0?(c.bills[BILL_EI].id||uid()):uid();
-  var item={id:billId,vendor:vendor,desc:sanitizeInput(g('bill-desc').value.trim()),amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:g('bill-acct')&&g('bill-acct').value||'2010',cat:g('bill-cat').value||'Accounts Payable',status:'Unpaid',notes:g('bill-notes').value};
+  var item={id:billId,vendor:vendor,desc:sanitizeInput(g('bill-desc').value.trim()),amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:acctCode,cat:(acctObj&&acctObj.cat)||'Uncategorized',status:'Unpaid',notes:g('bill-notes').value};
   var isNew=BILL_EI<0;
   if(BILL_EI>=0)c.bills[BILL_EI]=item;else c.bills.push(item);
   // AP ACCRUAL: on new bill entry post Dr Expense / Cr AP (accrual basis)
   // On edit we void the old ledger entry and repost to keep amounts in sync
   if(!isNew&&item.ledgerEntryId){voidLedgerEntry(c,item.ledgerEntryId);}
-  var expAcct=item.acctCode||'2010';var apCode=_defaultAPCode(c);
-  var le=postToLedger(c,expAcct,apCode,item.amt,'Bill received: '+vendor+(item.desc?' — '+item.desc:''),'bill',billId);
+  var apCode=_defaultAPCode(c);
+  var le=postToLedger(c,acctCode,apCode,item.amt,'Bill received: '+vendor+(item.desc?' — '+item.desc:''),'bill',billId);
   if(le)item.ledgerEntryId=le.id;
   BILL_EI=-1;sv();renderAll();closeM('m-bill');resetBillForm();
 }
+// PAY_BILL_I: index of the bill currently in the "Pay bill" modal (payBill() below).
+var PAY_BILL_I=-1;
 function payBill(i){
   var c=gc();if(!c.bills[i])return;
   var b=c.bills[i];
   // PERIOD LOCK GUARD
   if(isDateLocked(c,todayNum())){periodLockAlert(c.closedThrough);return;}
-  // Prompt for check/ACH number before confirm so user can cancel cleanly
-  var instrNum=window.prompt('Check or ACH number (leave blank to skip):','');
-  if(instrNum===null)return;// Cancel pressed
-  instrNum=(instrNum||'').trim();
+  PAY_BILL_I=i;
+  var sum=g('pb-summary');if(sum)sum.textContent='Pay "'+b.vendor+'" — '+fmt(b.amt)+(b.desc?' ('+b.desc+')':'');
+  var bankSel=g('pb-bank');
+  if(bankSel){
+    var banks=c.bankAccounts||[];
+    bankSel.innerHTML=banks.length
+      ?banks.map(function(bk,bi){return'<option value="'+bi+'">'+escHtml(bk.name)+'</option>';}).join('')
+      :'<option value="">— No bank accounts set up —</option>';
+  }
+  if(g('pb-refnum'))g('pb-refnum').value='';
+  if(g('pb-method'))g('pb-method').value='check';
+  _payBillMethodChanged();
+  _payBillBankChanged();
+  openM('m-pay-bill');
+}
+function _payBillMethodChanged(){
+  var method=g('pb-method')&&g('pb-method').value;
+  var checkFields=g('pb-check-fields');if(checkFields)checkFields.style.display=method==='check'?'block':'none';
+  var refRow=g('pb-ref-row');if(refRow)refRow.style.display=method==='check'?'none':'block';
+}
+function _payBillBankChanged(){
+  var c=gc();var bankSel=g('pb-bank');if(!c||!bankSel||bankSel.value==='')return;
+  var bank=(c.bankAccounts||[])[Number(bankSel.value)];
+  var checkNumEl=g('pb-checknum');
+  if(checkNumEl&&bank)checkNumEl.value=bank.nextCheckNum||'';
+}
+// confirmPayBill(): the "Mark paid" action in the m-pay-bill modal. Same accounting behavior
+// as the old window.prompt()-based payBill() (Dr AP / Cr Cash, checkNum on the resulting
+// expense) — this only changes how the check/ACH/reference number is captured, and adds an
+// optional check-print step when the method is Check. See printCheck() in checks.js.
+function confirmPayBill(){
+  var c=gc();if(PAY_BILL_I<0||!c.bills[PAY_BILL_I])return;
+  var b=c.bills[PAY_BILL_I];
+  var method=g('pb-method')&&g('pb-method').value||'other';
+  var instrNum='',bank=null;
+  if(method==='check'){
+    var bankSel=g('pb-bank');
+    if(!bankSel||bankSel.value===''){alert('Please add a bank account first (Reconciliation tab) before paying by check.');return;}
+    bank=(c.bankAccounts||[])[Number(bankSel.value)];
+    instrNum=(g('pb-checknum')&&g('pb-checknum').value||'').trim();
+    if(!instrNum){alert('Please enter a check number.');return;}
+  }else{
+    instrNum=(g('pb-refnum')&&g('pb-refnum').value||'').trim();
+  }
   var memo=b.vendor+(b.desc?' — '+b.desc:'')+(instrNum?' ['+instrNum+']':'');
   if(!confirm('Mark "'+b.vendor+'" bill for '+fmt(b.amt)+' as paid and post to expenses?'))return;
   b.status='Paid';b.paidDate=todayNum();b.instrNum=instrNum||'';
   if(!c.expenses)c.expenses=[];
   var expId=uid();
-  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||''});
+  // checkNum stored as structured data (not just in the memo string) so the
+  // bank feed can show "Check #1472" when offering a match, and so printCheck()
+  // has a real field to read/write.
+  // matchId stays unset until a bank transaction is matched to this expense —
+  // see bankMatchOne() in bank.js.
+  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null});
   // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
   var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
   postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);
-  sv();renderAll();
+  // Advance the bank account's check sequence so the next bill/expense suggests the next number.
+  if(method==='check'&&bank){
+    var bankIdx=c.bankAccounts.indexOf(bank);
+    var numPart=parseInt(instrNum,10);
+    if(bankIdx>=0&&!isNaN(numPart))c.bankAccounts[bankIdx].nextCheckNum=numPart+1;
+  }
+  sv();renderAll();closeM('m-pay-bill');
+  PAY_BILL_I=-1;
+  if(method==='check'&&bank){
+    var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===b.vendor.toLowerCase();});
+    if(typeof printCheck==='function')printCheck(c,bank,{payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum});
+  }
 }
-function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';if(g('bill-acct'))g('bill-acct').value=b.acctCode||'';openM('m-bill');}
+function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';_billPopulateAcctOptions(b.acctCode||'');openM('m-bill');}
 function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;c.bills.splice(i,1);sv();renderAll();}
 function resetBillForm(){['bill-vendor','bill-desc','bill-amt','bill-recv','bill-due','bill-cat','bill-notes'].forEach(function(id){var el=g(id);if(el)el.value='';});}
 
@@ -697,7 +768,7 @@ function printAPAging(){
     {label:'Current',bills:ag.cur,cls:'color:#1D9E75'}
   ];
   var body='<h2 style="margin:0 0 4px">Accounts Payable Aging Schedule</h2>';
-  body+='<div style="color:#888;font-size:11px;margin-bottom:1.5rem">As of '+today()+' &nbsp;·&nbsp; '+c.name+'</div>';
+  body+='<div style="color:#888;font-size:11px;margin-bottom:1.5rem">As of '+today()+' &nbsp;·&nbsp; '+escHtml(c.name)+'</div>';
   // Summary table
   body+='<table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:12px">';
   body+='<thead><tr style="background:#f5f3ee"><th style="padding:6px 8px;text-align:left">Bucket</th><th style="padding:6px 8px;text-align:right">Amount</th><th style="padding:6px 8px;text-align:right">Bills</th></tr></thead><tbody>';
@@ -742,7 +813,7 @@ function renderCC(c){
       +'<td><div class="row-acts"><button class="e-btn" style="color:var(--green)" onclick="markCCPaid('+oi+')" title="Mark cleared">\u2713</button><button class="d-btn" onclick="delItem(\'expenses\','+oi+')" title="Delete">&#215;</button></div></td></tr>';
     }).join('');
     html+='<div class="card" style="border-left:3px solid var(--blue);margin-bottom:1.25rem">'
-    +'<div class="c-head"><span class="c-title">'+cc.name+(cc.last4?' \u00b7\u00b7\u00b7'+cc.last4:'')+'</span>'
+    +'<div class="c-head"><span class="c-title">'+escHtml(cc.name)+(cc.last4?' \u00b7\u00b7\u00b7'+cc.last4:'')+'</span>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +(limit?'<span style="font-size:11px;color:var(--muted)">'+fmt(balance)+' / '+fmt(limit)+'</span>':'<span style="font-size:11px;color:var(--muted)">Balance: '+fmt(balance)+'</span>')
     +'<button class="add-btn" onclick="openCCCharge(\''+cc.id+'\')">+ Charge</button>'
@@ -799,7 +870,7 @@ function renderAmortization(c){
   var loan=loans[LOAN_VIEW];
   var amort=calcAmort(Number(loan.principal),Number(loan.rate),Number(loan.term));
   var posted=loan.posted||[];
-  var loanOpts=loans.map(function(l,i){return'<option value="'+i+'"'+(LOAN_VIEW===i?' selected':'')+'>'+l.name+'</option>';}).join('');
+  var loanOpts=loans.map(function(l,i){return'<option value="'+i+'"'+(LOAN_VIEW===i?' selected':'')+'>'+escHtml(l.name)+'</option>';}).join('');
   var remaining=Number(loan.principal)-amort.rows.filter(function(r){return posted.indexOf(r.num)>=0;}).reduce(function(s,r){return s+r.principal;},0);
   var rows=amort.rows.map(function(r){
     var isPosted=posted.indexOf(r.num)>=0;
@@ -811,7 +882,7 @@ function renderAmortization(c){
     +'<td class="vr">'+fmt(r.interest)+'</td>'
     +'<td class="vb">'+fmt(r.principal)+'</td>'
     +'<td>'+fmt(r.balance)+'</td>'
-    +'<td>'+(isPosted?'<span class="badge b-green">Posted ✓</span>':'<button class="add-btn" onclick="postLoanPayment('+LOAN_VIEW+','+r.num+','+r.interest.toFixed(2)+','+r.principal.toFixed(2)+')" style="font-size:10px;padding:3px 8px">Post interest</button>')+'</td>'
+    +'<td>'+(isPosted?'<span class="badge b-green">Posted <i class="fas fa-check"></i></span>':'<button class="add-btn" onclick="postLoanPayment('+LOAN_VIEW+','+r.num+','+r.interest.toFixed(2)+','+r.principal.toFixed(2)+')" style="font-size:10px;padding:3px 8px">Post interest</button>')+'</td>'
     +'</tr>';
   }).join('');
   el.innerHTML='<div class="card" style="border-left:3px solid var(--blue)">'
@@ -869,18 +940,18 @@ function renderProcurement(c){
     var bidCount=bids.filter(function(x){return x.scope===b.scope&&x.status!=='Rejected';}).length;
     return b.federal&&bidCount<3;
   });
-  var flagHtml=needsFlag.length?'<div class="insight" style="border-left-color:var(--red)"><div class="ins-lbl">⚠ Compliance alert</div>'+needsFlag.length+' federal solicitation'+(needsFlag.length===1?'':'s')+' with fewer than 3 bids documented. Add bids or mark as sole source with justification.</div>':'';
+  var flagHtml=needsFlag.length?'<div class="insight" style="border-left-color:var(--red)"><div class="ins-lbl"><i class="fas fa-triangle-exclamation"></i> Compliance alert</div>'+needsFlag.length+' federal solicitation'+(needsFlag.length===1?'':'s')+' with fewer than 3 bids documented. Add bids or mark as sole source with justification.</div>':'';
   var rows=filt.map(function(b){
     var oi=bids.indexOf(b);
     var bidCount=bids.filter(function(x){return x.scope===b.scope;}).length;
     var fedFlag=b.federal&&bidCount<3&&b.status!=='Sole source'&&b.status!=='Awarded'&&b.status!=='Rejected';
     return'<tr'+(fedFlag?' style="background:rgba(192,57,43,.06)"':'')+'>'
     +'<td style="font-weight:500">'+escHtml(b.vendor||'—')+'</td>'
-    +'<td>'+(b.scope||'—')+'</td>'
+    +'<td>'+escHtml(b.scope||'—')+'</td>'
     +'<td>'+fmt(b.bidAmt)+'</td>'
     +'<td style="color:var(--muted)">'+(b.bidDate||'—')+'</td>'
     +'<td>'+SB(b.status||'Soliciting')+'</td>'
-    +'<td>'+(b.grantId?'<span class="badge b-green" style="font-size:9px;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block">'+grantName(b.grantId).slice(0,22)+'</span>':b.fund?'<span class="badge '+(b.fund?'b-blue':'b-gray')+'">'+b.fund+'</span>':'—')+'</td>'
+    +'<td>'+(b.grantId?'<span class="badge b-green" style="font-size:9px;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block">'+escHtml(grantName(b.grantId).slice(0,22))+'</span>':b.fund?'<span class="badge '+(b.fund?'b-blue':'b-gray')+'">'+escHtml(b.fund)+'</span>':'—')+'</td>'
     +'<td>'+(b.federal?'<span class="badge b-blue">Federal</span>':'—')+'</td>'
     +'<td><div class="row-acts"><button class="e-btn" onclick="editProc('+oi+')" title="Edit">&#9998;</button>'
     +(b.docRef?'<a href="'+b.docRef+'" target="_blank" class="e-btn" title="View document" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">&#128196;</a>':'')
@@ -1740,7 +1811,7 @@ function onVendorSelect(sel){
 function vendorOpts(c){
   var opts='<option value="">— Select vendor (optional) —</option>';
   (c&&c.vendors||[]).sort(function(a,b){return a.name.localeCompare(b.name);}).forEach(function(v){
-    opts+='<option value="'+v.id+'">'+escHtml(v.name)+(v.is1099?' ★':'')+'</option>';
+    opts+='<option value="'+v.id+'">'+escHtml(v.name)+(v.is1099?' <i class="fas fa-star"></i>':'')+'</option>';
   });
   return opts;
 }
@@ -1956,7 +2027,7 @@ function renderForm990(c){
   var untagged=exp.filter(function(e){return!e.functional;}).length;
   var warnHtml=untagged
     ?'<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:.6rem .9rem;font-size:12px;margin-bottom:1rem;color:#7a5c00">'
-      +'⚠ <strong>'+untagged+' expense(s)</strong> have no functional classification and default to Management & General. '
+      +'<i class="fas fa-triangle-exclamation"></i> <strong>'+untagged+' expense(s)</strong> have no functional classification and default to Management & General. '
       +'Edit each expense and set the Functional field to Program, Management, or Fundraising.'
       +'</div>'
     :'';
@@ -2013,7 +2084,7 @@ function renderForm990(c){
     +'Verify all amounts with your CPA before filing Form 990.'
     +'</div>'
     +'<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:.6rem .9rem;font-size:11px;color:#795548;margin-bottom:.75rem">'
-    +'<strong>⚠️ Internal use only.</strong> This report is for reference and planning purposes only. It does not constitute a filed IRS Form 990 and is not transmitted to the IRS or any government agency. Always consult a qualified CPA or tax professional before filing.'
+    +'<strong><i class="fas fa-triangle-exclamation"></i> Internal use only.</strong> This report is for reference and planning purposes only. It does not constitute a filed IRS Form 990 and is not transmitted to the IRS or any government agency. Always consult a qualified CPA or tax professional before filing.'
     +'</div>';
 
   // Part VIII: Statement of Revenue
@@ -2074,7 +2145,7 @@ function renderForm990(c){
   p.innerHTML=FB()+XB()
     +'<div class="xbar" style="margin-bottom:.75rem">'
     +'<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:6px 10px;font-size:10px;color:#795548;margin-bottom:.75rem">'
-    +'<strong>⚠️ INTERNAL USE ONLY</strong> — This document is not a filed IRS Form 990 and is not transmitted to the IRS or any government agency. Consult a qualified CPA or tax professional before filing.'
+    +'<strong><i class="fas fa-triangle-exclamation"></i> INTERNAL USE ONLY</strong> — This document is not a filed IRS Form 990 and is not transmitted to the IRS or any government agency. Consult a qualified CPA or tax professional before filing.'
     +'</div>'
     +'<span style="font-weight:700;font-size:15px">Form 990 — Financial Statements</span>'
     +' <span class="badge b-blue" style="font-size:11px;vertical-align:middle">'+_npTypeLabel+'</span>'
@@ -2094,6 +2165,13 @@ var _f990SchBPublic=false;
 function _schedBHtml(){
   var c=gc();if(!c)return'';
   var THRESHOLD=5000;
+  // Collect every bankTxnId already represented in a donor's donation records —
+  // these are the same dollar event as some c.income[] entry and must not be
+  // counted again under the income entry's raw description.
+  var donorLinkedBankTxnIds={};
+  (c.donors||[]).forEach(function(d){
+    (d.donations||[]).forEach(function(dn){ if(dn.bankTxnId) donorLinkedBankTxnIds[dn.bankTxnId]=true; });
+  });
   var donors=(c.donors||[]).map(function(d){
     var total=(d.donations||[]).reduce(function(s,dn){return s+Number(dn.amt||0);},0);
     return{name:d.name||'Unknown',email:d.email||'',total:total};
@@ -2101,10 +2179,12 @@ function _schedBHtml(){
   // Include income entries above threshold not already in donor records.
   // Exclude grant-linked income (grantId set) — grants are institutional funders,
   // not individual contributors, and their donations are already tracked via donor records.
+  // Exclude any income entry whose bankTxnId is already linked to a donor's donation record —
+  // same money, already counted above, regardless of whether the names match.
   var incDonors={};
   var donorNames=donors.map(function(d){return(d.name||'').toLowerCase().trim();});
   (c.income||[]).filter(function(r){
-    return !r.deleted&&!r.voided&&!r.grantId;
+    return !r.deleted&&!r.voided&&!r.grantId&&!(r.bankTxnId&&donorLinkedBankTxnIds[r.bankTxnId]);
   }).forEach(function(r){
     var k=r.name||'Unknown';
     if(!incDonors[k])incDonors[k]=0;
@@ -2540,8 +2620,8 @@ function renderClosedPeriods(c){
 
   // History list — derive closed period "events" from the audit trail or just show current
   var statusHtml=hasLock
-    ? '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><div style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;letter-spacing:.04em">🔒 LOCKED</div><div style="font-size:13px;color:var(--text)">All transactions dated on or before <strong>'+cur+'</strong> are hard-blocked from being added or edited.</div></div>'
-    : '<div style="display:flex;align-items:center;gap:.75rem"><div style="background:var(--green);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;letter-spacing:.04em">✓ OPEN</div><div style="font-size:13px;color:var(--muted)">No periods are currently locked. All dates are editable.</div></div>';
+    ? '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><div style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;letter-spacing:.04em"><i class="fas fa-lock"></i> LOCKED</div><div style="font-size:13px;color:var(--text)">All transactions dated on or before <strong>'+cur+'</strong> are hard-blocked from being added or edited.</div></div>'
+    : '<div style="display:flex;align-items:center;gap:.75rem"><div style="background:var(--green);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;letter-spacing:.04em"><i class="fas fa-check"></i> OPEN</div><div style="font-size:13px;color:var(--muted)">No periods are currently locked. All dates are editable.</div></div>';
 
   var lockForm='<div class="card" style="margin-top:1rem"><div class="c-head"><span class="c-title">Set lock date</span></div>'
     +'<div style="padding:.75rem 1rem 1rem">'
@@ -2549,12 +2629,12 @@ function renderClosedPeriods(c){
     +'<div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">'
     +'<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Lock through date (MM/DD/YYYY)</label>'
     +'<input type="text" id="cp-date" placeholder="e.g. 12/31/2024" value="'+escHtml(cur)+'" style="width:180px" onblur="autoDate(this)" oninput="autoDate(this)"></div>'
-    +'<button class="sv-btn" onclick="applyPeriodLock()" style="margin-bottom:0">🔒 Lock period</button>'
-    +(hasLock?'<button onclick="clearPeriodLock()" style="background:none;border:1px solid var(--red);color:var(--red);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">✕ Clear lock</button>':'')
+    +'<button class="sv-btn" onclick="applyPeriodLock()" style="margin-bottom:0"><i class="fas fa-lock"></i> Lock period</button>'
+    +(hasLock?'<button onclick="clearPeriodLock()" style="background:none;border:1px solid var(--red);color:var(--red);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600"><i class="fas fa-xmark"></i> Clear lock</button>':'')
     +'</div></div></div>';
 
   var warningHtml='<div class="card" style="margin-top:1rem;border-left:3px solid var(--amber)"><div style="padding:.75rem 1rem">'
-    +'<div style="font-weight:600;font-size:13px;margin-bottom:.5rem">⚠ What gets blocked</div>'
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:.5rem"><i class="fas fa-triangle-exclamation"></i> What gets blocked</div>'
     +'<div style="font-size:12px;color:var(--muted);line-height:1.6">'
     +'Expenses · Income / Revenue · Donations · Journal entries · Invoices · Mileage · Fixed assets · Fund transfers · Restriction releases · Bill payments'
     +'<br><br>Recurring auto-posts and depreciation entries dated in the locked period will also be suppressed. Budget, reconciliation, and balance sheet opening balances are not affected.'
@@ -2576,7 +2656,7 @@ function applyPeriodLock(){
   if(_parts.length!==3||isNaN(Number(_parts[0]))||isNaN(Number(_parts[1]))||isNaN(Number(_parts[2]))){
     alert('Please enter a valid date in MM/DD/YYYY format.');return;
   }
-  if(!confirm('⚠ Lock all periods through '+dateVal+'?\n\nNo transactions dated on or before this date can be added or edited until the lock is cleared.\n\nThis is recommended after finalizing a fiscal year or tax period.'))return;
+  if(!confirm('Lock all periods through '+dateVal+'?\n\nNo transactions dated on or before this date can be added or edited until the lock is cleared.\n\nThis is recommended after finalizing a fiscal year or tax period.'))return;
   c.closedThrough=dateVal;
   sv();
   renderClosedPeriods(c);
@@ -2645,6 +2725,17 @@ function clearPeriodLock(){
       }
       // Always save cloud data back to localStorage so next load is instant
       try{localStorage.setItem(STORE,JSON.stringify(D));}catch(e){}
+    }
+    // STEP 5 — Supabase table restructuring: one-time migration into the
+    // new per-table schema. Safe to call on every sign-in — it checks for
+    // existing rows in the new `clients` table and no-ops instantly if this
+    // person has already been migrated. Runs only after their real cloud
+    // data has loaded above, so it's never migrating stale/local data.
+    // Fails silently on error and simply retries next sign-in — see
+    // migration.js for the full safety design (backup-first, no data
+    // deleted, nothing touched if anything goes wrong).
+    if(typeof maybeMigrateUser==='function'){
+      try{await maybeMigrateUser();}catch(e){console.error('[migration] unexpected error:',e);}
     }
   }
 
@@ -2892,7 +2983,7 @@ function renderChecklistHTML(listType,type,c){
     +'<input type="checkbox" '+(chk?'checked':'')+' '+(locked?'disabled':'')
     +' onchange="toggleCheck(\''+period+'\',\''+item.id+'\')" style="margin-top:2px;cursor:'+(locked?'default':'pointer')+';width:15px;height:15px;flex-shrink:0">'
     +'<span style="font-size:13px;'+(chk?'color:var(--muted);text-decoration:line-through;':'')+'">'+item.label
-    +(item.custom&&!locked?' <button onclick="removeCustomItem(\''+period+'\',\''+item.id+'\')" style="font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;margin-left:4px">✕</button>':'')
+    +(item.custom&&!locked?' <button onclick="removeCustomItem(\''+period+'\',\''+item.id+'\')" style="font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;margin-left:4px"><i class="fas fa-xmark"></i></button>':'')
     +'</span></div>';
   }).join('');
 
@@ -2906,13 +2997,13 @@ function renderChecklistHTML(listType,type,c){
   html+='<div style="margin-top:1rem;padding:.75rem;background:var(--bg);border-radius:10px">';
   html+='<div style="font-size:12px;font-weight:600;margin-bottom:.5rem">Sign-off</div>';
   if(data.selfSign){
-    html+='<div style="font-size:12px;color:var(--green);margin-bottom:.5rem">✓ Signed off by <strong>'+data.selfSign.name+'</strong> on '+data.selfSign.date+'</div>';
+    html+='<div style="font-size:12px;color:var(--green);margin-bottom:.5rem"><i class="fas fa-check"></i> Signed off by <strong>'+escHtml(data.selfSign.name)+'</strong> on '+data.selfSign.date+'</div>';
   } else {
-    html+='<button class="sv-btn" style="font-size:12px;margin-bottom:.5rem" onclick="selfSignOff(\''+period+'\')">✓ Sign off as preparer</button>';
+    html+='<button class="sv-btn" style="font-size:12px;margin-bottom:.5rem" onclick="selfSignOff(\''+period+'\')"><i class="fas fa-check"></i> Sign off as preparer</button>';
   }
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:.5rem">';
   if(data.bossName){
-    html+='<span style="font-size:12px;color:var(--muted)">Reviewed by: <strong>'+data.bossName+'</strong>'+(data.bossDate?' on '+data.bossDate:'')+'</span>';
+    html+='<span style="font-size:12px;color:var(--muted)">Reviewed by: <strong>'+escHtml(data.bossName)+'</strong>'+(data.bossDate?' on '+data.bossDate:'')+'</span>';
     html+='<button class="add-btn" style="font-size:11px;padding:3px 10px" onclick="clearBossSignoff(\''+period+'\')">Edit</button>';
   } else {
     html+='<input type="text" id="boss-name-'+period+'" placeholder="Reviewer / boss name" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);width:170px">';
@@ -2920,7 +3011,7 @@ function renderChecklistHTML(listType,type,c){
     html+='<button class="add-btn" style="font-size:12px" onclick="saveBossSignoff(\''+period+'\')">Save</button>';
   }
   html+='</div>';
-  html+='<div style="margin-top:.75rem"><button class="add-btn" style="font-size:11px;padding:4px 12px" onclick="downloadChecklist(\''+period+'\')">⬇ Download checklist</button></div>';
+  html+='<div style="margin-top:.75rem"><button class="add-btn" style="font-size:11px;padding:4px 12px" onclick="downloadChecklist(\''+period+'\')"><i class="fas fa-arrow-down"></i> Download checklist</button></div>';
   html+='</div>';
   return html;
 }
@@ -3054,7 +3145,7 @@ function renderHelpInsights(c){
 
   if(!insights.length){
     return'<div style="padding:1.5rem;text-align:center;color:var(--muted)">'
-    +'<div style="font-size:24px;margin-bottom:.5rem">✓</div>'
+    +'<div style="font-size:24px;margin-bottom:.5rem"><i class="fas fa-check"></i></div>'
     +'<div style="font-weight:600;margin-bottom:.25rem">No critical issues found</div>'
     +'<div style="font-size:12px">Add more dated transactions to get richer insights over time.</div>'
     +'</div>';
@@ -3062,7 +3153,7 @@ function renderHelpInsights(c){
 
   var colorMap={red:'var(--red)',amber:'var(--amber)',green:'var(--green)'};
   var bgMap={red:'rgba(239,68,68,.07)',amber:'rgba(245,158,11,.07)',green:'rgba(34,197,94,.07)'};
-  var iconMap={red:'🚨',amber:'⚠️',green:'✓'};
+  var iconMap={red:'<i class="fas fa-triangle-exclamation"></i>',amber:'<i class="fas fa-triangle-exclamation"></i>',green:'<i class="fas fa-check"></i>'};
 
   return'<div style="font-size:11px;color:var(--muted);margin-bottom:.75rem">Based on your current data. These are signals, not verdicts.</div>'
   +insights.map(function(ins){
@@ -3256,7 +3347,7 @@ function renderDocumentVault(c){
   // Auth gate
   if(!isSignedIn()){
     p.innerHTML='<div style="max-width:480px;margin:3rem auto;text-align:center;padding:2rem">'
-      +'<div style="font-size:2rem;margin-bottom:1rem">📎</div>'
+      +'<div style="font-size:2rem;margin-bottom:1rem"><i class="fas fa-paperclip"></i></div>'
       +'<div style="font-size:16px;font-weight:600;margin-bottom:.5rem">Sign in to access your document vault</div>'
       +'<div style="font-size:13px;color:var(--muted);margin-bottom:1.5rem;line-height:1.6">Receipts, invoices, tax returns, certificates and more — securely stored and tied to your account.</div>'
       +'<button class="sv-btn" onclick="showAuthScreen()" style="max-width:200px;margin:0 auto">Sign in</button>'
@@ -3278,7 +3369,7 @@ function renderDocumentVault(c){
   // Document rows
   var rows=filtered.length?filtered.map(function(doc){
     var ext=(doc.name||'').split('.').pop().toLowerCase();
-    var icon=ext==='pdf'?'📄':ext==='xlsx'||ext==='csv'?'📊':ext==='docx'?'📝':(ext==='jpg'||ext==='jpeg'||ext==='png'||ext==='heic')?'🖼':'📎';
+    var icon=ext==='pdf'?'<i class="fas fa-file"></i>':ext==='xlsx'||ext==='csv'?'<i class="fas fa-chart-column"></i>':ext==='docx'?'<i class="fas fa-pen-to-square"></i>':(ext==='jpg'||ext==='jpeg'||ext==='png'||ext==='heic')?'<i class="fas fa-image"></i>':'<i class="fas fa-paperclip"></i>';
     var sz=doc.size?_fmtSize(doc.size):'';
     var dt=doc.uploadedAt?new Date(doc.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
     return'<tr>'
@@ -3290,14 +3381,14 @@ function renderDocumentVault(c){
       +'<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+dt+'</td>'
       +'<td><div class="row-acts">'
         +'<button class="e-btn" onclick="vaultOpen(\''+escHtml(doc.id)+'\')" title="View" style="color:var(--accent)">View</button>'
-        +(doc.linkedTo?'<button class="e-btn" title="Linked to transaction" style="color:var(--muted);cursor:default">🔗</button>':'')
+        +(doc.linkedTo?'<button class="e-btn" title="Linked to transaction" style="color:var(--muted);cursor:default"><i class="fas fa-link"></i></button>':'')
         +'<button class="d-btn" onclick="vaultDelete(\''+escHtml(doc.id)+'\')" title="Delete">&#215;</button>'
       +'</div></td>'
       +'</tr>';
   }).join(''):'<tr><td colspan="7" style="text-align:center;padding:2.5rem;color:var(--muted);font-size:13px">No documents in this category yet.</td></tr>';
 
   p.innerHTML='<div class="card">'
-    +'<div class="c-head"><span class="c-title">📎 Document Vault</span>'
+    +'<div class="c-head"><span class="c-title"><i class="fas fa-paperclip"></i> Document Vault</span>'
     +'<button class="add-btn" onclick="vaultOpenUpload()">+ Upload document</button></div>'
     +'<p style="font-size:12px;color:var(--muted);margin:0 0 1rem;line-height:1.5">Store tax returns, exemption certificates, grant agreements, board minutes, W-9s, and more. Files are private and tied to your account.</p>'
     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1rem">'+pills+'</div>'
@@ -3322,14 +3413,14 @@ function _vaultLinkedSection(c){
   var rows='';
   expWithReceipt.forEach(function(e,i){
     var oi=(c.expenses||[]).indexOf(e);
-    rows+='<tr><td style="font-size:15px">🧾</td><td style="font-size:12px;font-weight:500">'+escHtml(e.desc||'Expense')+'</td><td><span class="badge b-amber" style="font-size:10px">Receipt</span></td><td style="font-size:11px;color:var(--muted)">'+(e.date||'')+'</td><td style="font-size:11px;color:var(--muted)">'+fmt(e.amt)+'</td><td><div class="row-acts"><button class="e-btn" onclick="vaultViewReceipt(\'expenses\','+oi+')" style="color:var(--accent)">View</button><button class="d-btn" onclick="vaultDetachReceipt(\'expenses\','+oi+')">&#215;</button></div></td></tr>';
+    rows+='<tr><td style="font-size:15px"><i class="fas fa-receipt"></i></td><td style="font-size:12px;font-weight:500">'+escHtml(e.desc||'Expense')+'</td><td><span class="badge b-amber" style="font-size:10px">Receipt</span></td><td style="font-size:11px;color:var(--muted)">'+(e.date||'')+'</td><td style="font-size:11px;color:var(--muted)">'+fmt(e.amt)+'</td><td><div class="row-acts"><button class="e-btn" onclick="vaultViewReceipt(\'expenses\','+oi+')" style="color:var(--accent)">View</button><button class="d-btn" onclick="vaultDetachReceipt(\'expenses\','+oi+')">&#215;</button></div></td></tr>';
   });
   billsWithInvoice.forEach(function(b){
     var oi=(c.bills||[]).indexOf(b);
-    rows+='<tr><td style="font-size:15px">📄</td><td style="font-size:12px;font-weight:500">'+escHtml(b.vendor||'Bill')+(b.desc?' — '+escHtml(b.desc):'')+'</td><td><span class="badge b-amber" style="font-size:10px">Invoice</span></td><td style="font-size:11px;color:var(--muted)">'+(b.received||b.due||'')+'</td><td style="font-size:11px;color:var(--muted)">'+fmt(b.amt)+'</td><td><div class="row-acts"><button class="e-btn" onclick="vaultViewBillInvoice('+oi+')" style="color:var(--accent)">View</button><button class="d-btn" onclick="vaultDetachBillInvoice('+oi+')">&#215;</button></div></td></tr>';
+    rows+='<tr><td style="font-size:15px"><i class="fas fa-file"></i></td><td style="font-size:12px;font-weight:500">'+escHtml(b.vendor||'Bill')+(b.desc?' — '+escHtml(b.desc):'')+'</td><td><span class="badge b-amber" style="font-size:10px">Invoice</span></td><td style="font-size:11px;color:var(--muted)">'+(b.received||b.due||'')+'</td><td style="font-size:11px;color:var(--muted)">'+fmt(b.amt)+'</td><td><div class="row-acts"><button class="e-btn" onclick="vaultViewBillInvoice('+oi+')" style="color:var(--accent)">View</button><button class="d-btn" onclick="vaultDetachBillInvoice('+oi+')">&#215;</button></div></td></tr>';
   });
   return'<div class="card" style="margin-top:1rem">'
-    +'<div class="c-title" style="margin-bottom:.75rem">🧾 Attached receipts &amp; invoices</div>'
+    +'<div class="c-title" style="margin-bottom:.75rem"><i class="fas fa-receipt"></i> Attached receipts &amp; invoices</div>'
     +'<table><thead><tr><th style="width:28px"></th><th>Description</th><th>Type</th><th>Date</th><th>Amount</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'</div>';
 }
@@ -3405,7 +3496,7 @@ async function vaultSaveUpload(){
     c.bills[linkedOi].invoiceUrl='';
   }
   sv();
-  if(stEl){stEl.style.color='var(--green)';stEl.textContent='Uploaded ✓';}
+  if(stEl){stEl.style.color='var(--green)';stEl.innerHTML='Uploaded <i class="fas fa-check"></i>';}
   // PDF import offer — if uploaded file is a PDF, offer to import its data
   if(file.name.toLowerCase().endsWith('.pdf')&&typeof pdfMaybeImport==='function'){
     setTimeout(function(){pdfMaybeImport(file,c.id);},900);
@@ -3661,7 +3752,7 @@ function renderComplianceBanner(c){
   if(!warns.length)return'';
   var sevColor={red:'var(--red)',amber:'var(--amber)',info:'var(--blue)'};
   var sevBg={red:'#fff5f5',amber:'#fffbeb',info:'#f0f7ff'};
-  var sevIcon={red:'⚠',amber:'⚠',info:'ℹ'};
+  var sevIcon={red:'<i class="fas fa-triangle-exclamation"></i>',amber:'<i class="fas fa-triangle-exclamation"></i>',info:'<i class="fas fa-circle-info"></i>'};
   return'<div style="margin-bottom:1rem">'
     +warns.map(function(w){
       return'<div style="display:flex;align-items:flex-start;gap:10px;padding:.75rem 1rem;background:'+sevBg[w.sev]+';border-left:3px solid '+sevColor[w.sev]+';border-radius:0 8px 8px 0;margin-bottom:6px;font-size:12px;line-height:1.5">'
@@ -3701,13 +3792,13 @@ function renderReimbursements(cc){
       +'<td style="color:var(--muted);font-size:11px">'+(r.submitted?r.submitted.split('T')[0]:'—')+'</td>'
       +'<td style="color:var(--muted);font-size:11px">'+(r.cat||'—')+'</td>'
       +'<td><span class="badge '+sev+'">'+r.status+'</span></td>'
-      +'<td>'+(noReceipt?'<span style="color:var(--red)" title="No receipt">📄🚩</span>'+(flagOld?' <span style="font-size:10px;color:var(--red)">('+daysOld+'d)</span>':''):'<span style="color:var(--green)">✓</span>')+'</td>'
+      +'<td>'+(noReceipt?'<span style="color:var(--red)" title="No receipt"><i class="fas fa-file"></i><i class="fas fa-flag"></i></span>'+(flagOld?' <span style="font-size:10px;color:var(--red)">('+daysOld+'d)</span>':''):'<span style="color:var(--green)"><i class="fas fa-check"></i></span>')+'</td>'
       +'<td><div style="display:flex;gap:4px;flex-wrap:wrap">'
-      +(r.status==='Pending'?'<button class="e-btn" style="font-size:10px;padding:2px 7px" onclick="approveReimb(\''+r.id+'\')">✓ Approve</button>':'')
-      +(r.status==='Approved'?'<button class="sv-btn" style="font-size:10px;padding:2px 7px" onclick="markReimbPaid(\''+r.id+'\')">💳 Paid</button>':'')
-      +(r.receiptPath||r.receiptUrl?'<button class="e-btn" style="font-size:10px;padding:2px 7px" onclick="viewReimbReceipt(\''+r.id+'\')">📄</button>':'')
-      +'<button class="e-btn" style="font-size:10px;padding:2px 7px" onclick="REIMB_EI='+ri+';openReimbModal()">✎</button>'
-      +'<button class="d-btn" style="font-size:10px;padding:2px 7px" onclick="deleteReimb(\''+r.id+'\')">✕</button>'
+      +(r.status==='Pending'?'<button class="e-btn" style="font-size:10px;padding:2px 7px" onclick="approveReimb(\''+r.id+'\')"><i class="fas fa-check"></i> Approve</button>':'')
+      +(r.status==='Approved'?'<button class="sv-btn" style="font-size:10px;padding:2px 7px" onclick="markReimbPaid(\''+r.id+'\')"><i class="fas fa-credit-card"></i> Paid</button>':'')
+      +(r.receiptPath||r.receiptUrl?'<button class="e-btn" style="font-size:10px;padding:2px 7px" onclick="viewReimbReceipt(\''+r.id+'\')"><i class="fas fa-file"></i></button>':'')
+      +'<button class="e-btn" style="font-size:10px;padding:2px 7px" onclick="REIMB_EI='+ri+';openReimbModal()"><i class="fas fa-pen"></i></button>'
+      +'<button class="d-btn" style="font-size:10px;padding:2px 7px" onclick="deleteReimb(\''+r.id+'\')"><i class="fas fa-xmark"></i></button>'
       +'</div></td>'
       +'</tr>';
   }).join('');
@@ -3754,11 +3845,11 @@ function openReimbModal(){
     +'<input type="text" id="reimb-date" placeholder="MM/DD/YYYY" value="'+(r.date||'')+'" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'
     +'<div class="fl"><label>Receipt <span style="font-size:11px;color:var(--muted)">(PDF or image, max 10MB — strongly recommended)</span></label>'
     +'<input type="file" id="reimb-file" accept="application/pdf,image/*">'
-    +(r.receiptUrl||r.receiptPath?'<div style="font-size:11px;color:var(--green);margin-top:4px">✓ Receipt on file</div>':'')+'</div>'
+    +(r.receiptUrl||r.receiptPath?'<div style="font-size:11px;color:var(--green);margin-top:4px"><i class="fas fa-check"></i> Receipt on file</div>':'')+'</div>'
     +'<div class="fl"><label>Or receipt URL</label>'
     +'<input type="text" id="reimb-url" placeholder="https://..." value="'+escHtml(r.receiptUrl||'')+'"></div>'
     +'<div class="fl"><label>Notes</label>'
-    +'<textarea id="reimb-notes" placeholder="Additional context...">'+(r.notes||'')+'</textarea></div>'
+    +'<textarea id="reimb-notes" placeholder="Additional context...">'+escHtml(r.notes||'')+'</textarea></div>'
     +'<button class="sv-btn" onclick="saveReimb()">Save request</button>'
     +'</div></div>';
   document.body.appendChild(mo);
@@ -3951,7 +4042,7 @@ function openWorkplaceGivingLetter(di){
   var mo=g('m-ty-letter');
   var bodyEl=g('ty-letter-text')||g('ty-letter-body');
   if(bodyEl){bodyEl.value=letter;if(mo)mo.classList.add('open');}
-  else{var win=window.open('','_blank');if(win){win.document.write('<pre style="font-family:Georgia;font-size:14px;line-height:1.8;max-width:600px;margin:2rem auto;white-space:pre-wrap">'+letter+'</pre>');win.document.close();}}
+  else{var win=window.open('','_blank');if(win){win.document.write('<pre style="font-family:Georgia;font-size:14px;line-height:1.8;max-width:600px;margin:2rem auto;white-space:pre-wrap">'+escHtml(letter)+'</pre>');win.document.close();}}
 }
 
 // ══════════════════════════════════════════
@@ -3966,7 +4057,7 @@ function renderTodoBar(){
   function dlItem(dateStr,label,type,id,days){
     var bg=days<=5?'#fff0f0':days<=15?'#fff3e0':'#fffbeb';
     var color=days<=5?'var(--red)':days<=15?'#e65100':'var(--amber)';
-    var icon=days<=5?'🔴':days<=15?'🔶':'⚠';
+    var icon=days<=5?'<i class="fas fa-circle"></i>':days<=15?'<i class="fas fa-triangle-exclamation"></i>':'<i class="fas fa-triangle-exclamation"></i>';
     return'<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:'+bg+';border:1px solid '+color+';border-radius:20px;font-size:11px;color:'+color+';white-space:nowrap">'
       +icon+' '+escHtml(label)+' — '+days+'d'
       +'<button onclick="dismissTodo(\''+type+'\',\''+id+'\')" style="background:none;border:none;cursor:pointer;color:'+color+';font-size:13px;line-height:1;padding:0 0 0 2px;opacity:.7" title="Dismiss">×</button>'
@@ -4004,7 +4095,7 @@ function renderTodoBar(){
       if(days<=7){
         var overdue=days<0;
         var label='Follow up: '+d.name+(ix.followupNote?' — '+ix.followupNote:'');
-        var color=overdue?'var(--red)':'var(--blue)';var bg=overdue?'#fff0f0':'#e8f0fb';var icon=overdue?'🔴':'📅';
+        var color=overdue?'var(--red)':'var(--blue)';var bg=overdue?'#fff0f0':'#e8f0fb';var icon=overdue?'<i class="fas fa-circle"></i>':'<i class="fas fa-calendar"></i>';
         items.push('<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:'+bg+';border:1px solid '+color+';border-radius:20px;font-size:11px;color:'+color+';white-space:nowrap;cursor:pointer" onclick="switchTab({target:document.querySelector(\'[data-panel=donors]\')},\'donors\')">'
           +icon+' '+escHtml(label.substring(0,60)+(label.length>60?'…':''))+(overdue?' — OVERDUE':days===0?' — Today':' — '+days+'d')
           +'</span>');
@@ -4014,7 +4105,7 @@ function renderTodoBar(){
 
   if(!items.length){bar.style.display='none';return;}
   bar.style.display='block';
-  inner.innerHTML='<span style="font-size:11px;font-weight:500;color:var(--muted);margin-right:4px;flex-shrink:0">📋 To do:</span>'+items.join('')
+  inner.innerHTML='<span style="font-size:11px;font-weight:500;color:var(--muted);margin-right:4px;flex-shrink:0"><i class="fas fa-clipboard"></i> To do:</span>'+items.join('')
     +'<button onclick="switchTab({target:document.querySelector(\'[data-panel=calendar]\')},\'calendar\')" style="margin-left:auto;font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;white-space:nowrap;text-decoration:underline">View calendar →</button>';
 }
 
@@ -4053,16 +4144,16 @@ function renderCalendar(cc){
   // Grant deadlines
   (c.grants||[]).forEach(function(gr){
     if(gr.appDeadline&&gr.status!=='Closed'&&gr.status!=='Denied')
-      addEvent(gr.appDeadline,'Apply: '+gr.name,'#e65100','📝');
+      addEvent(gr.appDeadline,'Apply: '+gr.name,'#e65100','<i class="fas fa-pen-to-square"></i>');
     if(gr.deadline&&gr.status!=='Closed')
-      addEvent(gr.deadline,'Report: '+gr.name,'var(--red)','📋');
+      addEvent(gr.deadline,'Report: '+gr.name,'var(--red)','<i class="fas fa-clipboard"></i>');
   });
 
   // Donor follow-ups
   (c.donors||[]).forEach(function(d){
     (d.interactions||[]).forEach(function(ix){
       if(ix.followupDate&&!ix.completed)
-        addEvent(ix.followupDate,'Follow up: '+d.name+(ix.followupNote?' — '+ix.followupNote:''),'var(--blue)','📅');
+        addEvent(ix.followupDate,'Follow up: '+d.name+(ix.followupNote?' — '+ix.followupNote:''),'var(--blue)','<i class="fas fa-calendar"></i>');
     });
   });
 
@@ -4106,12 +4197,12 @@ function renderCalendar(cc){
     if(days>=0&&days<=60)upcoming.push({date:d,days:days,label:label,color:color,icon:icon});
   }
   (c.grants||[]).forEach(function(gr){
-    if(gr.appDeadline&&gr.status!=='Closed'&&gr.status!=='Denied')addUpcoming(gr.appDeadline,'Apply: '+gr.name,'#e65100','📝');
-    if(gr.deadline&&gr.status!=='Closed')addUpcoming(gr.deadline,'Report: '+gr.name,'var(--red)','📋');
+    if(gr.appDeadline&&gr.status!=='Closed'&&gr.status!=='Denied')addUpcoming(gr.appDeadline,'Apply: '+gr.name,'#e65100','<i class="fas fa-pen-to-square"></i>');
+    if(gr.deadline&&gr.status!=='Closed')addUpcoming(gr.deadline,'Report: '+gr.name,'var(--red)','<i class="fas fa-clipboard"></i>');
   });
   (c.donors||[]).forEach(function(d){
     (d.interactions||[]).forEach(function(ix){
-      if(ix.followupDate&&!ix.completed)addUpcoming(ix.followupDate,'Follow up: '+d.name+(ix.followupNote?' — '+ix.followupNote:''),'var(--blue)','📅');
+      if(ix.followupDate&&!ix.completed)addUpcoming(ix.followupDate,'Follow up: '+d.name+(ix.followupNote?' — '+ix.followupNote:''),'var(--blue)','<i class="fas fa-calendar"></i>');
     });
   });
   upcoming.sort(function(a,b){return a.date-b.date;});
@@ -4186,7 +4277,7 @@ function renderGrantCloseoutRpt(){
   if(reqs.length){
     reqHtml='<div class="rpt-sec" style="margin-top:1rem"><div class="rpt-ttl" style="font-size:13px;margin-bottom:.5rem">Close-Out Requirements</div>'
       +reqs.map(function(r){return'<div style="display:flex;align-items:center;gap:8px;padding:.35rem 0;border-bottom:1px solid var(--soft)">'
-        +'<span style="font-size:15px">'+(r.done?'☑':'☐')+'</span>'
+        +'<span style="font-size:15px">'+(r.done?'<i class="fas fa-square-check"></i>':'<i class="far fa-square"></i>')+'</span>'
         +'<span style="font-size:12px;'+(r.done?'':'color:var(--amber)')+'">'+escHtml(r.label)+'</span>'
         +(r.done?'':'<span style="font-size:10px;color:var(--amber);margin-left:auto">Pending</span>')
         +'</div>';}).join('')
@@ -4211,7 +4302,7 @@ function renderGrantCloseoutRpt(){
     }).join(''):'<tr><td colspan="5" style="color:var(--muted);font-size:11px;padding:.75rem">No income entries for this period.</td></tr>';
     var expRows=expItems.length?expItems.map(function(e){
       var pct=e.grantPct!=null?Number(e.grantPct):100;var allocAmt=Number(e.amt||0)*(pct/100);
-      return'<tr><td>'+escHtml(e.desc||'—')+'</td><td>'+escHtml(e.cat||'—')+'</td><td class="vr">'+(pct!==100?fmt(allocAmt)+'<span style="font-size:10px;color:var(--muted);margin-left:4px">('+pct+'% of '+fmt(e.amt)+')</span>':fmt(e.amt))+'</td><td style="color:var(--muted)">'+(e.date||'—')+'</td><td>'+(e.reconciled?'<span class="badge b-green" style="font-size:10px">✓ Reconciled</span>':'<span class="badge b-amber" style="font-size:10px">Unreconciled</span>')+'</td></tr>';
+      return'<tr><td>'+escHtml(e.desc||'—')+'</td><td>'+escHtml(e.cat||'—')+'</td><td class="vr">'+(pct!==100?fmt(allocAmt)+'<span style="font-size:10px;color:var(--muted);margin-left:4px">('+pct+'% of '+fmt(e.amt)+')</span>':fmt(e.amt))+'</td><td style="color:var(--muted)">'+(e.date||'—')+'</td><td>'+(e.reconciled?'<span class="badge b-green" style="font-size:10px"><i class="fas fa-check"></i> Reconciled</span>':'<span class="badge b-amber" style="font-size:10px">Unreconciled</span>')+'</td></tr>';
     }).join(''):'<tr><td colspan="5" style="color:var(--muted);font-size:11px;padding:.75rem">No expenses for this period.</td></tr>';
     return'<div class="card" style="margin-bottom:1rem">'
       +(multiYear?'<div class="c-title" style="margin-bottom:.75rem;font-size:13px">'+escHtml(fyLabel)+'</div>':'')
@@ -4231,7 +4322,7 @@ function renderGrantCloseoutRpt(){
     return fySection(fy,fyMap[fy]||{income:gInc,expenses:gExp});
   }).join('');
 
-  var statusBadge=gr.reconciled?'<span class="badge b-green" style="font-size:11px">✓ Reconciled</span>':'';
+  var statusBadge=gr.reconciled?'<span class="badge b-green" style="font-size:11px"><i class="fas fa-check"></i> Reconciled</span>':'';
 
   el.innerHTML='<div class="rpt-sec">'
     +selHtml
@@ -4246,7 +4337,7 @@ function renderGrantCloseoutRpt(){
     +tilesHtml
     +reqHtml
     +'<div style="margin-top:1rem">'+fySections+'</div>'
-    +(balance>0?'<div class="card" style="background:var(--amber-bg,#fffbea);border:1px solid var(--amber);margin-top:.5rem"><div style="font-size:12px;font-weight:500;color:var(--amber)">⚠ Unspent balance: '+fmt(balance)+'</div><div style="font-size:11px;color:var(--muted);margin-top:3px">Confirm with funder whether unspent funds must be returned or may be carried forward.</div></div>':'')
+    +(balance>0?'<div class="card" style="background:var(--amber-bg,#fffbea);border:1px solid var(--amber);margin-top:.5rem"><div style="font-size:12px;font-weight:500;color:var(--amber)"><i class="fas fa-triangle-exclamation"></i> Unspent balance: '+fmt(balance)+'</div><div style="font-size:11px;color:var(--muted);margin-top:3px">Confirm with funder whether unspent funds must be returned or may be carried forward.</div></div>':'')
     +'</div>';
 }
 
@@ -4331,7 +4422,7 @@ function renderGrantStatusRpt(){
   var gapsHtml=gaps.length
     ?'<div class="card" style="margin-bottom:1rem"><div class="c-title" style="margin-bottom:.5rem;font-size:13px">Compliance flags</div>'
       +gaps.map(function(g2){var col=g2.sev==='red'?'var(--red)':'var(--amber)';return'<div style="display:flex;gap:6px;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--soft);font-size:12px"><span style="color:'+col+'">●</span><span>'+g2.msg+'</span></div>';}).join('')+'</div>'
-    :'<div class="card" style="margin-bottom:1rem;background:var(--green-bg,#f0faf4);border:1px solid var(--green)"><div style="font-size:12px;color:var(--green);font-weight:500">✓ No compliance gaps</div></div>';
+    :'<div class="card" style="margin-bottom:1rem;background:var(--green-bg,#f0faf4);border:1px solid var(--green)"><div style="font-size:12px;color:var(--green);font-weight:500"><i class="fas fa-check"></i> No compliance gaps</div></div>';
 
   el.innerHTML='<div class="rpt-sec">'
     +selHtml
@@ -4358,7 +4449,7 @@ function renderGrantStatusRpt(){
     +yoyHtml
     +(reqs.length?'<div class="card"><div class="c-title" style="margin-bottom:.5rem;font-size:13px">Close-out requirements</div>'
       +reqs.map(function(r){return'<div style="display:flex;align-items:center;gap:8px;padding:.3rem 0;border-bottom:1px solid var(--soft);font-size:12px">'
-        +'<span>'+(r.done?'☑':'☐')+'</span><span style="'+(r.done?'':'color:var(--amber)')+'">'+escHtml(r.label)+'</span>'
+        +'<span>'+(r.done?'<i class="fas fa-square-check"></i>':'<i class="far fa-square"></i>')+'</span><span style="'+(r.done?'':'color:var(--amber)')+'">'+escHtml(r.label)+'</span>'
         +(r.done?'':'<span style="font-size:10px;color:var(--amber);margin-left:auto">Pending</span>')
         +'</div>';}).join('')+'</div>':'')
     +'</div>';
