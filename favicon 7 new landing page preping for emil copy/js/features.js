@@ -663,30 +663,83 @@ function saveBill(){
   if(le)item.ledgerEntryId=le.id;
   BILL_EI=-1;sv();renderAll();closeM('m-bill');resetBillForm();
 }
+// PAY_BILL_I: index of the bill currently in the "Pay bill" modal (payBill() below).
+var PAY_BILL_I=-1;
 function payBill(i){
   var c=gc();if(!c.bills[i])return;
   var b=c.bills[i];
   // PERIOD LOCK GUARD
   if(isDateLocked(c,todayNum())){periodLockAlert(c.closedThrough);return;}
-  // Prompt for check/ACH number before confirm so user can cancel cleanly
-  var instrNum=window.prompt('Check or ACH number (leave blank to skip):','');
-  if(instrNum===null)return;// Cancel pressed
-  instrNum=(instrNum||'').trim();
+  PAY_BILL_I=i;
+  var sum=g('pb-summary');if(sum)sum.textContent='Pay "'+b.vendor+'" — '+fmt(b.amt)+(b.desc?' ('+b.desc+')':'');
+  var bankSel=g('pb-bank');
+  if(bankSel){
+    var banks=c.bankAccounts||[];
+    bankSel.innerHTML=banks.length
+      ?banks.map(function(bk,bi){return'<option value="'+bi+'">'+escHtml(bk.name)+'</option>';}).join('')
+      :'<option value="">— No bank accounts set up —</option>';
+  }
+  if(g('pb-refnum'))g('pb-refnum').value='';
+  if(g('pb-method'))g('pb-method').value='check';
+  _payBillMethodChanged();
+  _payBillBankChanged();
+  openM('m-pay-bill');
+}
+function _payBillMethodChanged(){
+  var method=g('pb-method')&&g('pb-method').value;
+  var checkFields=g('pb-check-fields');if(checkFields)checkFields.style.display=method==='check'?'block':'none';
+  var refRow=g('pb-ref-row');if(refRow)refRow.style.display=method==='check'?'none':'block';
+}
+function _payBillBankChanged(){
+  var c=gc();var bankSel=g('pb-bank');if(!c||!bankSel||bankSel.value==='')return;
+  var bank=(c.bankAccounts||[])[Number(bankSel.value)];
+  var checkNumEl=g('pb-checknum');
+  if(checkNumEl&&bank)checkNumEl.value=bank.nextCheckNum||'';
+}
+// confirmPayBill(): the "Mark paid" action in the m-pay-bill modal. Same accounting behavior
+// as the old window.prompt()-based payBill() (Dr AP / Cr Cash, checkNum on the resulting
+// expense) — this only changes how the check/ACH/reference number is captured, and adds an
+// optional check-print step when the method is Check. See printCheck() in checks.js.
+function confirmPayBill(){
+  var c=gc();if(PAY_BILL_I<0||!c.bills[PAY_BILL_I])return;
+  var b=c.bills[PAY_BILL_I];
+  var method=g('pb-method')&&g('pb-method').value||'other';
+  var instrNum='',bank=null;
+  if(method==='check'){
+    var bankSel=g('pb-bank');
+    if(!bankSel||bankSel.value===''){alert('Please add a bank account first (Reconciliation tab) before paying by check.');return;}
+    bank=(c.bankAccounts||[])[Number(bankSel.value)];
+    instrNum=(g('pb-checknum')&&g('pb-checknum').value||'').trim();
+    if(!instrNum){alert('Please enter a check number.');return;}
+  }else{
+    instrNum=(g('pb-refnum')&&g('pb-refnum').value||'').trim();
+  }
   var memo=b.vendor+(b.desc?' — '+b.desc:'')+(instrNum?' ['+instrNum+']':'');
   if(!confirm('Mark "'+b.vendor+'" bill for '+fmt(b.amt)+' as paid and post to expenses?'))return;
   b.status='Paid';b.paidDate=todayNum();b.instrNum=instrNum||'';
   if(!c.expenses)c.expenses=[];
   var expId=uid();
   // checkNum stored as structured data (not just in the memo string) so the
-  // bank feed can later show "Check #1472" when offering a match, and so a
-  // future check-printing feature has a real field to read/write.
+  // bank feed can show "Check #1472" when offering a match, and so printCheck()
+  // has a real field to read/write.
   // matchId stays unset until a bank transaction is matched to this expense —
   // see bankMatchOne() in bank.js.
   c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null});
   // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
   var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
   postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);
-  sv();renderAll();
+  // Advance the bank account's check sequence so the next bill/expense suggests the next number.
+  if(method==='check'&&bank){
+    var bankIdx=c.bankAccounts.indexOf(bank);
+    var numPart=parseInt(instrNum,10);
+    if(bankIdx>=0&&!isNaN(numPart))c.bankAccounts[bankIdx].nextCheckNum=numPart+1;
+  }
+  sv();renderAll();closeM('m-pay-bill');
+  PAY_BILL_I=-1;
+  if(method==='check'&&bank){
+    var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===b.vendor.toLowerCase();});
+    if(typeof printCheck==='function')printCheck(c,bank,{payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum});
+  }
 }
 function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';_billPopulateAcctOptions(b.acctCode||'');openM('m-bill');}
 function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;c.bills.splice(i,1);sv();renderAll();}
