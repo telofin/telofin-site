@@ -759,6 +759,21 @@ tr:hover td{background:var(--bg)}
     </div>
   </div>
 </div>
+<div class="overlay" id="m-pay-bill">
+  <div class="modal">
+    <button class="cx" onclick="closeM('m-pay-bill')">&#215;</button>
+    <div class="m-title">Pay bill</div>
+    <div id="pb-summary" style="font-size:13px;color:var(--muted);margin-bottom:.75rem"></div>
+    <div class="fl" style="margin-bottom:.5rem"><label>Payment method</label><select id="pb-method" onchange="_payBillMethodChanged()"><option value="check">Check</option><option value="ach">ACH</option><option value="other">Other</option></select></div>
+    <div id="pb-check-fields">
+      <div class="fr"><div class="fl" style="margin-bottom:0"><label>Pay from account</label><select id="pb-bank" onchange="_payBillBankChanged()"></select></div><div class="fl" style="margin-bottom:0"><label>Check number</label><input type="text" id="pb-checknum"></div></div>
+    </div>
+    <div class="fl" id="pb-ref-row" style="display:none;margin-bottom:.5rem"><label>Reference # (optional)</label><input type="text" id="pb-refnum"></div>
+    <div style="display:flex;gap:8px;margin-top:.5rem">
+      <button class="sv-btn" onclick="confirmPayBill()">Mark paid</button>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="m-ty-letter">
   <div class="modal" style="max-width:560px">
     <button class="cx" onclick="closeM('m-ty-letter')">&#215;</button>
@@ -921,6 +936,7 @@ tr:hover td{background:var(--bg)}
 <script src="js/timetracking.js"></script>
 <script src="js/switcher.js"></script>
 <script src="js/bank.js"></script>
+<script src="js/checks.js"></script>
 <script>
 // Load after all scripts so every getTabs/afterSwitch patch is in place
 (function(){ if(typeof load==='function') load(); })();
