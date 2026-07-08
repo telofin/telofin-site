@@ -92,19 +92,48 @@ function rb(type,i){
       +'<button class="e-btn" onclick="unvoidItem(\''+type+'\','+i+')" title="Un-void">↩</button>'
       +'</div>';
   }
+  var reprintBtn=(type==='expenses'&&item.checkNum)?'<button class="add-btn" onclick="reprintCheck(\''+type+'\','+i+')" title="Reprint this check" style="font-size:11px;padding:3px 9px"><i class="fas fa-print"></i> Reprint</button>':'';
   if(item.reconciled){
     return'<div class="row-acts">'
       +(hasAudit?'<button class="e-btn" onclick="openTxnAuditLog(\''+type+'\','+i+')" title="Edit history">&#128221;</button>':'')
       +'<button class="add-btn" onclick="editItem(\''+type+'\','+i+')" title="Edit (reconciled — will warn before saving)" style="font-size:11px;padding:3px 9px">&#9998; Edit</button>'
+      +reprintBtn
       +'<span style="font-size:10px;color:var(--muted)" title="Reconciled"><i class="fas fa-lock"></i></span>'
       +'</div>';
   }
   return'<div class="row-acts">'
     +(hasAudit?'<button class="e-btn" onclick="openTxnAuditLog(\''+type+'\','+i+')" title="Edit history">&#128221;</button>':'')
     +'<button class="add-btn" onclick="editItem(\''+type+'\','+i+')" title="Edit" style="font-size:11px;padding:3px 9px">&#9998; Edit</button>'
+    +reprintBtn
     +'<button class="add-btn" onclick="voidItem(\''+type+'\','+i+')" title="Void & reverse" style="font-size:11px;padding:3px 9px;background:none;border:1px solid var(--border);color:var(--amber)">⊘</button>'
     +'<button class="add-btn" onclick="delItem(\''+type+'\','+i+')" title="Delete" style="font-size:11px;padding:3px 9px;background:none;border:1px solid var(--red-bg);color:var(--red)">&#215; Delete</button>'
     +'</div>';
+}
+// reprintCheck(type,i): reprints a check that was already issued for this expense (see
+// bankId/checkNum stored in confirmPayBill(), features.js). Asks whether the blank check was
+// spoiled (reprint the identical check number) or voided in favor of a fresh one (prompts for
+// the new number, updates the expense, and advances the bank account's sequence past it) —
+// either way this just calls the same printCheck() used for the original print, no new
+// print/accounting logic.
+function reprintCheck(type,i){
+  var c=gc();var item=c&&c[type]&&c[type][i];
+  if(!item||!item.checkNum)return;
+  var bank=(c.bankAccounts||[]).find(function(b){return b.id===item.bankId;});
+  if(!bank){alert('Could not find the bank account this check was paid from. If that account was renamed or removed, set up "Check settings" again from the Reconciliation tab.');return;}
+  var checkNum=item.checkNum;
+  var sameNum=confirm('Reprint Check #'+checkNum+' for '+(item.vendor1099||item.desc||'this expense')+'.\n\nOK = same check number — the blank check was spoiled/misprinted, this is an identical replacement\nCancel = use a different check number instead — that check was voided');
+  if(!sameNum){
+    var newNum=(prompt('Enter the new check number:',String(bank.nextCheckNum||''))||'').trim();
+    if(!newNum)return;
+    checkNum=newNum;
+    item.checkNum=checkNum;
+    var bankIdx=c.bankAccounts.indexOf(bank);
+    var numPart=parseInt(checkNum,10);
+    if(bankIdx>=0&&!isNaN(numPart))c.bankAccounts[bankIdx].nextCheckNum=numPart+1;
+    sv();
+  }
+  var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===(item.vendor1099||'').toLowerCase();});
+  printCheck(c,bank,{payee:item.vendor1099||item.desc||'',address:vendorRec&&vendorRec.address||'',amount:item.amt,date:item.date,memo:item.desc||'',checkNum:checkNum});
 }
 
 // ── TRANSACTION AUDIT TRAIL ─────────────────────────────────────────────────
@@ -416,6 +445,52 @@ function catSum(items,key){var cats={};items.forEach(function(r){var c=r.cat||'O
 function catF(items,fn){var cats=['all'];items.forEach(function(r){if(r.cat&&cats.indexOf(r.cat)<0)cats.push(r.cat);});if(cats.length<=2)return'';return'<div class="cat-filter"><span style="font-size:12px;color:var(--muted)">Filter:</span><div class="sw"><select onchange="CF=this.value;'+fn+'">'+cats.map(function(c){return'<option value="'+escHtml(c)+'"'+(CF===c?' selected':'')+'>'+( c==='all'?'All categories':escHtml(c))+'</option>';}).join('')+'</select></div></div>';}
 function srchBar(panelId,fn){var q=SRCH[panelId]||'';return'<div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem"><input type="text" placeholder="Search..." value="'+q.replace(/"/g,'&quot;')+'" oninput="SRCH[\''+panelId+'\']=this.value;'+fn+'" style="max-width:220px;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:DM Sans,sans-serif;outline:none">'+(q?'<button onclick="SRCH[\''+panelId+'\']=\'\';'+fn+'" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 6px"><i class="fas fa-xmark"></i> Clear</button>':'')+'</div>';}
 function srchItems(items,q,fields){if(!q)return items;var lq=q.toLowerCase();return items.filter(function(r){return fields.some(function(f){var v=r[f];return v&&String(v).toLowerCase().indexOf(lq)>=0;});});}
+// sortDateBar(panelId, fn): sort dropdown + From/To date range, same filter-bar pattern as
+// catF/srchBar above. type="date" inputs produce YYYY-MM-DD; parseDate() (state.js) already
+// handles that format alongside this app's usual MM/DD/YYYY, so no conversion is needed here.
+function sortDateBar(panelId,fn,noDate){
+  var sort=SORT_STATE[panelId]||(noDate?'amt_desc':'date_desc');
+  var range=DATE_RANGE[panelId]||{};
+  return '<div class="cat-filter" style="flex-wrap:wrap;gap:8px">'
+    +'<span style="font-size:12px;color:var(--muted)">Sort:</span>'
+    +'<div class="sw"><select onchange="SORT_STATE[\''+panelId+'\']=this.value;'+fn+'">'
+    +(noDate?'':'<option value="date_desc"'+(sort==='date_desc'?' selected':'')+'>Date: Newest first</option>'
+    +'<option value="date_asc"'+(sort==='date_asc'?' selected':'')+'>Date: Oldest first</option>')
+    +'<option value="amt_desc"'+(sort==='amt_desc'?' selected':'')+'>Amount: High to low</option>'
+    +'<option value="amt_asc"'+(sort==='amt_asc'?' selected':'')+'>Amount: Low to high</option>'
+    +'</select></div>'
+    +(noDate?'':'<span style="font-size:12px;color:var(--muted);margin-left:6px">From:</span>'
+    +'<input type="date" value="'+escHtml(range.from||'')+'" onchange="DATE_RANGE[\''+panelId+'\']=DATE_RANGE[\''+panelId+'\']||{};DATE_RANGE[\''+panelId+'\'].from=this.value;'+fn+'" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:DM Sans,sans-serif">'
+    +'<span style="font-size:12px;color:var(--muted)">To:</span>'
+    +'<input type="date" value="'+escHtml(range.to||'')+'" onchange="DATE_RANGE[\''+panelId+'\']=DATE_RANGE[\''+panelId+'\']||{};DATE_RANGE[\''+panelId+'\'].to=this.value;'+fn+'" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:DM Sans,sans-serif">')
+    +((range.from||range.to)?'<button onclick="DATE_RANGE[\''+panelId+'\']={};'+fn+'" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 6px"><i class="fas fa-xmark"></i> Clear dates</button>':'')
+    +'</div>';
+}
+function dateRangeFilterItems(items,panelId,dateField){
+  var range=DATE_RANGE[panelId];
+  if(!range||(!range.from&&!range.to))return items;
+  var from=range.from?parseDate(range.from):null;
+  var to=range.to?parseDate(range.to):null;
+  return items.filter(function(r){
+    var d=parseDate(r[dateField]);
+    if(!d)return false;
+    if(from&&d<from)return false;
+    if(to&&d>to)return false;
+    return true;
+  });
+}
+function sortListItems(items,panelId,dateField,amtField){
+  var sort=SORT_STATE[panelId]||(dateField?'date_desc':'amt_desc');
+  var sorted=items.slice();
+  sorted.sort(function(a,b){
+    if(sort==='amt_desc')return Number(b[amtField]||0)-Number(a[amtField]||0);
+    if(sort==='amt_asc')return Number(a[amtField]||0)-Number(b[amtField]||0);
+    var da=parseDate(a[dateField]),db=parseDate(b[dateField]);
+    if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;
+    return sort==='date_asc'?da-db:db-da;
+  });
+  return sorted;
+}
 
 // ══════════════════════════════════════════
 // RENDER ALL
@@ -706,10 +781,12 @@ function renderNpInc(c){
 function renderNpExp(c){
   var p=g('p-npexp');if(!p)return;if(!c)return;var exp=(c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});var filt=CF==='all'?exp:exp.filter(function(r){return r.cat===CF;});
   filt=srchItems(filt,SRCH['p-npexp']||'',['desc','cat','fund','date','checkNum','vendor1099','receiptUrl','acctCode']);
+  filt=dateRangeFilterItems(filt,'p-npexp','date');
+  filt=sortListItems(filt,'p-npexp','date','amt');
   var tot=exp.reduce(function(s,r){return(r.voided||r.isReversal)?s:s+Number(r.amt||0);},0);
   var rows=filt.map(function(r){var oi=exp.indexOf(r);var acctE=(c.accounts||[]).find(function(a){return a.code===r.acctCode||a.cat===r.cat||a.name===r.cat;});var expAcctsE=(c.accounts||[]).filter(function(a){return a.type==='Expense'&&a.active!==false;});var _catAcctCell=r.reconciled?escHtml(r.cat||'—'):'<select onchange="inlineSetExpAcct('+oi+',this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;max-width:140px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text)" title="Category / Account"><option value="">— Category —</option>'+expAcctsE.map(function(a){return'<option value="'+escHtml(a.code)+'|'+escHtml(a.name)+'"'+((r.acctCode===a.code||r.cat===a.name||r.cat===a.cat)?' selected':'')+'>'+escHtml(a.name)+'</option>';}).join('')+'<option value="__new__" style="color:var(--np);font-weight:500">+ New account...</option></select>';var _vnd=r.vendor1099||r.desc||'';var _descCell=escHtml(_vnd||'—');var _fundCell=r.fund?'<span class="badge b-green" style="cursor:pointer" onclick="runItemReport(\'fund\',\''+escHtml(r.fund)+'\',\'Fund: '+escHtml(r.fund)+'\',\'expdetail\')" title="Run fund report">'+escHtml(r.fund)+'</span>':(r.grantId?'<span class="badge b-green">Grant</span>':'—');return'<tr'+(r.voided?' style="opacity:.55;text-decoration:line-through"':'')+'><td style="width:20px"><input type="checkbox" class="exp-recon-chk" data-oi="'+oi+'" style="width:13px;height:13px;cursor:pointer" '+(r.reconciled?'checked':'')+' onchange="tgRecon('+oi+')"></td><td>'+_descCell+'</td><td colspan="2">'+_catAcctCell+'</td><td>'+fmt(r.amt)+'</td><td style="color:var(--muted)">'+(r.date||'—')+'</td><td style="color:var(--muted);font-size:11px">'+(r.checkNum||'—')+'</td><td>'+rcptCell('expenses',oi,r)+'</td><td>'+_fundCell+'</td><td style="white-space:nowrap;min-width:220px">'+(r.inkindRef?'<span style="font-size:10px;color:var(--muted)" title="Auto-created from in-kind donation">&#9889; system</span>':'<span style="display:inline-flex;align-items:center;gap:3px">'+(r.functionalSplit?'<span class="badge b-blue" style="font-size:10px" title="Split allocation">split</span>':'')+rb('expenses',oi)+'<button class="add-btn" onclick="openAllocModal('+oi+')" title="Allocate across functional categories" style="font-size:11px;padding:3px 8px;white-space:nowrap">&#8853; Allocate</button></span>')+'</td></tr>';}).join('');
   var cs=catSum(exp,'amt');
-  p.innerHTML=FB()+XB('expenses')+renderPayroll(c)+renderAP(c)+catF(exp,'renderNpExp(gc())')+srchBar('p-npexp','renderNpExp(gc())')+'<div class="metrics"><div class="metric"><div class="m-lbl">Total expenses</div><div class="m-val vr">'+fmt(tot)+'</div></div></div>'+(cs?'<div class="card"><div class="c-title" style="margin-bottom:.75rem">By category</div>'+cs+'</div>':'')+'<div class="card"><div class="c-head"><span class="c-title">Expense log</span><div style="display:flex;gap:.5rem;align-items:center"><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="batchUnreconcileExp()">↩ Unreconcile selected</button><button class="add-btn" onclick="EI=-1;g(\'e-gid\').value=\'\';openM(\'m-exp\')">+ Add expense</button></div></div>'+(exp.length?'<table><thead><tr><th style="width:20px"></th><th style="width:18%">Description</th><th style="width:15%">Category / Account</th><th style="width:7%">Amount</th><th style="width:7%">Date</th><th style="width:6%">Check #</th><th style="width:5%"><i class="fas fa-paperclip"></i></th><th style="width:8%">Fund</th><th style="width:9%">Recon</th><th style="width:26%"></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No expenses yet','Log your first expense.','EI=-1;g(\'e-gid\').value=\'\';openM(\'m-exp\')'))+'</div>';
+  p.innerHTML=FB()+XB('expenses')+renderPayroll(c)+renderAP(c)+catF(exp,'renderNpExp(gc())')+srchBar('p-npexp','renderNpExp(gc())')+sortDateBar('p-npexp','renderNpExp(gc())')+'<div class="metrics"><div class="metric"><div class="m-lbl">Total expenses</div><div class="m-val vr">'+fmt(tot)+'</div></div></div>'+(cs?'<div class="card"><div class="c-title" style="margin-bottom:.75rem">By category</div>'+cs+'</div>':'')+'<div class="card"><div class="c-head"><span class="c-title">Expense log</span><div style="display:flex;gap:.5rem;align-items:center"><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="batchUnreconcileExp()">↩ Unreconcile selected</button><button class="add-btn" onclick="EI=-1;g(\'e-gid\').value=\'\';openM(\'m-exp\')">+ Add expense</button></div></div>'+(exp.length?'<table><thead><tr><th style="width:20px"></th><th style="width:18%">Description</th><th style="width:15%">Category / Account</th><th style="width:7%">Amount</th><th style="width:7%">Date</th><th style="width:6%">Check #</th><th style="width:5%"><i class="fas fa-paperclip"></i></th><th style="width:8%">Fund</th><th style="width:9%">Recon</th><th style="width:26%"></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No expenses yet','Log your first expense.','EI=-1;g(\'e-gid\').value=\'\';openM(\'m-exp\')'))+'</div>';
 }
 
 // ── DONORS ──────────────────────────────
@@ -1546,11 +1623,12 @@ function renderCF(cc){
 function renderSbExp(c){
   var p=g('p-sbexp');if(!p)return;if(!c)return;var exp=(c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});var filt=CF==='all'?exp:exp.filter(function(r){return r.cat===CF;});
   filt=srchItems(filt,SRCH['p-sbexp']||'',['desc','cat','freq','fixed','checkNum','vendor1099','receiptUrl','acctCode']);
+  filt=sortListItems(filt,'p-sbexp',null,'amt');
   var mo=exp.reduce(function(s,e){var a=Number(e.amt||0);return s+(e.freq==='Weekly'?a*4:e.freq==='Bi-weekly'?a*2:e.freq==='Monthly'?a:e.freq==='Quarterly'?a/3:e.freq==='Annual'?a/12:a);},0);
   var fx=exp.filter(function(e){return e.fixed==='Fixed';}).reduce(function(s,e){return s+Number(e.amt||0);},0),vr=exp.filter(function(e){return e.fixed==='Variable';}).reduce(function(s,e){return s+Number(e.amt||0);},0);
   var rows=filt.map(function(r){var oi=exp.indexOf(r),mo2=r.freq==='Weekly'?r.amt*4:r.freq==='Bi-weekly'?r.amt*2:r.freq==='Monthly'?r.amt:r.freq==='Quarterly'?Math.round(r.amt/3):r.freq==='Annual'?Math.round(r.amt/12):r.amt;var acctSb=(c.accounts||[]).find(function(a){return a.code===r.acctCode||a.cat===r.cat||a.name===r.cat;});var expAcctsSb=(c.accounts||[]).filter(function(a){return a.type==='Expense'&&a.active!==false;});var _catAcctCell=r.reconciled?escHtml(r.cat||'—'):'<select onchange="inlineSetExpAcct('+oi+',this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;max-width:140px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text)" title="Category / Account"><option value="">— Category —</option>'+expAcctsSb.map(function(a){return'<option value="'+escHtml(a.code)+'|'+escHtml(a.name)+'"'+((r.acctCode===a.code||r.cat===a.name||r.cat===a.cat)?' selected':'')+'>'+escHtml(a.name)+'</option>';}).join('')+'<option value="__new__" style="color:var(--np);font-weight:500">+ New account...</option></select>';var _vnd=r.vendor1099||r.desc||'';var _descCell=escHtml(_vnd||'—');return'<tr><td style="width:20px"><input type="checkbox" class="exp-recon-chk" data-oi="'+oi+'" style="width:13px;height:13px;cursor:pointer" '+(r.reconciled?'checked':'')+' onchange="sbRC('+oi+')"></td><td>'+_descCell+'</td><td colspan="2">'+_catAcctCell+'</td><td>'+fmt(r.amt)+'</td><td style="color:var(--muted)">'+(r.freq||'—')+'</td><td>'+fmt(mo2)+'</td><td><span class="badge '+(r.fixed==='Fixed'?'b-blue':'b-amber')+'">'+(r.fixed||'')+'</span>'+(r.recurring&&r.recurring!=='None'?' <span class="badge b-rec">&#8635;</span>':'')+'</td><td style="color:var(--muted);font-size:11px">'+(r.checkNum||'—')+'</td><td>'+rcptCell('expenses',oi,r)+'</td><td style="white-space:nowrap;min-width:220px">'+(r.inkindRef?'<span style="font-size:10px;color:var(--muted)">&#9889; system</span>':'<span style="display:inline-flex;align-items:center;gap:3px">'+rb('expenses',oi)+'<button class="add-btn" onclick="openAllocModal('+oi+')" title="Split across functional categories" style="font-size:11px;padding:3px 8px;white-space:nowrap">&#8853; Allocate</button></span>')+'</td></tr>';}).join('');
   var cs=catSum(exp,'amt');
-  p.innerHTML=FB()+XB('expenses')+renderPayroll(c)+renderAP(c)+catF(exp,'renderSbExp(gc())')+srchBar('p-sbexp','renderSbExp(gc())')+'<div class="metrics"><div class="metric"><div class="m-lbl">Monthly burn</div><div class="m-val vr">'+fmt(Math.round(mo))+'</div></div><div class="metric"><div class="m-lbl">Fixed costs</div><div class="m-val">'+fmt(fx)+'</div></div><div class="metric"><div class="m-lbl">Variable costs</div><div class="m-val">'+fmt(vr)+'</div></div></div>'+(cs?'<div class="card"><div class="c-title" style="margin-bottom:.75rem">By category</div>'+cs+'</div>':'')+'<div class="card"><div class="c-head"><span class="c-title">Expenses</span><div style="display:flex;gap:.5rem;align-items:center"><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="batchUnreconcileExp()">↩ Unreconcile selected</button><button class="add-btn" onclick="EI=-1;openM(\'m-exp\')">+ Add expense</button></div></div>'+(exp.length?'<table><thead><tr><th style="width:20px"></th><th style="width:13%">Description</th><th style="width:14%">Category / Account</th><th style="width:7%">Amount</th><th style="width:6%">Freq</th><th style="width:7%">Monthly</th><th style="width:7%">Type</th><th style="width:6%">Check #</th><th style="width:5%"><i class="fas fa-paperclip"></i></th><th style="width:6%">Recon</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No expenses yet','Add your business expenses.','EI=-1;openM(\'m-exp\')'))+'</div>';
+  p.innerHTML=FB()+XB('expenses')+renderPayroll(c)+renderAP(c)+catF(exp,'renderSbExp(gc())')+srchBar('p-sbexp','renderSbExp(gc())')+sortDateBar('p-sbexp','renderSbExp(gc())',true)+'<div class="metrics"><div class="metric"><div class="m-lbl">Monthly burn</div><div class="m-val vr">'+fmt(Math.round(mo))+'</div></div><div class="metric"><div class="m-lbl">Fixed costs</div><div class="m-val">'+fmt(fx)+'</div></div><div class="metric"><div class="m-lbl">Variable costs</div><div class="m-val">'+fmt(vr)+'</div></div></div>'+(cs?'<div class="card"><div class="c-title" style="margin-bottom:.75rem">By category</div>'+cs+'</div>':'')+'<div class="card"><div class="c-head"><span class="c-title">Expenses</span><div style="display:flex;gap:.5rem;align-items:center"><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="batchUnreconcileExp()">↩ Unreconcile selected</button><button class="add-btn" onclick="EI=-1;openM(\'m-exp\')">+ Add expense</button></div></div>'+(exp.length?'<table><thead><tr><th style="width:20px"></th><th style="width:13%">Description</th><th style="width:14%">Category / Account</th><th style="width:7%">Amount</th><th style="width:6%">Freq</th><th style="width:7%">Monthly</th><th style="width:7%">Type</th><th style="width:6%">Check #</th><th style="width:5%"><i class="fas fa-paperclip"></i></th><th style="width:6%">Recon</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No expenses yet','Add your business expenses.','EI=-1;openM(\'m-exp\')'))+'</div>';
 }
 function sbRC(i){var c=gc();if(!c||!c.expenses[i])return;var cur=c.expenses[i].reconciled;if(!cur&&!confirm('Mark this transaction as reconciled?'))return;if(cur&&!confirm('Unmark this transaction as reconciled?'))return;c.expenses[i].reconciled=!cur;sv();renderSbExp(c);}
 
@@ -1567,10 +1645,12 @@ function renderPeInc(c){
 function renderPeExp(c){
   var p=g('p-peexp');if(!p)return;if(!c)return;var exp=(c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});var filt=CF==='all'?exp:exp.filter(function(r){return r.cat===CF;});
   filt=srchItems(filt,SRCH['p-peexp']||'',['desc','cat','freq','date','checkNum','vendor1099','acctCode']);
+  filt=dateRangeFilterItems(filt,'p-peexp','date');
+  filt=sortListItems(filt,'p-peexp','date','amt');
   var tot=exp.reduce(function(s,r){return(r.voided||r.isReversal)?s:s+Number(r.amt||0);},0);
   var rows=filt.map(function(r){var oi=exp.indexOf(r);var acctPE=(c.accounts||[]).find(function(a){return a.code===r.acctCode||a.cat===r.cat||a.name===r.cat;});var expAcctsPE=(c.accounts||[]).filter(function(a){return a.type==='Expense'&&a.active!==false;});var _catAcctCell=r.reconciled?escHtml(r.cat||'—'):'<select onchange="inlineSetExpAcct('+oi+',this.value)" style="font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;max-width:140px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text)" title="Category / Account"><option value="">— Category —</option>'+expAcctsPE.map(function(a){return'<option value="'+escHtml(a.code)+'|'+escHtml(a.name)+'"'+((r.acctCode===a.code||r.cat===a.name||r.cat===a.cat)?' selected':'')+'>'+escHtml(a.name)+'</option>';}).join('')+'<option value="__new__" style="color:var(--np);font-weight:500">+ New account...</option></select>';var _vnd=r.vendor1099||r.desc||'';var _descCell=escHtml(_vnd||'—');return'<tr><td style="width:20px"><input type="checkbox" class="exp-recon-chk" data-oi="'+oi+'" style="width:13px;height:13px;cursor:pointer" '+(r.reconciled?'checked':'')+' onchange="peRC('+oi+')"></td><td>'+_descCell+'</td><td colspan="2">'+_catAcctCell+'</td><td>'+fmt(r.amt)+'</td><td style="color:var(--muted)">'+(r.freq||'—')+(r.recurring&&r.recurring!=='None'?' <span class="badge b-rec">&#8635;</span>':'')+'</td><td style="color:var(--muted)">'+(r.date||'—')+'</td><td style="color:var(--muted);font-size:11px">'+(r.checkNum||'—')+'</td><td>'+rcptCell('expenses',oi,r)+'</td><td>'+'<span style="display:inline-flex;gap:4px;align-items:center;white-space:nowrap">'+rb('expenses',oi)+'</span></td></tr>';}).join('');
   var cs=catSum(exp,'amt');
-  p.innerHTML=FB()+XB('expenses')+catF(exp,'renderPeExp(gc())')+srchBar('p-peexp','renderPeExp(gc())')+'<div class="metrics"><div class="metric"><div class="m-lbl">Total expenses</div><div class="m-val vr">'+fmt(tot)+'</div></div></div>'+(cs?'<div class="card"><div class="c-title" style="margin-bottom:.75rem">By category</div>'+cs+'</div>':'')+'<div class="card"><div class="c-head"><span class="c-title">Expense log</span><div style="display:flex;gap:.5rem;align-items:center"><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="batchUnreconcileExp()">&#8617; Unreconcile selected</button><button class="add-btn" onclick="EI=-1;openM(\'m-exp\')">+ Add expense</button></div>'+(exp.length?'<table><thead><tr><th style="width:20px"></th><th style="width:14%">Description</th><th style="width:15%">Category / Account</th><th style="width:7%">Amount</th><th style="width:9%">Frequency</th><th style="width:9%">Date</th><th style="width:6%">Check #</th><th style="width:5%"><i class="fas fa-paperclip"></i></th><th style="width:6%">Recon</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No expenses yet','Start logging your household expenses.','EI=-1;openM(\'m-exp\')'))+'</div>';
+  p.innerHTML=FB()+XB('expenses')+catF(exp,'renderPeExp(gc())')+srchBar('p-peexp','renderPeExp(gc())')+sortDateBar('p-peexp','renderPeExp(gc())')+'<div class="metrics"><div class="metric"><div class="m-lbl">Total expenses</div><div class="m-val vr">'+fmt(tot)+'</div></div></div>'+(cs?'<div class="card"><div class="c-title" style="margin-bottom:.75rem">By category</div>'+cs+'</div>':'')+'<div class="card"><div class="c-head"><span class="c-title">Expense log</span><div style="display:flex;gap:.5rem;align-items:center"><button class="add-btn" style="font-size:11px;padding:3px 10px;background:none;border:1px solid var(--border);color:var(--muted)" onclick="batchUnreconcileExp()">&#8617; Unreconcile selected</button><button class="add-btn" onclick="EI=-1;openM(\'m-exp\')">+ Add expense</button></div>'+(exp.length?'<table><thead><tr><th style="width:20px"></th><th style="width:14%">Description</th><th style="width:15%">Category / Account</th><th style="width:7%">Amount</th><th style="width:9%">Frequency</th><th style="width:9%">Date</th><th style="width:6%">Check #</th><th style="width:5%"><i class="fas fa-paperclip"></i></th><th style="width:6%">Recon</th><th style="width:29%"></th></tr></thead><tbody>'+rows+'</tbody></table>':ES('No expenses yet','Start logging your household expenses.','EI=-1;openM(\'m-exp\')'))+'</div>';
 }
 function peRC(i){var c=gc();if(!c||!c.expenses[i])return;var cur=c.expenses[i].reconciled;if(!cur&&!confirm('Mark this transaction as reconciled?'))return;if(cur&&!confirm('Unmark this transaction as reconciled?'))return;c.expenses[i].reconciled=!cur;sv();renderPeExp(c);}
 
@@ -4275,7 +4355,7 @@ function buildDynMods(type){
     +'<div style="display:flex;gap:4px;margin:2px 0"><button type="button" class="add-btn" style="padding:4px 10px" onclick="_nudgeCheckOffset(\'x\',-0.05)" title="Nudge left">&larr;</button><button type="button" class="add-btn" style="padding:4px 10px" onclick="_nudgeCheckOffset(\'x\',0.05)" title="Nudge right">&rarr;</button></div>'
     +'<button type="button" class="add-btn" style="padding:4px 10px" onclick="_nudgeCheckOffset(\'y\',0.05)" title="Nudge down">&darr;</button>'
     +'</div><div style="font-size:12px;color:var(--muted)">Current offset: <span id="ba-check-offset-readout">0.00&quot;, 0.00&quot;</span></div></div>'
-    +'<button class="add-btn" style="margin-top:.5rem" onclick="printCheckAlignmentTest(g(\'ba-check-offx\').value,g(\'ba-check-offy\').value,g(\'ba-check-format\').value)"><i class="fas fa-print"></i> Print test page</button>'
+    +'<button class="add-btn" style="margin-top:.5rem" onclick="printCheckAlignmentTest(g(\'ba-check-offx\').value,g(\'ba-check-offy\').value,g(\'ba-check-format\').value);_markCheckCalibrated()"><i class="fas fa-print"></i> Print test page</button>'
     +'</div><button class="sv-btn" onclick="saveBankAcct()">Save account</button></div></div>';
   if(type==='np'){
     h+='<div class="overlay" id="m-fund"><div class="modal"><button class="cx" onclick="closeM(\'m-fund\')">&#215;</button><div class="m-title">Add / edit fund</div><div class="fl"><label>Fund name *</label><input type="text" id="fund-name" placeholder="e.g. General Operating, Smith Grant Restricted"></div><div class="fl"><label>Fund type</label><select id="fund-type"><option value="Unrestricted">Unrestricted</option><option value="Restricted">Temporarily Restricted</option><option value="Permanently Restricted">Permanently Restricted</option><option value="Capital">Capital / Building</option><option value="Endowment">Endowment</option></select></div><div class="fl"><label>Description (optional)</label><input type="text" id="fund-desc" placeholder="e.g. Day-to-day operations with no donor restrictions"></div><button class="sv-btn" onclick="saveFund()">Save fund</button></div></div>';

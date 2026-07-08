@@ -3,6 +3,8 @@
 // ══════════════════════════════════════════
 var _recurPosted=[];
 var STORE='clarity-v2',D={clients:[]},CID=null,acMode='np',firstMode='np',EI=-1,DONOR_EI=-1,DONATION_EI=-1,AG=null,CF='all',RST_F='all',DONOR_F='all',SRCH={},_plan='free',RECON_ACCT='bank',REIMB_EI=-1;
+// Keyed by panel id, same convention as SRCH — sort/date-range state for list views (Expenses).
+var SORT_STATE={},DATE_RANGE={};
 
 // ══════════════════════════════════════════
 // CORE HELPERS

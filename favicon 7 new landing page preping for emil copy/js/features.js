@@ -711,6 +711,17 @@ function confirmPayBill(){
     bank=(c.bankAccounts||[])[Number(bankSel.value)];
     instrNum=(g('pb-checknum')&&g('pb-checknum').value||'').trim();
     if(!instrNum){alert('Please enter a check number.');return;}
+    // CALIBRATION CHECKPOINT: before this account's very first real check, offer to print a
+    // free test alignment page instead of risking a real blank check. Stops asking forever
+    // once bank.checkCalibrated is set (see _markCheckCalibrated() in saves.js). Printing the
+    // test page here does NOT mark the bill paid — that only happens once they click
+    // "Mark paid" again when they're ready.
+    if(!bank.checkCalibrated){
+      if(confirm('You haven\'t printed a test alignment page for "'+bank.name+'" yet.\n\nOK = print a free test page first (nothing else happens — come back and click Mark paid when it lines up)\nCancel = skip this and print the real check now')){
+        printCheckAlignmentTest(bank.checkOffsetX||0,bank.checkOffsetY||0,bank.checkFormat||'voucher2');
+        return;
+      }
+    }
   }else{
     instrNum=(g('pb-refnum')&&g('pb-refnum').value||'').trim();
   }
@@ -724,7 +735,7 @@ function confirmPayBill(){
   // has a real field to read/write.
   // matchId stays unset until a bank transaction is matched to this expense —
   // see bankMatchOne() in bank.js.
-  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null});
+  c.expenses.push({id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null,bankId:(method==='check'&&bank)?bank.id:null});
   // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
   var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
   postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);

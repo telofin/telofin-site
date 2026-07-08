@@ -2121,6 +2121,14 @@ function _checkOffsetReadout(){
   if(!readout)return;
   readout.textContent=Number((x&&x.value)||0).toFixed(2)+'", '+Number((y&&y.value)||0).toFixed(2)+'"';
 }
+// _markCheckCalibrated(): flips bankAcct.checkCalibrated once a test alignment page has been
+// printed for this account, so confirmPayBill() (features.js) only offers the "print a test
+// page first" checkpoint before someone's very first real check from that account.
+function _markCheckCalibrated(){
+  var c=gc();if(!c||BANK_ACCT_EI<0||!c.bankAccounts||!c.bankAccounts[BANK_ACCT_EI])return;
+  c.bankAccounts[BANK_ACCT_EI].checkCalibrated=true;
+  sv();
+}
 function editBankAcct(i){
   var c=gc();if(!c||!c.bankAccounts||!c.bankAccounts[i])return;
   BANK_ACCT_EI=i;
