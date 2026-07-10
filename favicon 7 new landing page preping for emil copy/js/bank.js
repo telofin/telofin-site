@@ -428,12 +428,18 @@ function bankSaveNewParty(txnId) {
 
   if (type === 'vendor') {
     if (!c.vendors) c.vendors = [];
-    if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); }))
-      c.vendors.push({ id: uid(), name: name, is1099: is1099, defaultCat: '', email: bpmEmail, phone: bpmPhone, address: bpmAddress });
+    if (!c.vendors.find(function(v){ return v.name.toLowerCase() === name.toLowerCase(); })) {
+      var _newVendor3 = { id: uid(), name: name, is1099: is1099, defaultCat: '', email: bpmEmail, phone: bpmPhone, address: bpmAddress };
+      c.vendors.push(_newVendor3);
+      if (typeof dwUpsertVendor === 'function') dwUpsertVendor(c, _newVendor3);
+    }
   } else if (type === 'customer') {
     if (!c.customers) c.customers = [];
-    if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); }))
-      c.customers.push({ id: uid(), name: name, email: bpmEmail, phone: bpmPhone, address: bpmAddress });
+    if (!c.customers.find(function(cu){ return cu.name.toLowerCase() === name.toLowerCase(); })) {
+      var _newCust3 = { id: uid(), name: name, email: bpmEmail, phone: bpmPhone, address: bpmAddress };
+      c.customers.push(_newCust3);
+      if (typeof dwUpsertCustomer === 'function') dwUpsertCustomer(c, _newCust3);
+    }
   } else if (type === 'donor') {
     if (!c.donors) c.donors = [];
     var _newDonor = c.donors.find(function(d){ return d.name.toLowerCase() === name.toLowerCase(); });
@@ -442,8 +448,11 @@ function bankSaveNewParty(txnId) {
     // Link the bank transaction amount as a donation record
     var _txnForDonor = (c.bankTransactions || []).find(function(x){ return x.id === txnId; });
     if (_txnForDonor && !_newDonor.donations.find(function(dn){ return dn.bankTxnId === txnId; })) {
-      _newDonor.donations.push({ amt: _txnForDonor.amount, date: _txnForDonor.date || '', fund: '', rec: 'Yes', ty: 'No', rst: 'Unrestricted', inkind: 'No', fmv: 0, itemDescription: '', qpq: 0, bankTxnId: txnId, fromBank: true });
+      var _bpmDonRecord = { id: uid(), amt: _txnForDonor.amount, date: _txnForDonor.date || '', fund: '', rec: 'Yes', ty: 'No', rst: 'Unrestricted', inkind: 'No', fmv: 0, itemDescription: '', qpq: 0, bankTxnId: txnId, fromBank: true };
+      _newDonor.donations.push(_bpmDonRecord);
+      if (typeof dwUpsertDonation === 'function') dwUpsertDonation(c, _newDonor, _bpmDonRecord);
     }
+    if (typeof dwUpsertDonor === 'function') dwUpsertDonor(c, _newDonor);
   } else if (type === 'grantor') {
     if (!c.grants) c.grants = [];
     if (!c.grants.find(function(g){ return (g.funder||'').toLowerCase() === name.toLowerCase(); }))
@@ -505,6 +514,7 @@ function _bankForcePushIncome(){
   if(!window._bankPendingDupInc)return;
   var _p=window._bankPendingDupInc;
   _p.c.income.push(_p.incItem);
+  if(typeof dwUpsertIncome==='function')dwUpsertIncome(_p.c,_p.incItem);
   // Auto-create donor record too
   if((_p.t.category==='Donation'||_p.t.category==='Donations')&&_p.t.vendorName){
     if(!_p.c.donors)_p.c.donors=[];
@@ -513,7 +523,9 @@ function _bankForcePushIncome(){
     if(!_dor){_dor={id:uid(),name:_dn,donations:[]};_p.c.donors.push(_dor);}
     if(!_dor.donations)_dor.donations=[];
     if(!_dor.donations.find(function(dn){return dn.bankTxnId===_p.t.id;})){
-      _dor.donations.push({amt:_p.t.amount,date:_p.t.date||'',fund:'',rec:'Yes',ty:'No',rst:'Unrestricted',inkind:'No',fmv:0,itemDescription:'',qpq:0,bankTxnId:_p.t.id,fromBank:true,incomeRef:_p.incItem&&_p.incItem.id});
+      var _forceDonRecord={id:uid(),amt:_p.t.amount,date:_p.t.date||'',fund:'',rec:'Yes',ty:'No',rst:'Unrestricted',inkind:'No',fmv:0,itemDescription:'',qpq:0,bankTxnId:_p.t.id,fromBank:true,incomeRef:_p.incItem&&_p.incItem.id};
+      _dor.donations.push(_forceDonRecord);
+      if(typeof dwUpsertDonation==='function')dwUpsertDonation(_p.c,_dor,_forceDonRecord);
     }
     if(_p.incItem){_p.incItem.donorId=_dor.id;_p.incItem.donationRef=true;}
   }
@@ -888,6 +900,7 @@ function _bankPost(c, t) {
       };
       if (tagBankId) revItem.bankId = tagBankId;
       c.revenue.push(revItem);
+      if (typeof dwUpsertRevenue === 'function') dwUpsertRevenue(c, revItem);
     } else {
       if (!c.income) c.income = [];
       var incItem = {
@@ -973,6 +986,7 @@ function _bankPost(c, t) {
         }
       }
       c.income.push(incItem);
+      if (typeof dwUpsertIncome === 'function') dwUpsertIncome(c, incItem);
     }
     // Auto-create/update donor when category is Donation and vendorName is set
     if ((t.category === 'Donation' || t.category === 'Donations') && t.vendorName) {
@@ -990,7 +1004,8 @@ function _bankPost(c, t) {
         // incItem may be undefined here if this bank transaction hit the "possible duplicate
         // donation" flow above and returned early — in that case linking happens later in
         // _bankForcePushIncome() instead, keyed the same way (incomeRef -> the pushed income id).
-        _donor.donations.push({
+        var _bankDonRecord={
+          id: uid(),
           amt: t.amount,
           date: t.date || '',
           fund: '',
@@ -1004,7 +1019,9 @@ function _bankPost(c, t) {
           bankTxnId: t.id,  // link back to the bank transaction for dedup
           fromBank: true,
           incomeRef: (typeof incItem!=='undefined'&&incItem)?incItem.id:undefined
-        });
+        };
+        _donor.donations.push(_bankDonRecord);
+        if (typeof dwUpsertDonation === 'function') dwUpsertDonation(c, _donor, _bankDonRecord);
       }
       if (typeof incItem!=='undefined'&&incItem){incItem.donorId=_donor.id;incItem.donationRef=true;}
     }
@@ -1025,6 +1042,7 @@ function _bankPost(c, t) {
       if (t.grantPct != null) expItem.grantPct = t.grantPct;
     }
     c.expenses.push(expItem);
+    if (typeof dwUpsertExpense === 'function') dwUpsertExpense(c, expItem);
   }
 }
 
@@ -2251,33 +2269,56 @@ function ccRejectOne(ti) {
   sv(); renderCCTab(c);
 }
 
+// _ccPostOne(c,t): posts one approved credit-card-statement-import transaction.
+//
+// Charge branch was genuinely broken — pushed a raw expense with no acctCode and never
+// called postToLedger() at all, unlike manually entering the same charge via the regular
+// Expense modal (saveExp(), which always posts Dr [category account] / Cr the client's
+// default cash account, ccId or not — this app's credit-card charges are treated cash-basis,
+// on the established, already-reviewed design that CC balance is a separate live/working
+// computation over unpaid tagged charges, not its own ledger-tracked liability; see
+// markCCPaid() below, which only flips a display flag and intentionally touches no ledger
+// entry). Fixed to match that exact behavior: resolve the account by category
+// (lookupAcctByCAT, same as every other expense-creating path) and post Dr [that account] /
+// Cr default cash.
+//
+// Payment branch is intentionally left NOT posting to the ledger. A "cc_payment" transaction
+// recognized from a bank-statement import represents the same real-world cash outflow that
+// was already credited to cash at charge time — posting a second Dr/Cr here would double-count
+// that cash. Still fixed the cosmetic bug (debitCode/creditCode were always blank, so this
+// never even displayed correctly in the GL's own hybrid journal-entry view) so the display
+// record is at least readable, without changing its no-ledger-effect behavior.
 function _ccPostOne(c, t) {
   if (!c.expenses)      c.expenses      = [];
   if (!c.journalEntries) c.journalEntries = [];
   var ccId = t._ccId;
   var cc = (c.creditCards||[]).find(function(x){ return x.id===ccId; });
   var cardName = cc ? cc.name : 'Credit Card';
+  var cashCode = _defaultCashCode(c);
 
   if (t.type === 'cc_payment') {
-    // Payment: debit bank account, credit CC liability
-    var bankName = (t._bankAcctName) || 'Checking Account';
+    // Display/audit-trail record only — no postToLedger(), see comment above.
     c.journalEntries.push({
-      id: uid(), date: t.date,
-      type: 'Credit Card Payment',
-      memo: t.description || t.desc || 'Credit Card Payment',
-      debitAcct: bankName,
-      creditAcct: cardName + ' Payable',
-      amt: t.amount || t.amt,
-      notes: 'Imported from CC statement', ccId: ccId
+      id: t.id || uid(), date: t.date, type: 'Credit Card Payment',
+      memo: t.description || t.desc || 'Credit Card Payment — ' + cardName,
+      debitAcct: cardName + ' (already expensed at charge time)', creditAcct: cashCode + ' Cash',
+      debitCode: '', creditCode: cashCode,
+      amt: t.amount || t.amt, notes: 'Imported from CC statement — informational only, not posted (see charge-time posting)', ccId: ccId
     });
   } else {
-    // Charge: expense with ccId
-    c.expenses.push({
-      id: uid(), desc: t.description || t.desc,
-      amt: t.amount || t.amt, date: t.date,
-      cat: t.category || 'Uncategorized',
+    // Charge: Dr Expense / Cr default cash — resolved by category like every other
+    // expense-creating path (lookupAcctByCAT), matching saveExp()'s established behavior.
+    var expId = t.id || uid();
+    var desc = t.description || t.desc || 'Credit card charge';
+    var cat = t.category || 'Uncategorized';
+    var acctCode = lookupAcctByCAT(c, cat, 'Expense') || '5010';
+    var expItem = {
+      id: expId, desc: desc, amt: t.amount || t.amt, date: t.date, cat: cat, acctCode: acctCode,
       ccId: ccId, ccPaid: false, reconciled: false, fromImport: true
-    });
+    };
+    c.expenses.push(expItem);
+    if (typeof dwUpsertExpense === 'function') dwUpsertExpense(c, expItem);
+    postToLedger(c, acctCode, cashCode, Number(t.amount || t.amt || 0), desc, 'expense', expId);
   }
 }
 
@@ -2728,6 +2769,7 @@ function saveCC() {
     // New card
     c.creditCards.push({ id: uid(), name: name, network: network, last4: last4, limit: limit });
   }
+  if (typeof dwUpsertCC === 'function') dwUpsertCC(c, c.creditCards[idx >= 0 ? idx : c.creditCards.length - 1]);
   EI = -1;
   sv();
   closeM('m-cc');
@@ -2752,6 +2794,7 @@ function deleteCC(ccId) {
   if (!cc) return;
   if (!confirm('Delete "' + cc.name + '"? This will not delete associated charges.')) return;
   c.creditCards = c.creditCards.filter(function(x){ return x.id !== ccId; });
+  if (typeof dwDeleteCC === 'function') dwDeleteCC(c, cc);
   sv();
   renderCCTab(c);
 }

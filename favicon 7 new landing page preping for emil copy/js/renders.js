@@ -115,6 +115,7 @@ function showRowActionsMenu(btn,type,i){
   if(hasAudit)items.push({label:'Edit history',icon:'<i class="fas fa-clipboard-list"></i>',fn:'openTxnAuditLog(\''+type+'\','+i+')'});
   items.push({label:item.reconciled?'Edit (reconciled)':'Edit',icon:'<i class="fas fa-pen"></i>',fn:'editItem(\''+type+'\','+i+')'});
   if(type==='expenses'&&item.checkPrinted)items.push({label:'Reprint check',icon:'<i class="fas fa-print"></i>',fn:'reprintCheck(\''+type+'\','+i+')'});
+  if(type==='expenses'&&item.bankId&&!item.checkPrinted)items.push({label:'Print check',icon:'<i class="fas fa-print"></i>',fn:'printCheckForExpense('+i+')'});
   items.push({label:'Void &amp; reverse',icon:'<i class="fas fa-ban"></i>',fn:'voidItem(\''+type+'\','+i+')',color:'var(--amber)'});
   items.push({label:'Delete',icon:'<i class="fas fa-trash"></i>',fn:'delItem(\''+type+'\','+i+')',color:'var(--red)'});
   var menuHtml='<div id="row-acts-menu" style="position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:170px;overflow:hidden;animation:fadeIn .12s ease">'
@@ -156,6 +157,43 @@ function reprintCheck(type,i){
   }
   var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===(item.vendor1099||'').toLowerCase();});
   printCheck(c,bank,{payee:item.vendor1099||item.desc||'',address:vendorRec&&vendorRec.address||'',amount:item.amt,date:item.date,memo:item.desc||'',checkNum:checkNum});
+}
+// printCheckForExpense(i): prints a check for a plain expense entered via the generic
+// Expense modal (not through Bills) that already has a bank account + check/ref number set
+// (e-bank/e-ref, saveExp()) but has never actually been printed — i.e. checkPrinted is not
+// yet set, distinct from reprintCheck()'s condition. Mirrors _payOneBill()'s post-print
+// bookkeeping (checkPrinted flag, nextCheckNum advance) and confirmPayBill()'s calibration
+// checkpoint, without touching the ledger — the expense is already posted, this only adds
+// the missing print action.
+function printCheckForExpense(i){
+  var c=gc();var item=c&&c.expenses&&c.expenses[i];
+  if(!item||!item.bankId)return;
+  var bank=(c.bankAccounts||[]).find(function(b){return b.id===item.bankId;});
+  if(!bank){alert('Could not find the bank account this expense is paid from. If that account was renamed or removed, set up "Check settings" again from the Reconciliation tab.');return;}
+  if(!bank.checkCalibrated){
+    if(confirm('You haven\'t printed a test alignment page for "'+bank.name+'" yet.\n\nOK = print a free test page first (nothing else happens — come back and use "Print check" again when it lines up)\nCancel = skip this and print the real check now')){
+      printCheckAlignmentTest(bank.checkOffsetX||0,bank.checkOffsetY||0,bank.checkFormat||'voucher2');
+      return;
+    }
+  }
+  var checkNum=(item.checkNum||'').trim();
+  if(!checkNum){
+    checkNum=(prompt('Enter the check number:',String(bank.nextCheckNum||''))||'').trim();
+    if(!checkNum)return;
+  }
+  var slot=1;
+  if(bank.checkFormat==='standard3'){
+    var slotIn=(prompt('Which check slot is blank on the sheet? Enter 1 (top), 2 (middle), or 3 (bottom):','1')||'1').trim();
+    slot=[1,2,3].indexOf(Number(slotIn))>=0?Number(slotIn):1;
+  }
+  var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===(item.vendor1099||'').toLowerCase();});
+  printCheck(c,bank,{payee:item.vendor1099||item.desc||'',address:vendorRec&&vendorRec.address||'',amount:item.amt,date:item.date,memo:item.desc||'',checkNum:checkNum,slot:slot});
+  item.checkNum=checkNum;
+  item.checkPrinted=true;
+  var bankIdx=c.bankAccounts.indexOf(bank);
+  var numPart=parseInt(checkNum,10);
+  if(bankIdx>=0&&!isNaN(numPart))c.bankAccounts[bankIdx].nextCheckNum=numPart+1;
+  sv();renderAll(true);
 }
 
 // ── TRANSACTION AUDIT TRAIL ─────────────────────────────────────────────────
@@ -1209,8 +1247,8 @@ function openAnnualLetter(di){
   openM('m-ty-letter');
 }
 function toggleTY(di,dni){var c=gc();if(!c||!c.donors[di]||!c.donors[di].donations[dni])return;var dn=c.donors[di].donations[dni];dn.ty=dn.ty==='Yes'?'No':'Yes';sv();renderDonors(c);}
-function delDonation(di,dni){var c=gc();if(!confirm('Delete this donation?'))return;var _rec=c.donors[di].donations[dni];_voidDonationLedger(c,_rec);c.donors[di].donations.splice(dni,1);sv();renderDonors(c);renderBalanceSheet(c);}
-function delDonor(di){var c=gc();if(!confirm('Remove this donor and all their donation history? Cannot be undone.'))return;c.donors.splice(di,1);sv();renderDonors(c);}
+function delDonation(di,dni){var c=gc();if(!confirm('Delete this donation?'))return;var _rec=c.donors[di].donations[dni];var _donor=c.donors[di];_voidDonationLedger(c,_rec);c.donors[di].donations.splice(dni,1);if(typeof dwDeleteDonation==='function')dwDeleteDonation(c,_donor,_rec);sv();renderDonors(c);renderBalanceSheet(c);}
+function delDonor(di){var c=gc();if(!confirm('Remove this donor and all their donation history? Cannot be undone.'))return;var d=c.donors[di];c.donors.splice(di,1);if(d&&typeof dwDeleteDonor==='function')dwDeleteDonor(c,d);sv();renderDonors(c);}
 function editDonor(di){
   var c=gc();if(!c||!c.donors[di])return;DONOR_EI=di;var d=c.donors[di];
   g('m-donor-title').textContent='Edit donor';
@@ -1267,11 +1305,13 @@ function saveDonor(){
   Object.keys(keyDates).forEach(function(f){
     var label=f.indexOf('_custom_')===0?f.replace('_custom_',''):(_keyDateMap[f]||f);
     if(existingTypes.indexOf(label)<0){
-      item.milestones.push({id:uid(),type:label,date:keyDates[f],notes:'',created:new Date().toISOString()});
+      var _newMilestone={id:uid(),type:label,date:keyDates[f],notes:'',created:new Date().toISOString()};
+      item.milestones.push(_newMilestone);
+      if(typeof dwUpsertMilestone==='function')dwUpsertMilestone(c,item,_newMilestone);
     } else {
       // Update existing milestone date if it changed
       var existing=item.milestones.find(function(m){return m.type===label;});
-      if(existing)existing.date=keyDates[f];
+      if(existing){existing.date=keyDates[f];if(typeof dwUpsertMilestone==='function')dwUpsertMilestone(c,item,existing);}
     }
   });
   item.milestones.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
@@ -1290,6 +1330,7 @@ function saveDonor(){
     item.audit=[{field:'created',oldValue:'',newValue:'Donor record created',timestamp:new Date().toISOString()}];
   }
   if(DONOR_EI>=0)c.donors[DONOR_EI]=item;else c.donors.push(item);
+  if(typeof dwUpsertDonor==='function')dwUpsertDonor(c,item);
   DONOR_EI=-1;sv();renderDonors(c);renderTodoBar();closeM('m-donor');
 }
 function openDonorAuditLog(di){
@@ -1341,25 +1382,34 @@ function _postDonationLedger(c,di,record){
     // Income entry: In-kind contributions (COA 4050, Part VIII Line 1)
     var incItem={id:uid(),name:inkindDesc,cat:'In-Kind',status:'Received',proj:inkindAmt,recv:inkindAmt,date:record.date,fund:record.fund||'',acctCode:'4050',inkindRef:true,netClass:netClass,donorId:donorId,audit:[]};
     c.income.push(incItem);
+    if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,incItem);
     record.incomeRef=incItem.id;
     if(typeof postToLedger==='function')postToLedger(c,cashCode,'4050',inkindAmt,'In-kind donation: '+donorName,'income',incItem.id);
-    // Expense entry: In-kind expense allocated per the functional category the user selected
+    // Expense entry: In-kind expense allocated per the functional category the user selected.
+    // Resolved by name (not hardcoded '5400', which is actually "Marketing & outreach" in NP's
+    // default COA — a real miscoding bug, this was landing in Marketing every time instead of
+    // its own line) — mirrors NP's own default "5410 In-kind expense" account by name, and
+    // survives a client's COA being renumbered/healed the same way the loan/asset accounts do.
     if(!c.expenses)c.expenses=[];
-    var expItem={id:uid(),desc:inkindDesc,cat:'In-Kind Expense',amt:inkindAmt,date:record.date,fund:record.fund||'',functional:record.inkindFunctional||'fundraising',acctCode:'5400',inkindRef:true,reconciled:true,audit:[]};
+    var inkindExpCode=_ensureDedicatedCOA(c,'In-kind expense','Expense','In-Kind Expense');
+    var expItem={id:uid(),desc:inkindDesc,cat:'In-Kind Expense',amt:inkindAmt,date:record.date,fund:record.fund||'',functional:record.inkindFunctional||'fundraising',acctCode:inkindExpCode,inkindRef:true,reconciled:true,audit:[]};
     c.expenses.push(expItem);
+    if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,expItem);
     record.expenseRef=expItem.id;
-    if(typeof postToLedger==='function')postToLedger(c,'5400',cashCode,inkindAmt,'In-kind expense: '+inkindDesc,'expense',expItem.id);
+    if(typeof postToLedger==='function')postToLedger(c,inkindExpCode,cashCode,inkindAmt,'In-kind expense: '+inkindDesc,'expense',expItem.id);
     // If auctioned: also log auction sale proceeds as event revenue
     if(record.auctioned&&record.auctionSalePrice>0){
       var saleDesc='Auction sale: '+(record.itemDescription||'In-kind item')+' (buyer: '+(record.auctionBuyerName||'unknown')+')';
       var saleItem={id:uid(),name:saleDesc,cat:'Events',status:'Received',proj:record.auctionSalePrice,recv:record.auctionSalePrice,date:record.auctionDate||record.date,fund:record.fund||'',acctCode:'4040',auctionRef:true,netClass:'without_restriction',audit:[]};
       c.income.push(saleItem);
+      if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,saleItem);
       if(typeof postToLedger==='function')postToLedger(c,cashCode,'4040',record.auctionSalePrice,saleDesc,'income',saleItem.id);
     }
   }else{
     var amt=Number(record.amt||0);
     var incItem2={id:uid(),name:donorName,cat:'Individual donation',status:'Received',proj:amt,recv:amt,date:record.date,fund:record.fund||'',acctCode:'4010',donationRef:true,netClass:netClass,donorId:donorId,audit:[]};
     c.income.push(incItem2);
+    if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,incItem2);
     record.incomeRef=incItem2.id;
     if(typeof postToLedger==='function')postToLedger(c,cashCode,'4010',amt,'Donation: '+donorName,'income',incItem2.id);
   }
@@ -1497,7 +1547,7 @@ function _syncIncomeToCustomerTab(c,item){
   if(!custName)return;
   if(!c.customers)c.customers=[];
   var existing=c.customers.find(function(cu){return cu.name.toLowerCase()===custName.toLowerCase();});
-  if(!existing)c.customers.push({id:uid(),name:custName,email:'',phone:'',address:'',notes:'',added:new Date().toISOString()});
+  if(!existing){var _newCust4={id:uid(),name:custName,email:'',phone:'',address:'',notes:'',added:new Date().toISOString()};c.customers.push(_newCust4);if(typeof dwUpsertCustomer==='function')dwUpsertCustomer(c,_newCust4);}
 }
 // Finds income entries still needing a donor/customer decision — the batch-review counterpart
 // to the one-time healMissingDonorLinks() notice (data.js). Only entries with partyType still
@@ -1544,7 +1594,7 @@ function saveDonation(){
   var di=parseInt(g('dnt-donor-id').value);if(isNaN(di)||!c.donors[di])return;
   if(!c.donors[di].donations)c.donors[di].donations=[];
 
-  var record={amt:amt,date:dateVal,fund:g('dnt-fund').value,proj:g('dnt-proj')&&g('dnt-proj').value||'',rec:g('dnt-rec').value,ty:g('dnt-ty').value,rst:g('dnt-rst').value,inkind:g('dnt-inkind')&&g('dnt-inkind').value||'No',fmv:g('dnt-fmv')&&Number(g('dnt-fmv').value||0)||0,itemDescription:g('dnt-item-desc')&&g('dnt-item-desc').value.trim()||'',inkindFunctional:g('dnt-inkind-func')&&g('dnt-inkind-func').value||'',auctioned:g('dnt-auctioned')&&g('dnt-auctioned').value==='Yes',auctionDate:g('dnt-auction-date')&&g('dnt-auction-date').value||'',auctionSalePrice:g('dnt-auction-sale')&&Number(g('dnt-auction-sale').value||0)||0,auctionBuyerName:g('dnt-auction-buyer')&&g('dnt-auction-buyer').value.trim()||'',qpq:g('dnt-hasqpq')&&g('dnt-hasqpq').value==='Yes'?Number(g('dnt-qpq')&&g('dnt-qpq').value||0):0};
+  var record={id:DONATION_EI>=0?(c.donors[di].donations[DONATION_EI].id||uid()):uid(),amt:amt,date:dateVal,fund:g('dnt-fund').value,proj:g('dnt-proj')&&g('dnt-proj').value||'',rec:g('dnt-rec').value,ty:g('dnt-ty').value,rst:g('dnt-rst').value,inkind:g('dnt-inkind')&&g('dnt-inkind').value||'No',fmv:g('dnt-fmv')&&Number(g('dnt-fmv').value||0)||0,itemDescription:g('dnt-item-desc')&&g('dnt-item-desc').value.trim()||'',inkindFunctional:g('dnt-inkind-func')&&g('dnt-inkind-func').value||'',auctioned:g('dnt-auctioned')&&g('dnt-auctioned').value==='Yes',auctionDate:g('dnt-auction-date')&&g('dnt-auction-date').value||'',auctionSalePrice:g('dnt-auction-sale')&&Number(g('dnt-auction-sale').value||0)||0,auctionBuyerName:g('dnt-auction-buyer')&&g('dnt-auction-buyer').value.trim()||'',qpq:g('dnt-hasqpq')&&g('dnt-hasqpq').value==='Yes'?Number(g('dnt-qpq')&&g('dnt-qpq').value||0):0};
   if(record.inkind==='Yes'&&!record.fmv){alert('Please enter the fair market value for this in-kind donation.');return;}
   if(record.inkind==='Yes'&&!record.itemDescription){alert('Please describe the donated item or service.');return;}
   if(record.inkind==='Yes'&&!record.inkindFunctional){alert('Please select a functional category (Program, Management & General, or Fundraising) for this in-kind donation — it determines how it appears on the Statement of Functional Expenses.');return;}
@@ -1602,6 +1652,7 @@ function saveDonation(){
     c.donors[di].donations.push(record);
     _postDonationLedger(c,di,record);
   }
+  if(typeof dwUpsertDonation==='function')dwUpsertDonation(c,c.donors[di],record);
 
   sv();renderDonors(c);closeM('m-donation');['dnt-amt','dnt-date','dnt-fund','dnt-fmv','dnt-qpq','dnt-item-desc','dnt-inkind-func','dnt-auction-date','dnt-auction-sale','dnt-auction-buyer'].forEach(function(id){var el=g(id);if(el)el.value='';});var _dp=g('dnt-proj');if(_dp)_dp.value='';if(g('dnt-inkind'))g('dnt-inkind').value='No';if(g('dnt-hasqpq'))g('dnt-hasqpq').value='No';if(g('dnt-auctioned'))g('dnt-auctioned').value='No';toggleInkindFMV();toggleQpq();
 }
@@ -1620,27 +1671,6 @@ function renderRev(c){
 }
 
 // ── CASH FLOW ───────────────────────────
-function renderCF(cc){
-  var c=cc||gc(),p=g('p-cashflow');if(!p)return;if(!c)return;var rev=(c.revenue||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;}),exp=(c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});
-  var mIn=rev.reduce(function(s,r){return s+Number(r.proj||0);},0);
-  var mOut=exp.reduce(function(s,e){var a=Number(e.amt||0);return s+(e.freq==='Weekly'?a*4:e.freq==='Bi-weekly'?a*2:e.freq==='Monthly'?a:e.freq==='Quarterly'?a/3:e.freq==='Annual'?a/12:a);},0);
-  var net=mIn-mOut,tR=rev.reduce(function(s,r){return s+basisInc(c,r);},0),tE=exp.reduce(function(s,e){return s+Number(e.amt||0);},0),gp=tR-tE;
-  // Build next 4 months dynamically from today
-  var _now=new Date();
-  var _mnNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var cfHtml='';
-  for(var _mi=0;_mi<4;_mi++){
-    var _md=new Date(_now.getFullYear(),_now.getMonth()+_mi+1,1);
-    var _mlabel=_mnNames[_md.getMonth()]+' '+_md.getFullYear();
-    var _ins=Math.round(mIn),_out=Math.round(mOut),_n=_ins-_out;
-    cfHtml+='<div class="cf-mo"><div class="cf-mn">'+_mlabel+'</div>';
-    cfHtml+='<div class="cf-in">+'+fmt(_ins)+'</div>';
-    cfHtml+='<div class="cf-out">−'+fmt(_out)+'</div>';
-    cfHtml+='<div class="cf-net" style="color:'+(_n>=0?'var(--green)':'var(--red)')+';">'+((_n>=0)?'+':'')+fmt(_n)+'</div></div>';
-  }
-  p.innerHTML=FB()+XB()+'<div class="insight"><div class="ins-lbl">Cash flow health</div>'+(net>=0?'Monthly position looks positive at '+fmt(Math.round(net))+'/mo.':'Projected monthly outflow exceeds inflow by '+fmt(Math.round(Math.abs(net)))+'. Review variable costs.')+'</div><div class="card"><div class="c-head"><span class="c-title">4-month forecast</span></div><div class="cf-grid">'+cfHtml+'</div></div><div class="card"><div class="c-head"><span class="c-title">P&amp;L snapshot</span></div><div class="metrics"><div class="metric"><div class="m-lbl">Total revenue</div><div class="m-val vg">'+fmt(tR)+'</div></div><div class="metric"><div class="m-lbl">Total costs</div><div class="m-val vr">'+fmt(tE)+'</div></div><div class="metric"><div class="m-lbl">Net P&amp;L</div><div class="m-val '+(gp>=0?'vg':'vr')+'">'+fmt(gp)+'</div></div></div></div>';
-}
-
 // ── SB EXPENSES ─────────────────────────
 function renderSbExp(c){
   var p=g('p-sbexp');if(!p)return;if(!c)return;var exp=(c.expenses||[]).filter(function(r){return!r.deleted&&!r.voided&&!r.isReversal;});var filt=CF==='all'?exp:exp.filter(function(r){return r.cat===CF;});
@@ -1824,7 +1854,7 @@ function renderReports(){
   var budRows=(c.budgetItems||[]).map(function(b){
     var act=b.type==='Income'?(iC[b.cat]||0):(eC[b.cat]||0);
     var v=b.type==='Income'?(act-Number(b.amt)):(Number(b.amt)-act);
-    return '<div class="rpt-row"><span>'+b.cat+' <span style="font-size:10px;color:var(--muted)">('+b.type+')</span></span>'
+    return '<div class="rpt-row"><span>'+escHtml(b.cat)+' <span style="font-size:10px;color:var(--muted)">('+b.type+')</span></span>'
       +'<span style="display:flex;gap:12px;flex-wrap:wrap"><span>'+fmt(b.amt)+'</span><span>'+fmt(act)+' actual</span>'
       +'<span class="'+(v>=0?'vg':'vr')+'">'+(v>=0?'+':'')+fmt(v)+'</span></span></div>';
   }).join('');
@@ -1873,7 +1903,7 @@ function renderReports(){
     +'<div id="rpt-header">'
       +'<div class="card">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:.75rem">'
-          +'<div>'+(logoHtml?logoHtml+'<br>':'')+'<span style="font-family:\'DM Serif Display\',serif;font-size:18px;font-weight:400">'+c.name+'</span>'
+          +'<div>'+(logoHtml?logoHtml+'<br>':'')+'<span style="font-family:\'DM Serif Display\',serif;font-size:18px;font-weight:400">'+escHtml(c.name)+'</span>'
             +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+tl(c.type)+' · '+today()+(c.fiscalYearEnd?' · FY ends '+fyeLabel(c.fiscalYearEnd):'')+'</div>'
           +'</div>'
           +'<div style="text-align:right">'+logoUpload+'</div>'
@@ -2581,7 +2611,7 @@ function _renderExecSummaryBody(el,c){
     }).filter(function(l){return l.vpct>10;}).sort(function(a,b){return Math.abs(b.variance)-Math.abs(a.variance);});
     h6='<div style="margin-bottom:1.25rem"><div class="rpt-ttl" style="margin-bottom:.5rem">Budget Variance — Notable Items</div>'
     +'<div style="font-size:11px;color:var(--muted);margin-bottom:.75rem">Categories with 10%+ variance from budget. These are your biggest planning misses.</div>'
-    +(varLines.length?varLines.slice(0,6).map(function(l){return'<div class="rpt-row"><span>'+l.cat+' <span style="font-size:10px;color:var(--muted)">('+l.type+')</span></span><span style="display:flex;gap:12px"><span style="color:var(--muted)">'+fmt(l.budget)+'</span><span class="'+(l.variance>=0?'vg':'vr')+'">'+(l.variance>=0?'+':'')+fmt(l.variance)+' ('+l.vpct+'%)</span></span></div>';}).join(''):'<div style="font-size:12px;color:var(--muted)">All categories within 10% of budget. Good forecasting.</div>')+'</div>';
+    +(varLines.length?varLines.slice(0,6).map(function(l){return'<div class="rpt-row"><span>'+escHtml(l.cat)+' <span style="font-size:10px;color:var(--muted)">('+l.type+')</span></span><span style="display:flex;gap:12px"><span style="color:var(--muted)">'+fmt(l.budget)+'</span><span class="'+(l.variance>=0?'vg':'vr')+'">'+(l.variance>=0?'+':'')+fmt(l.variance)+' ('+l.vpct+'%)</span></span></div>';}).join(''):'<div style="font-size:12px;color:var(--muted)">All categories within 10% of budget. Good forecasting.</div>')+'</div>';
   }
 
   // ── SECTION 7: PROJECTS ──────────────────
@@ -3112,13 +3142,14 @@ function saveMile(){
   if(!c.mileage)c.mileage=[];
   var item={id:uid(),date:g('mile-date').value||todayNum(),miles:miles,purpose:purpose,from:g('mile-from').value.trim(),to:g('mile-to').value.trim(),rate:rate,deduction:Math.round(miles*rate*100)/100,notes:g('mile-notes').value.trim()};
   if(MILE_EI>=0)c.mileage[MILE_EI]=item;else c.mileage.push(item);
+  if(typeof dwUpsertMileage==='function')dwUpsertMileage(c,item);
   sv();renderMileageRpt();closeM('m-mile');MILE_EI=-1;
   ['mile-miles','mile-purpose','mile-from','mile-to','mile-notes'].forEach(function(id){var el=g(id);if(el)el.value='';});
   if(g('mile-rate'))g('mile-rate').value='0.67';
   if(g('mile-preview'))g('mile-preview').textContent='';
 }
 var MILE_EI=-1;
-function delMile(i){var c=gc();if(!c||!confirm('Delete this mileage entry?'))return;c.mileage.splice(i,1);sv();renderMileageRpt();}
+function delMile(i){var c=gc();if(!c||!confirm('Delete this mileage entry?'))return;var m=c.mileage[i];c.mileage.splice(i,1);if(m&&typeof dwDeleteMileage==='function')dwDeleteMileage(c,m);sv();renderMileageRpt();}
 function renderMileageRpt(){
   var c=gc();if(!c)return;var el=g('rpt-mileage');if(!el)return;
   if(!c.mileage)c.mileage=[];
@@ -3164,15 +3195,23 @@ function saveAsset(){
   var method=g('asset-method').value||'sl';
   var annual=method==='sl'?(cost-salvage)/life:method==='macrs'?cost*(2/Math.max(life,3)):cost*(2/life);
   if(!c.fixedAssets)c.fixedAssets=[];
-  var item={id:uid(),name:name,date:g('asset-date').value||todayNum(),cost:cost,life:life,salvage:salvage,method:method,annualDepr:Math.round(annual*100)/100,notes:g('asset-notes').value.trim()};
+  var isNewAsset=ASSET_EI<0;
+  var itemId=isNewAsset?uid():(c.fixedAssets[ASSET_EI].id||uid());
+  var acctCode=_ensureDedicatedCOA(c,name,'Asset','Fixed Assets');
+  var item={id:itemId,name:name,date:g('asset-date').value||todayNum(),cost:cost,life:life,salvage:salvage,method:method,annualDepr:Math.round(annual*100)/100,notes:g('asset-notes').value.trim(),acctCode:acctCode};
   if(ASSET_EI>=0)c.fixedAssets[ASSET_EI]=item;else c.fixedAssets.push(item);
-  sv();renderAssetsRpt();closeM('m-asset');ASSET_EI=-1;
+  // Dr [asset's dedicated account] / Cr Cash for the purchase — previously never posted at
+  // all (see CLARITY_TODO queue item 2 in getCashFlowStatement()'s comment).
+  var memo='Fixed asset purchase: '+name;
+  if(isNewAsset)postToLedger(c,acctCode,_defaultCashCode(c),cost,memo,'asset',itemId);
+  else updateLedgerEntry(c,itemId,acctCode,_defaultCashCode(c),cost,memo,'asset');
+  sv();renderAssetsRpt();renderTrialBalance(c);renderGL(c);renderBalanceSheet(c);closeM('m-asset');ASSET_EI=-1;
   ['asset-name','asset-date','asset-cost','asset-notes'].forEach(function(id){var el=g(id);if(el)el.value='';});
   if(g('asset-life'))g('asset-life').value='5';
   if(g('asset-salvage'))g('asset-salvage').value='0';
   if(g('asset-preview'))g('asset-preview').textContent='';
 }
-function delAsset(i){var c=gc();if(!c||!confirm('Delete this asset?'))return;if(!c.fixedAssets)return;c.fixedAssets.splice(i,1);sv();renderAssetsRpt();}
+function delAsset(i){var c=gc();if(!c||!confirm('Delete this asset?'))return;if(!c.fixedAssets)return;var a=c.fixedAssets[i];if(a&&a.id)voidLedgerEntry(c,a.id);c.fixedAssets.splice(i,1);sv();renderAssetsRpt();renderTrialBalance(c);renderGL(c);renderBalanceSheet(c);}
 function renderAssetsRpt(){
   var c=gc();if(!c)return;var el=g('rpt-assets');if(!el)return;
   if(!c.fixedAssets)c.fixedAssets=[];
@@ -3306,7 +3345,7 @@ function renderLoansRpt(){
       +'<td><div class="row-acts">'
       +(isPosted
         ?'<span class="badge b-green" style="font-size:10px">Posted <i class="fas fa-check"></i></span>'
-        :'<button class="add-btn" style="font-size:10px;padding:3px 8px" onclick="loanPostPayment('+_loanRptIdx+','+r.num+','+r.interest.toFixed(2)+','+r.principal.toFixed(2)+')" title="Post this payment to expenses and journal">Post</button>')
+        :'<button class="add-btn" style="font-size:10px;padding:3px 8px" onclick="postLoanPayment('+_loanRptIdx+','+r.num+','+r.interest.toFixed(2)+','+r.principal.toFixed(2)+')" title="Post this payment to the ledger">Post</button>')
       +'</div></td></tr>';
   }).join('');
 
@@ -3342,39 +3381,15 @@ function renderLoansRpt(){
     // Schedule table
     +'<div class="card"><div class="c-head"><span class="c-title">Payment schedule</span>'
     +'<div style="display:flex;gap:6px">'
-    +'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:12px" onclick="LOAN_EI='+_loanRptIdx+';openM(\'m-loan\')" title="Edit loan">&#9998;</button>'
-    +'<button class="d-btn" style="border:1px solid var(--red-bg);border-radius:7px;padding:4px 10px;font-size:12px" onclick="loanDel('+_loanRptIdx+')" title="Delete loan">&#215;</button>'
+    +'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:12px" onclick="editLoan('+_loanRptIdx+')" title="Edit loan">&#9998;</button>'
+    +'<button class="d-btn" style="border:1px solid var(--red-bg);border-radius:7px;padding:4px 10px;font-size:12px" onclick="delLoan('+_loanRptIdx+')" title="Delete loan">&#215;</button>'
     +'</div></div>'
     +'<div style="max-height:380px;overflow-y:auto">'
     +'<table><thead><tr><th style="width:22%">Payment</th><th style="width:14%">Total</th><th style="width:14%">Interest</th><th style="width:14%">Principal</th><th style="width:14%">Balance</th><th style="width:22%"></th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--soft)">Posting a payment books interest to expenses (acct 5700) and records principal reduction as a journal entry against your loan liability account.</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--soft)">Posting a payment books interest as an expense and reduces the loan liability, both posted to the general ledger.</div>'
     +'</div>'
     +'</div>';
-}
-
-function loanPostPayment(li,num,interest,principal){
-  var c=gc();if(!c||!c.loans[li])return;
-  var loan=c.loans[li];
-  if(!confirm('Post payment #'+num+' for '+escHtml(loan.name)+'?\n\nInterest: '+fmt(interest)+' → Expense (5700)\nPrincipal: '+fmt(principal)+' → Reduces loan liability'))return;
-  if(!c.expenses)c.expenses=[];
-  if(!c.journalEntries)c.journalEntries=[];
-  var date=todayNum();
-  // Post interest to expenses
-  if(interest>0.01)c.expenses.push({id:uid(),desc:'Loan interest — '+loan.name+' pmt #'+num,cat:'Interest expense',amt:Number(interest.toFixed(2)),date:date,acctCode:'5700',reconciled:false,recurring:'None',freq:'One-time',fixed:'Fixed',loanId:loan.id});
-  // Journal entry: Dr Loan Payable / Cr Cash (principal)
-  c.journalEntries.push({id:uid(),date:date,type:'Loan payment',memo:'Principal — '+loan.name+' pmt #'+num,debitAcct:loan.acctCode||'2200',creditAcct:'Cash',amt:Number(principal.toFixed(2)),notes:'Auto-posted from loan schedule'});
-  if(!loan.posted)loan.posted=[];
-  loan.posted.push(num);
-  sv();renderLoansRpt();renderReports();
-}
-
-function loanDel(li){
-  var c=gc();if(!c||!c.loans[li])return;
-  if(!confirm('Delete '+c.loans[li].name+' and its amortization schedule?'))return;
-  c.loans.splice(li,1);
-  _loanRptIdx=c.loans.length?Math.max(0,li-1):0;
-  sv();renderLoansRpt();
 }
 
 // ── FUNCTIONAL EXPENSE ALLOCATION ───────────────────────────────────────────
@@ -3466,67 +3481,6 @@ function deleteTransfer(ti){
   var c=gc();if(!c||!c.fundTransfers||!c.fundTransfers[ti])return;
   if(!confirm('Remove this transfer? This cannot be undone.'))return;
   c.fundTransfers.splice(ti,1);
-  sv();renderReports();
-}
-
-function openReleaseModal(){
-  var c=gc();if(!c)return;
-  var funds=(c.funds||[]).filter(function(f){return f.type==='Restricted'||f.type==='Permanently Restricted'||f.type==='Endowment';});
-  if(!funds.length){alert('No restricted or endowment funds found. Add a restricted fund first under the Funds tab.');return;}
-  // Populate from-fund dropdown (restricted funds only)
-  var fromOpts=funds.map(function(f){return'<option value="'+escHtml(f.name)+'">'+escHtml(f.name)+' ('+f.type+')</option>';}).join('');
-  var rel=g('rel-fund');if(rel)rel.innerHTML=fromOpts;
-  // Populate to-fund dropdown (unrestricted funds + blank)
-  var toFunds=(c.funds||[]).filter(function(f){return f.type==='Unrestricted';});
-  var toOpts='<option value="">— General unrestricted —</option>'+toFunds.map(function(f){return'<option value="'+escHtml(f.name)+'">'+escHtml(f.name)+'</option>';}).join('');
-  var rel2=g('rel-to-fund');if(rel2)rel2.innerHTML=toOpts;
-  // Clear fields
-  ['rel-date','rel-amt','rel-note'].forEach(function(id){var el=g(id);if(el)el.value='';});
-  var w=g('rel-warn');if(w)w.style.display='none';
-  openM('m-release');
-}
-
-function saveRelease(){
-  var c=gc();if(!c)return;
-  // PERIOD LOCK GUARD
-  var _relLockDate=g('rel-date')&&g('rel-date').value.trim();
-  if(_relLockDate&&isDateLocked(c,_relLockDate)){periodLockAlert(c.closedThrough);return;}
-  var fundName=g('rel-fund')&&g('rel-fund').value;
-  var dateVal=g('rel-date')&&g('rel-date').value.trim();
-  var amt=Number(g('rel-amt')&&g('rel-amt').value||0);
-  var note=g('rel-note')&&g('rel-note').value.trim();
-  var toFund=g('rel-to-fund')&&g('rel-to-fund').value||'';
-  if(!fundName){alert('Please select a fund.');return;}
-  if(!dateVal){alert('Please enter a release date.');return;}
-  if(!amt||amt<=0){alert('Please enter a valid amount.');return;}
-  if(!note){alert('Please enter a note describing the purpose of this release.');return;}
-  // Warn if release exceeds available restricted balance
-  var fy=getFiscalYear(c.fiscalYearEnd);
-  var fundInc=(c.income||[]).filter(function(r){return r.fund===fundName&&!r.deleted&&!r.voided;}).reduce(function(s,r){return s+Number(r.recv||0);},0);
-  var fundExp=(c.expenses||[]).filter(function(e){return e.fund===fundName&&!e.deleted&&!e.voided;}).reduce(function(s,e){return s+Number(e.amt||0);},0);
-  var prevReleased=(c.restrictionReleases||[]).filter(function(r){return r.fundName===fundName;}).reduce(function(s,r){return s+Number(r.amount||0);},0);
-  var available=fundInc-fundExp-prevReleased;
-  var warn=g('rel-warn');
-  if(amt>available&&available>=0){
-    if(!confirm('Release amount ('+fmt(amt)+') exceeds the available restricted balance for '+fundName+' ('+fmt(available)+'). This may indicate expenses haven\'t been recorded yet.\nProceed anyway?'))return;
-  }
-  if(!c.restrictionReleases)c.restrictionReleases=[];
-  c.restrictionReleases.push({
-    id:uid(),
-    fundName:fundName,
-    toFund:toFund,
-    date:dateVal,
-    amount:amt,
-    note:note,
-    createdAt:new Date().toISOString()
-  });
-  sv();closeM('m-release');renderReports();
-}
-
-function deleteRelease(ri){
-  var c=gc();if(!c||!c.restrictionReleases||!c.restrictionReleases[ri])return;
-  if(!confirm('Remove this restriction release? This cannot be undone.'))return;
-  c.restrictionReleases.splice(ri,1);
   sv();renderReports();
 }
 
@@ -3671,7 +3625,7 @@ function renderBudgetMultiRpt(){
         grpTots[ci]+=(val||0);
         return'<td style="text-align:right">'+(val===null?'<span style="color:var(--muted)">—</span>':fmt(val))+'</td>';
       }).join('');
-      return'<tr><td style="padding-left:1rem;font-size:12px">'+b.cat+'</td>'+cells+'</tr>';
+      return'<tr><td style="padding-left:1rem;font-size:12px">'+escHtml(b.cat)+'</td>'+cells+'</tr>';
     }).join('');
     var totCells=grpTots.map(function(t){return'<td style="text-align:right;font-weight:500">'+fmt(t)+'</td>';}).join('');
     return'<tr style="background:var(--bg)"><td style="font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)" colspan="'+(cols.length+1)+'">'+grpName+'</td></tr>'
@@ -3714,7 +3668,7 @@ function renderBudgetTwoYrRpt(){
       var vals=cols.map(function(col,ci){var found=(col.items||[]).find(function(x){return x.cat===b.cat&&x.type===b.type;});var v=found?Number(found.amt||0):null;grpTots[ci]+=(v||0);if(b.type==='Income')grandInc[ci]+=(v||0);else grandExp[ci]+=(v||0);return v;});
       var cells=vals.map(function(v){return'<td style="text-align:right">'+(v===null?'<span style="color:var(--muted)">—</span>':fmt(v))+'</td>';}).join('');
       var changeCell='';if(cols.length>1){var d=( vals[1]||0)-(vals[0]||0);changeCell='<td style="text-align:right;font-size:12px" class="'+(d>0?'vg':d<0?'vr':'')+'">'+( d===0?'—':(d>0?'+':'')+fmt(d))+'</td>';}
-      return'<tr><td style="padding-left:1rem;font-size:12px">'+b.cat+'</td>'+codeCell+cells+changeCell+'</tr>';
+      return'<tr><td style="padding-left:1rem;font-size:12px">'+escHtml(b.cat)+'</td>'+codeCell+cells+changeCell+'</tr>';
     }).join('');
     var totCells=grpTots.map(function(t){return'<td style="text-align:right;font-weight:500">'+fmt(t)+'</td>';}).join('');
     var totChange='';if(cols.length>1){var td=grpTots[1]-grpTots[0];totChange='<td style="text-align:right;font-weight:500" class="'+(td>0?'vg':td<0?'vr':'')+'">'+( td===0?'—':(td>0?'+':'')+fmt(td))+'</td>';}
@@ -3736,7 +3690,7 @@ function renderBudgetExportRpt(){
     var isInc=items.some(function(b){return b.type==='Income';});
     var grpTot=items.reduce(function(s,b){return s+Number(b.amt||0);},0);
     if(isInc)totInc+=grpTot;else totExp+=grpTot;
-    var rows=items.map(function(b){return'<div class="rpt-row"><span style="padding-left:1.25rem;color:var(--muted)">'+b.cat+'</span><span>'+fmt(b.amt)+'</span></div>';}).join('');
+    var rows=items.map(function(b){return'<div class="rpt-row"><span style="padding-left:1.25rem;color:var(--muted)">'+escHtml(b.cat)+'</span><span>'+fmt(b.amt)+'</span></div>';}).join('');
     return'<div style="margin-bottom:.5rem">'
     +'<div style="display:flex;justify-content:space-between;padding:7px 0;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-top:1px solid var(--soft)"><span>'+grp+'</span></div>'
     +rows
@@ -4366,8 +4320,8 @@ function buildDynMods(type){
   var ia='<div class="fl"><label>Account (COA)</label><div style="display:flex;gap:6px;align-items:center"><div class="sw" style="flex:1"><select id="i-acct" style="width:100%"></select></div><button type="button" class="add-btn" style="white-space:nowrap;font-size:11px;padding:4px 8px" onclick="quickNewAcct(\'i-acct\',\'Income\')">+ New</button></div></div>';
   var ra='<div class="fl"><label>Account (COA)</label><div style="display:flex;gap:6px;align-items:center"><div class="sw" style="flex:1"><select id="r-acct" style="width:100%"></select></div><button type="button" class="add-btn" style="white-space:nowrap;font-size:11px;padding:4px 8px" onclick="quickNewAcct(\'r-acct\',\'Income\')">+ New</button></div></div>';
   var pia='<div class="fl"><label>Account (COA)</label><div style="display:flex;gap:6px;align-items:center"><div class="sw" style="flex:1"><select id="pi-acct" style="width:100%"></select></div><button type="button" class="add-btn" style="white-space:nowrap;font-size:11px;padding:4px 8px" onclick="quickNewAcct(\'pi-acct\',\'Income\')">+ New</button></div></div>';
-  var billModal='<div class="overlay" id="m-bill"><div class="modal"><button class="cx" onclick="closeM(\'m-bill\')">&#215;</button><div class="m-title">Enter bill (A/P)</div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Vendor *</label><input type="text" id="bill-vendor" placeholder="e.g. Office Depot"></div><div class="fl" style="margin-bottom:0"><label>Amount ($)</label><input type="number" id="bill-amt" placeholder="0" oninput="fmtAmt(this)"></div></div><div class="fl"><label>Description</label><input type="text" id="bill-desc" placeholder="e.g. Office supplies — March"></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Bill received</label><input type="text" id="bill-recv" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl" style="margin-bottom:0"><label>Due date</label><input type="text" id="bill-due" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Account (COA)</label><div class="sw" style="width:100%"><select id="bill-acct" style="width:100%"></select></div></div><div class="fl" style="margin-bottom:0"><label>Category</label><input type="text" id="bill-cat" placeholder="e.g. Supplies"></div></div><div class="fl"><label>Notes</label><textarea id="bill-notes" placeholder="Invoice #, payment terms..."></textarea></div><div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveBill()">Save bill</button><button class="add-btn" style="flex:1" onclick="saveBillAndNew()">Save &amp; new</button></div></div></div>';
   var ccModal='<div class="overlay" id="m-cc"><div class="modal"><button class="cx" onclick="closeM(\'m-cc\')">&#215;</button><div class="m-title">Credit card</div><div class="fl"><label>Card name *</label><input type="text" id="cc-name" placeholder="e.g. Chase Sapphire, Amex Blue"></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Network</label><select id="cc-network"><option>Visa</option><option>Mastercard</option><option>Amex</option><option>Discover</option><option>Other</option></select></div><div class="fl" style="margin-bottom:0"><label>Last 4 digits</label><input type="text" id="cc-last4" placeholder="4321" maxlength="4"></div></div><div class="fl"><label>Credit limit ($, optional)</label><input type="number" id="cc-limit" placeholder="0" oninput="fmtAmt(this)"></div><div style="font-size:11px;color:var(--muted);margin-bottom:.75rem">Charges go to expenses by category and feed your P&amp;L and GL. Reconcile via the Reconciliation tab.</div><button class="sv-btn" onclick="saveCC()">Save card</button></div></div>';
+  var loanModal='<div class="overlay" id="m-loan"><div class="modal"><button class="cx" onclick="closeM(\'m-loan\')">&#215;</button><div class="m-title">Add loan</div><div class="fl"><label>Loan name *</label><input type="text" id="loan-name" placeholder="e.g. SBA Loan, Equipment Financing"></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Principal ($)</label><input type="number" id="loan-principal" placeholder="50000" oninput="fmtAmt(this)"></div><div class="fl" style="margin-bottom:0"><label>Annual interest rate (%)</label><input type="number" id="loan-rate" placeholder="6.5" step="0.01"></div></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Term (months)</label><input type="number" id="loan-term" placeholder="60"></div><div class="fl" style="margin-bottom:0"><label>First payment date</label><input type="text" id="loan-start" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><button class="sv-btn" onclick="saveLoan()">Generate schedule</button></div></div>';
   h+='<div class="overlay" id="m-project"><div class="modal"><button class="cx" onclick="closeM(\'m-project\')">&#215;</button><div class="m-title">Project/Event</div><div class="fl"><label>Project name *</label><input type="text" id="proj-name" placeholder="e.g. Annual Gala, Q3 Campaign"></div><div class="fl"><label>Description</label><input type="text" id="proj-desc" placeholder="Brief description"></div><div class="fl"><label>Total budget ($)</label><input type="number" id="proj-budget" placeholder="0" oninput="fmtAmt(this)"></div><div class="fl"><label>Notes</label><textarea id="proj-notes" placeholder="Goals, scope, team..."></textarea></div><div class="fl" style="flex-direction:row;align-items:center;gap:10px;margin-bottom:.75rem"><input type="checkbox" id="proj-multiyear" style="width:16px;height:16px;cursor:pointer"><label style="margin:0;font-size:13px;cursor:pointer" for="proj-multiyear">Multi-year project (grant or capital project spanning fiscal years)</label></div><div id="proj-grant-row" style="display:none"><div class="fl"><label>Link to grant (optional)</label><div class="sw"><select id="proj-grant" style="width:100%"></select></div></div></div><button class="sv-btn" onclick="saveProject()">Save project</button></div></div>';
   h+='<div class="overlay" id="m-bank-acct"><div class="modal"><button class="cx" onclick="closeM(\'m-bank-acct\')">&#215;</button><div class="m-title" id="m-bank-acct-title">Bank account</div><div class="fl"><label>Account name *</label><input type="text" id="ba-name" placeholder="e.g. Chase Checking, Savings"></div><div class="fl"><label>Account type</label><select id="ba-type"><option value="checking">Checking</option><option value="savings">Savings</option><option value="money_market">Money market</option><option value="other">Other</option></select></div><div class="fl"><label>Account number (last 4, optional)</label><input type="text" id="ba-last4" placeholder="e.g. 4321" maxlength="4"></div><div class="fl"><label>Next check number (optional)</label><input type="number" id="ba-next-check" placeholder="e.g. 1001" min="1"><div style="font-size:11px;color:var(--muted);margin-top:3px">Set this once to match wherever your physical check stock starts. It auto-advances each time you print a check.</div></div><div class="fl"><label>What does your check page look like?</label><select id="ba-check-format"><option value="voucher2">1 check + 2 vouchers</option><option value="voucher1">1 check + 1 voucher</option><option value="standard3">3 checks, no vouchers</option></select></div>'
     +'<div class="fl" style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.25rem"><label>Check print alignment</label><div style="font-size:11px;color:var(--muted);margin-bottom:.5rem">Set your printer to <strong>Actual size / 100%</strong> with no auto-fit before printing — that\'s the most common cause of misalignment, more than these offsets. Then print a test page, hold it against your actual check stock, and nudge the arrows until a real check prints in the right spot.</div>'
@@ -4383,21 +4337,21 @@ function buildDynMods(type){
     h+='<div class="overlay" id="m-fund"><div class="modal"><button class="cx" onclick="closeM(\'m-fund\')">&#215;</button><div class="m-title">Add / edit fund</div><div class="fl"><label>Fund name *</label><input type="text" id="fund-name" placeholder="e.g. General Operating, Smith Grant Restricted"></div><div class="fl"><label>Fund type</label><select id="fund-type"><option value="Unrestricted">Unrestricted</option><option value="Restricted">Temporarily Restricted</option><option value="Permanently Restricted">Permanently Restricted</option><option value="Capital">Capital / Building</option><option value="Endowment">Endowment</option></select></div><div class="fl"><label>Description (optional)</label><input type="text" id="fund-desc" placeholder="e.g. Day-to-day operations with no donor restrictions"></div><button class="sv-btn" onclick="saveFund()">Save fund</button></div></div>';
     h+='<div class="overlay" id="m-release"><div class="modal"><button class="cx" onclick="closeM(\'m-release\')">&#215;</button><div class="m-title">Record restriction release</div><div class="fl"><label>Restricted fund *</label><div class="sw" style="width:100%"><select id="rel-fund" style="width:100%"></select></div></div><div class="fr"><div><label>Amount released ($)</label><input type="number" id="rel-amt" placeholder="0" oninput="fmtAmt(this)"></div><div><label>Date (MM/DD/YYYY)</label><input type="text" id="rel-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fl"><label>Note / purpose</label><input type="text" id="rel-note" placeholder="e.g. Program activities completed per grant terms"></div><button class="sv-btn" onclick="saveRelease()">Save release</button></div></div>';
     h+='<div class="overlay" id="m-grant"><div class="modal"><button class="cx" onclick="closeM(\'m-grant\')">&#215;</button><div class="m-title">Grant details</div><div class="fl"><label>Grant name *</label><input type="text" id="g-n" placeholder="Smith Family Foundation Grant"></div><div class="fr"><div><label>Funder</label><input type="text" id="g-f"></div><div><label>Status</label><select id="g-st"><option>Prospecting</option><option>Applied</option><option>Awarded</option><option>In Progress</option><option>Reporting</option><option>Closed</option><option>Denied</option></select></div></div><div class="fr"><div><label>Amount awarded ($)</label><input type="number" id="g-a" oninput="fmtAmt(this)"></div><div><label>Application deadline</label><input type="text" id="g-appdl" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fr"><div><label>Reporting deadline</label><input type="text" id="g-dl" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Grant portal URL</label><input type="text" id="g-portal" placeholder="https://apply.foundation.org"></div></div><div class="fl"><label>Match requirement</label><input type="text" id="g-m" placeholder="e.g. 1:1 match"></div><div class="fl"><label>Match amount required ($)</label><input type="number" id="g-mr" placeholder="0" oninput="fmtAmt(this)"></div><div class="fl"><label>Restrictions</label><textarea id="g-r" placeholder="What can and cannot this grant be spent on?"></textarea></div><div class=\"fl\"><label>Close-out requirements <span style=\"font-size:10px;color:var(--muted);font-weight:400\">— must all be checked to mark grant reconciled</span></label><div id=\"g-req-list\" style=\"margin-bottom:6px\"></div><div style=\"display:flex;gap:6px\"><input type=\"text\" id=\"g-req-new\" placeholder=\"e.g. Submit final report\" style=\"flex:1;font-size:12px\"><button class=\"add-btn\" style=\"font-size:11px;padding:4px 10px;flex-shrink:0\" onclick=\"_addGrantReq()\">+ Add</button></div></div><button class=\"sv-btn\" onclick=\"saveGrant()\">Save grant</button></div></div>';
-    h+=billModal;h+=ccModal;
+    h+=ccModal;
     h+='<div class="overlay" id="m-inc"><div class="modal"><button class="cx" onclick="closeM(\'m-inc\')">&#215;</button><div class="m-title">Add income</div>'+ia+'<div class="fr"><div><label>Source name (optional)</label><input type="text" id="i-n" placeholder="e.g. Spring Gala"></div><div><label>Link to</label><select id="i-party-type"><option value="">— Not linked —</option><option value="donor">Donor</option><option value="customer">Customer</option></select></div></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="i-c" style="width:100%"></select></div></div><div><label>Status</label><select id="i-s"><option>Prospecting</option><option>Applied</option><option>Awarded</option><option>Received</option></select></div></div><div class="fr"><div><label>Projected ($)</label><input type="number" id="i-p" oninput="fmtAmt(this)"></div><div><label>Received ($)</label><input type="number" id="i-r" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Date (MM/DD/YYYY)</label><input type="text" id="i-dt" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Fund</label><div class="sw" style="width:100%"><select id="i-fund" style="width:100%"><option value="">— None —</option></select></div></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Deposit to account</label><div class=\"sw\" style=\"width:100%\"><select id=\"i-bank\" style=\"width:100%\"></select></div></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"i-proj\" style=\"width:100%\"></select></div></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Grant (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"i-gid\" style=\"width:100%\"></select></div></div>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveInc()">Save</button><button class="add-btn" style="flex:1" onclick="saveIncAndNew()">Save &amp; new</button><button class="add-btn" id="del-inc-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;income&quot;)"><i class="fas fa-trash"></i> Delete</button></div></div></div>';
     h+='<div class="overlay" id="m-exp"><div class="modal"><button class="cx" onclick="closeM(\'m-exp\')">&#215;</button><div class="m-title">Add expense</div>'+ca+'<div class="fl"><label>Description</label><input type="text" id="e-d" placeholder="Program supplies"></div><div style="display:none"><select id="e-c"></select></div><div class="fr"><div><label>990 Part IX Line <span style="font-size:10px;color:var(--muted)">(optional)</span></label><div class="sw" style="width:100%"><select id="e-990line" style="width:100%" onchange="exp990LineChange(this)"><option value="">— Select line —</option><option value="L1">Line 1 — Grants to domestic orgs</option><option value="L2">Line 2 — Grants to domestic individuals</option><option value="L3">Line 3 — Grants to foreign orgs/individuals</option><option value="L5">Line 5 — Compensation of officers</option><option value="L6">Line 6 — Compensation not above</option><option value="L7">Line 7 — Other salaries &amp; wages</option><option value="L8">Line 8 — Pension plan contributions</option><option value="L9">Line 9 — Other employee benefits</option><option value="L10">Line 10 — Payroll taxes</option><option value="L11a">Line 11a — Management fees</option><option value="L11b">Line 11b — Legal fees</option><option value="L11c">Line 11c — Accounting fees</option><option value="L11d">Line 11d — Lobbying fees</option><option value="L11e">Line 11e — Professional fundraising</option><option value="L11g">Line 11g — Other fees for services</option><option value="L12">Line 12 — Advertising &amp; promotion</option><option value="L13">Line 13 — Office expenses</option><option value="L14">Line 14 — Information technology</option><option value="L15">Line 15 — Royalties</option><option value="L16a">Line 16a — Occupancy</option><option value="L17">Line 17 — Travel</option><option value="L19">Line 19 — Conferences &amp; meetings</option><option value="L20">Line 20 — Interest</option><option value="L22">Line 22 — Depreciation</option><option value="L23">Line 23 — Insurance</option><option value="L24">Line 24 — Other expenses</option><option value="custom">+ Add custom…</option></select></div></div><div><label>Amount ($)</label><input type="number" id="e-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Date (MM/DD/YYYY)</label><input type="text" id="e-dt" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Paid from account <span style=\\\"color:var(--red)\\\">*</span></label><div class=\"sw\" style=\"width:100%\"><select id=\"e-bank\" style=\"width:100%\"></select></div></div>'+'<div class=\"fr\"><div><label>Fund</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-f\" style=\"width:100%\"><option value=\"\">— None —</option></select></div></div><div><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-proj\" style=\"width:100%\"></select></div></div></div>'+'<div class=\"fr\" style=\"align-items:flex-end;margin-bottom:.5rem\"><div style=\"flex:2\"><label>Grant allocation (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-gid\" style=\"width:100%\"><option value=\"\">-- No grant --</option></select></div></div><div style=\"flex:1\"><label style=\"font-size:11px\">% toward grant</label><input type=\"number\" id=\"e-gpct\" min=\"0\" max=\"100\" placeholder=\"100\" style=\"width:100%\"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Check / Ref # (optional)</label><input type=\"text\" id=\"e-ref\" placeholder=\"e.g. 1472 or ACH\"></div>'+'<div class=\"fr\"><div class=\"fl\" style=\"margin-bottom:0\"><label>1099 contractor?</label><select id=\"e-1099\"><option value=\"\">No</option><option value=\"yes\">Yes</option></select></div><div class=\"fl\" style=\"margin-bottom:0\"><label>Vendor name</label><input type=\"text\" id=\"e-vendor\" placeholder=\"e.g. John Smith Consulting\\"></div><div class=\\"fl\\" style=\\"margin-bottom:0\"><label>EIN / TIN <span style=\\"font-size:10px;color:var(--muted)\">for 1099</span></label><input type=\\"text\" id=\\"e-tin\" placeholder="12-3456789"></div></div<div class=\\\"fr\\\"><div class=\\\"fl\\\" style=\\\"margin-bottom:0\\\"><label>Functional <span style=\\\"font-size:10px;color:var(--muted)\\\">(990)</span></label><select id=\\\"e-func\\\"><option value=\\\"\\\">&#x2014; Select &#x2014;</option><option value=\\\"program\\\">Program services</option><option value=\\\"management\\\">Mgmt &amp; general</option><option value=\\\"fundraising\\\">Fundraising</option></select></div><div class=\\\"fl\\\" style=\\\"margin-bottom:0\\\"><label>Receipt URL (optional)</label><input type=\\\"url\\\" id=\\\"e-url\\\" placeholder=\\\"https://drive.google.com/...\\\"></div></div>>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveExp()">Save</button><button class="add-btn" style="flex:1" onclick="saveExpAndNew()">Save &amp; new</button><button class="add-btn" id="del-exp-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;expenses&quot;)"><i class="fas fa-trash"></i> Delete</button></div></div></div>';
   }else if(type==='sb'){
     h+='<div class="overlay" id="m-rev"><div class="modal"><button class="cx" onclick="closeM(\'m-rev\')">&#215;</button><div class="m-title">Add revenue stream</div>'+ra+'<div class="fl"><label>Stream name</label><input type="text" id="r-n" placeholder="Consulting retainer"></div><div class="fl"><label>Customer / Client name (optional)</label><input type="text" id="r-cust" placeholder="e.g. Acme Corp"></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="r-c" style="width:100%"></select></div></div><div><label>Confidence</label><select id="r-cf"><option>Confirmed</option><option>Likely</option><option>Possible</option><option>Speculative</option></select></div></div><div class="fr"><div><label>Projected ($)</label><input type="number" id="r-p" oninput="fmtAmt(this)"></div><div><label>Actual ($)</label><input type="number" id="r-a" oninput="fmtAmt(this)"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Date (MM/DD/YYYY)</label><input type=\"text\" id=\"r-dt\" placeholder=\"MM/DD/YYYY\" onblur=\"autoDate(this)\" oninput=\"autoDate(this)\"></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Deposit to account</label><div class=\"sw\" style=\"width:100%\"><select id=\"r-bank\" style=\"width:100%\"></select></div></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"r-proj\" style=\"width:100%\"></select></div></div><div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Sales tax jurisdiction</label><div class=\"sw\" style=\"width:100%\"><select id=\"r-taxjur\" style=\"width:100%\" onchange=\"revTaxCalc()\"><option value=\"\">No sales tax</option></select></div></div><div class=\"fr\"><div><label>Tax rate (%)</label><input type=\"number\" id=\"r-taxrate\" min=\"0\" max=\"25\" step=\"0.001\" placeholder=\"0\" value=\"0\" oninput=\"revTaxCalc()\"></div><div><label>Tax collected ($)</label><input type=\"number\" id=\"r-taxamt\" placeholder=\"auto\" readonly style=\"background:var(--bg);color:var(--muted)\"></div></div>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveRev()">Save</button><button class="add-btn" style="flex:1" onclick="saveRevAndNew()">Save &amp; new</button><button class="add-btn" id="del-rev-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;revenue&quot;)"><i class="fas fa-trash"></i> Delete</button></div></div></div>';
     h+='<div class="overlay" id="m-exp"><div class="modal"><button class="cx" onclick="closeM(\'m-exp\')">&#215;</button><div class="m-title">Add expense</div>'+ca+'<div class="fl"><label>Description</label><input type="text" id="e-d" placeholder="Software subscriptions"></div><div style="display:none"><select id="e-c"></select></div><div class="fr"><div><label>Subcategory <span style="font-size:10px;color:var(--muted)">(optional)</span></label><input type="text" id="e-subcat" list="sb-subcat-list" placeholder="e.g. Software, Ads, Meals…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--soft);color:var(--text)"><datalist id="sb-subcat-list"><option value="Software &amp; subscriptions"><option value="Meals &amp; entertainment"><option value="Advertising &amp; marketing"><option value="Office supplies"><option value="Professional development"><option value="Travel &amp; transportation"><option value="Utilities"><option value="Repairs &amp; maintenance"><option value="Contractor payments"><option value="Insurance"><option value="Rent &amp; lease"><option value="Equipment &amp; hardware"><option value="Bank &amp; payment fees"><option value="Taxes &amp; licenses"><option value="Shipping &amp; postage"><option value="Inventory"><option value="Vehicle expenses"></datalist></div><div><label>Amount ($)</label><input type="number" id="e-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Frequency</label><select id="e-fr">'+FO+'</select></div><div><label>Type</label><select id="e-fx"><option>Fixed</option><option>Variable</option></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Paid from account <span style=\\\"color:var(--red)\\\">*</span></label><div class=\"sw\" style=\"width:100%\"><select id=\"e-bank\" style=\"width:100%\"></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-proj\" style=\"width:100%\"></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Check / Ref # (optional)</label><input type=\"text\" id=\"e-ref\" placeholder=\"e.g. 1472 or ACH\"></div>'+'<div class=\"fr\"><div class=\"fl\" style=\"margin-bottom:0\"><label>1099 contractor?</label><select id=\"e-1099\"><option value=\"\">No</option><option value=\"yes\">Yes</option></select></div><div class=\"fl\" style=\"margin-bottom:0\"><label>Vendor name</label><input type=\"text\" id=\"e-vendor\" placeholder=\"e.g. John Smith Consulting\\"></div><div class=\\"fl\\" style=\\"margin-bottom:0\"><label>EIN / TIN <span style=\\"font-size:10px;color:var(--muted)\">for 1099</span></label><input type=\\"text\" id=\\"e-tin\" placeholder="12-3456789"></div></div<div class=\\\"fl\\\" style=\\\"margin-bottom:.5rem\\\"><label>Receipt URL (optional)</label><input type=\\\"url\\\" id=\\\"e-url\\\" placeholder=\\\"https://drive.google.com/...\\\"></div>>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveExp()">Save</button><button class="add-btn" style="flex:1" onclick="saveExpAndNew()">Save &amp; new</button><button class="add-btn" id="del-exp-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;expenses&quot;)"><i class="fas fa-trash"></i> Delete</button></div></div></div>';
-    h+='<div class="overlay" id="m-inv"><div class="modal" style="max-width:480px"><button class="cx" onclick="closeM(\'m-inv\')">&#215;</button><div class="m-title">Invoice</div><div class="fr"><div><label>Invoice #</label><input type="text" id="inv-num" placeholder="INV-001"></div><div><label>Status</label><select id="inv-status"><option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Paid">Paid</option><option value="Overdue">Overdue</option></select></div></div><div class="fl"><label>Client / company</label><input type="text" id="inv-client" placeholder="Acme Corp"></div><div class="fl"><label>Description</label><input type="text" id="inv-desc" placeholder="Consulting services — April 2026"></div><div class="fr"><div><label>Amount ($)</label><input type="number" id="inv-amt" placeholder="0" oninput="fmtAmt(this)"></div><div><label>Issue date</label><input type="text" id="inv-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fl"><label>Due date</label><input type="text" id="inv-due" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl"><label>Notes (optional)</label><textarea id="inv-notes" placeholder="Payment terms, bank details..."></textarea></div><div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveInv()">Save invoice</button><button class="add-btn" style="flex:1" onclick="saveInvAndNew()">Save &amp; new</button></div></div></div>';
-    h+='<div class="overlay" id="m-je"><div class="modal"><button class="cx" onclick="closeM(\'m-je\')">&#215;</button><div class="m-title">Journal entry</div><div class="fr"><div><label>Date</label><input type="text" id="je-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Type</label><select id="je-type"><option>Loan payment</option><option>Depreciation</option><option>Equity change</option><option>Accrual</option><option>Prepaid expense</option><option>Other</option></select></div></div><div class="fl"><label>Memo</label><input type="text" id="je-memo" placeholder="e.g. Monthly loan principal payment"></div><div class="fr"><div><label>Debit account</label><input type="text" id="je-debit" placeholder="e.g. Loan Payable"></div><div><label>Credit account</label><input type="text" id="je-credit" placeholder="e.g. Cash / Assets"></div></div><div class="fl"><label>Amount ($)</label><input type="number" id="je-amt" placeholder="0" oninput="fmtAmt(this)"></div><div class="fl"><label>Notes (optional)</label><textarea id="je-notes" placeholder="Additional details..."></textarea></div><button class="sv-btn" onclick="saveJE()">Save entry</button></div></div>';
+    h+='<div class="overlay" id="m-inv"><div class="modal" style="max-width:480px"><button class="cx" onclick="closeM(\'m-inv\')">&#215;</button><div class="m-title">Invoice</div><div class="fr"><div><label>Invoice #</label><input type="text" id="inv-num" placeholder="INV-001"></div><div><label>Status</label><select id="inv-status"><option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Paid" disabled>Paid (use "Mark paid" instead)</option><option value="Overdue">Overdue</option></select></div></div><div class="fl"><label>Client / company</label><input type="text" id="inv-client" placeholder="Acme Corp"></div><div class="fl"><label>Description</label><input type="text" id="inv-desc" placeholder="Consulting services — April 2026"></div><div class="fr"><div><label>Amount ($)</label><input type="number" id="inv-amt" placeholder="0" oninput="fmtAmt(this)"></div><div><label>Issue date</label><input type="text" id="inv-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><div class="fl"><label>Due date</label><input type="text" id="inv-due" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl"><label>Notes (optional)</label><textarea id="inv-notes" placeholder="Payment terms, bank details..."></textarea></div><div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveInv()">Save invoice</button><button class="add-btn" style="flex:1" onclick="saveInvAndNew()">Save &amp; new</button></div></div></div>';
+    h+='<div class="overlay" id="m-je"><div class="modal"><button class="cx" onclick="closeM(\'m-je\')">&#215;</button><div class="m-title">Journal entry</div><div class="fr"><div><label>Date</label><input type="text" id="je-date" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Type</label><select id="je-type"><option>Loan payment</option><option>Depreciation</option><option>Equity change</option><option>Accrual</option><option>Prepaid expense</option><option>Other</option></select></div></div><div class="fl"><label>Memo</label><input type="text" id="je-memo" placeholder="e.g. Monthly loan principal payment"></div><div class="fr"><div><label>Debit account</label><div class="sw" style="width:100%"><select id="je-debit-acct" style="width:100%"></select></div></div><div><label>Credit account</label><div class="sw" style="width:100%"><select id="je-credit-acct" style="width:100%"></select></div></div></div><div class="fl"><label>Amount ($)</label><input type="number" id="je-amt" placeholder="0" oninput="fmtAmt(this)"></div><div class="fl"><label>Notes (optional)</label><textarea id="je-notes" placeholder="Additional details..."></textarea></div><button class="sv-btn" onclick="saveJE()">Save entry</button></div></div>';
     h+='<div class="overlay" id="m-bs"><div class="modal"><button class="cx" onclick="closeM(\'m-bs\')">&#215;</button><div class="m-title">Balance sheet item</div><div style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Section: <strong id="bs-sec-label"></strong></div><div class="fl"><label>Account name</label><input type="text" id="bs-name" placeholder="e.g. Cash, Equipment, Loan Payable"></div><div class="fl"><label id="bs-amt-label">Amount ($)</label><input type="number" id="bs-amt" placeholder="0" oninput="fmtAmt(this)"></div><button class="sv-btn" onclick="saveBSItem()">Save</button></div></div>';
-    h+=billModal;h+=ccModal;
-    h+='<div class="overlay" id="m-loan"><div class="modal"><button class="cx" onclick="closeM(\'m-loan\')">&#215;</button><div class="m-title">Add loan</div><div class="fl"><label>Loan name *</label><input type="text" id="loan-name" placeholder="e.g. SBA Loan, Equipment Financing"></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Principal ($)</label><input type="number" id="loan-principal" placeholder="50000" oninput="fmtAmt(this)"></div><div class="fl" style="margin-bottom:0"><label>Annual interest rate (%)</label><input type="number" id="loan-rate" placeholder="6.5" step="0.01"></div></div><div class="fr"><div class="fl" style="margin-bottom:0"><label>Term (months)</label><input type="number" id="loan-term" placeholder="60"></div><div class="fl" style="margin-bottom:0"><label>First payment date</label><input type="text" id="loan-start" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div><button class="sv-btn" onclick="saveLoan()">Generate schedule</button></div></div>';
+    h+=ccModal;
   }else{
     h+='<div class="overlay" id="m-peinc"><div class="modal"><button class="cx" onclick="closeM(\'m-peinc\')">&#215;</button><div class="m-title">Add income</div>'+pia+'<div class="fl"><label>Source</label><input type="text" id="pi-n" placeholder="e.g. Salary"></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="pi-c" style="width:100%"></select></div></div><div><label>Amount ($)</label><input type="number" id="pi-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Frequency</label><select id="pi-f">'+FO+'</select></div><div><label>Date (MM/DD/YYYY)</label><input type="text" id="pi-d" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="savePeInc()">Save</button><button class="add-btn" style="flex:1" onclick="savePeIncAndNew()">Save &amp; new</button></div></div></div>';
     h+='<div class="overlay" id="m-exp"><div class="modal"><button class="cx" onclick="closeM(\'m-exp\')">&#215;</button><div class="m-title">Add expense</div>'+ca+'<div class="fl"><label>Description</label><input type="text" id="e-d" placeholder="e.g. Rent"></div><div class="fr"><div><label>Category</label><div class="sw" style="width:100%"><select id="e-c" style="width:100%"></select></div></div><div><label>Amount ($)</label><input type="number" id="e-a" oninput="fmtAmt(this)"></div></div><div class="fr"><div><label>Frequency</label><select id="e-fr">'+FO+'</select></div><div><label>Date (MM/DD/YYYY)</label><input type="text" id="e-dt" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Paid from account <span style=\\\"color:var(--red)\\\">*</span></label><div class=\"sw\" style=\"width:100%\"><select id=\"e-bank\" style=\"width:100%\"></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Project (optional)</label><div class=\"sw\" style=\"width:100%\"><select id=\"e-proj\" style=\"width:100%\"></select></div></div>'+'<div class=\"fl\" style=\"margin-bottom:.5rem\"><label>Check / Ref # (optional)</label><input type=\"text\" id=\"e-ref\" placeholder=\"e.g. 1472 or ACH\"></div>'+'<div class=\"fr\"><div class=\"fl\" style=\"margin-bottom:0\"><label>1099 contractor?</label><select id=\"e-1099\"><option value=\"\">No</option><option value=\"yes\">Yes</option></select></div><div class=\"fl\" style=\"margin-bottom:0\"><label>Vendor name</label><input type=\"text\" id=\"e-vendor\" placeholder=\"e.g. John Smith Consulting\\"></div><div class=\\"fl\\" style=\\"margin-bottom:0\"><label>EIN / TIN <span style=\\"font-size:10px;color:var(--muted)\">for 1099</span></label><input type=\\"text\" id=\\"e-tin\" placeholder="12-3456789"></div></div<div class=\\\"fl\\\" style=\\\"margin-bottom:.5rem\\\"><label>Receipt URL (optional)</label><input type=\\\"url\\\" id=\\\"e-url\\\" placeholder=\\\"https://drive.google.com/...\\\"></div>>'+ro+'<div style="display:flex;gap:8px"><button class="sv-btn" onclick="saveExp()">Save</button><button class="add-btn" style="flex:1" onclick="saveExpAndNew()">Save &amp; new</button><button class="add-btn" id="del-exp-btn" style="display:none;background:none;border:1px solid var(--red);color:var(--red)" onclick="deleteFromModal(&quot;expenses&quot;)"><i class="fas fa-trash"></i> Delete</button></div></div></div>';
   }
+  h+=loanModal;
   h+='<div class="overlay" id="m-budget"><div class="modal"><button class="cx" onclick="closeM(\'m-budget\')">&#215;</button><div class="m-title">Budget line item</div><div class="fl"><label>Group</label><div class="sw" style="width:100%"><select id="b-g" style="width:100%"></select></div></div><div class="fl"><label>Line item (category)</label><div class="sw" style="width:100%"><select id="b-c" style="width:100%"></select></div></div><div class="fr"><div><label>Type</label><select id="b-t"><option>Income</option><option>Expense</option></select></div><div><label>Budgeted amount ($)</label><input type="number" id="b-a" oninput="fmtAmt(this)"></div></div><div class="fl"><label>Fund (optional)</label><div class="sw" style="width:100%"><select id="b-fund" style="width:100%"><option value="">— None —</option></select></div></div><div class="fl"><label>Overspend policy</label><select id="b-overspend"><option value="warn">⚠ Warn — allow with warning</option><option value="strict">🔒 Strict — block save</option></select></div><div style="display:flex;gap:8px"><button class="sv-btn" id="budget-sv-btn" onclick="saveBudget()">Save &amp; close</button><button class="add-btn" style="flex:1" onclick="saveBudgetAndNew()">Save &amp; new</button></div></div></div>';
   h+='<div class="overlay" id="m-jrn"><div class="modal"><button class="cx" onclick="closeM(\'m-jrn\')">&#215;</button><div class="m-title">Journal entry</div><div class="fl"><label>Entry</label><textarea id="j-t" placeholder="Wins, challenges, reflections..."></textarea></div><button class="sv-btn" onclick="saveJrn()">Save</button></div></div>';
   h+='<div class="overlay" id="m-act"><div class="modal"><button class="cx" onclick="closeM(\'m-act\')">&#215;</button><div class="m-title">Daily action item</div><div class="fl"><label>Task</label><input type="text" id="a-t" placeholder="e.g. Follow up on grant"></div><div class="fr"><div><label>Due date</label><input type="text" id="a-d" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div><label>Assigned to</label><input type="text" id="a-w" placeholder="Optional"></div></div><div class="fl"><label>Priority</label><select id="a-p"><option>High</option><option>Medium</option><option>Low</option></select></div><button class="sv-btn" onclick="saveAct()">Save</button></div></div>';
@@ -4450,6 +4404,7 @@ function saveGrant(){
       grantId:item.id
     };
     c.income.push(incEntry);
+    if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,incEntry);
     markDirty('funding','budget','reports','bs');
     // Show a quiet confirmation
     setTimeout(function(){
@@ -4466,6 +4421,7 @@ function saveGrant(){
   }
   markDirty('grants','budget','reports');
   if(_rGEI>=0)c.grants[_rGEI]=item;else{c.grants.push(item);AG=item.id;}
+  if(typeof dwUpsertGrant==='function')dwUpsertGrant(c,item);
   sv();renderGrants(c);renderBudgetMultiYear();renderReports();renderTodoBar();
   closeM('m-grant');
   ['g-n','g-f','g-a','g-dl','g-appdl','g-portal','g-m','g-mr','g-r'].forEach(function(id){var el=g(id);if(el)el.value='';});
@@ -4545,9 +4501,17 @@ function saveRev(){var c=gc();if(!c.revenue)c.revenue=[];
   var _netRevAmt=Number(item.act||0)-(_taxAmt>0?_taxAmt:0);
   var _existingId=_rREI>=0?(item.id||c.revenue[_rREI].id):item.id;
   if(_rREI>=0){
-    // Edit: supersede old ledger entries and repost
+    // Edit: supersede old ledger entries and repost. The sales-tax sub-entry
+    // (sourceId=_existingId+':stax') must ALSO go through updateLedgerEntry, not a raw
+    // postToLedger — postToLedger has no dedup of its own (that's what updateLedgerEntry is
+    // for), so every edit to a taxed revenue item was stacking a brand-new Sales Tax Payable
+    // entry on top of the previous one instead of superseding it, permanently overstating the
+    // liability by every prior edit's tax amount. Also: if tax is removed on this edit
+    // (_taxAmt now 0), the old tax entry must be voided, not silently left active — the
+    // previous code just skipped the whole tax branch in that case, leaving it stale forever.
     updateLedgerEntry(c,_existingId,_defaultCashCode(c),item.acctCode||'4010',_taxAmt>0?_netRevAmt:Number(item.act||0),item.name||'Revenue','revenue');
-    if(_taxAmt>0)postToLedger(c,_defaultCashCode(c),_stCode,_taxAmt,(item.name||'Revenue')+' — sales tax collected','revenue',_existingId+':stax');
+    if(_taxAmt>0)updateLedgerEntry(c,_existingId+':stax',_defaultCashCode(c),_stCode,_taxAmt,(item.name||'Revenue')+' — sales tax collected','revenue');
+    else voidLedgerEntry(c,_existingId+':stax');
   }else{
     postToLedger(c,_defaultCashCode(c),item.acctCode||'4010',_taxAmt>0?_netRevAmt:Number(item.act||0),item.name||'Revenue','revenue',item.id);
     if(_taxAmt>0)postToLedger(c,_defaultCashCode(c),_stCode,_taxAmt,(item.name||'Revenue')+' — sales tax collected','revenue',item.id+':stax');
@@ -4566,7 +4530,13 @@ function revTaxCalc(){
   if(ta)ta.value=act>0&&rate>0?(act*(rate/100)).toFixed(2):'';
 }
 // ── EDIT ITEM pre-fill for tax fields ───────────────────────────────────────
-function savePeInc(){var c=gc();if(!c.income)c.income=[];var n=g('pi-n').value.trim();if(!n)return;var item={name:n,cat:g('pi-c').value,amt:Number(g('pi-a').value||0),freq:g('pi-f').value,date:g('pi-d').value,acctCode:g('pi-acct')&&g('pi-acct').value||'',recurring:g('f-rec').value};markDirty('peinc','budget','reports');var _rPEI=resolveEI(c.income);if(_rPEI>=0)c.income[_rPEI]=item;else c.income.push(item);sv();renderPeInc(c);renderBudgetMultiYear();renderReports();closeM('m-peinc');['pi-n','pi-c','pi-a','pi-d'].forEach(function(id){g(id).value='';}); }
+function savePeInc(){var c=gc();if(!c.income)c.income=[];var n=g('pi-n').value.trim();if(!n)return;var _rPEI=resolveEI(c.income);var item={id:_rPEI>=0?(c.income[_rPEI].id||uid()):uid(),name:n,cat:g('pi-c').value,amt:Number(g('pi-a').value||0),freq:g('pi-f').value,date:g('pi-d').value,acctCode:g('pi-acct')&&g('pi-acct').value||'',recurring:g('f-rec').value};markDirty('peinc','budget','reports','bs');
+  // DOUBLE ENTRY: Dr Cash / Cr Income — this was previously missing entirely for Personal
+  // clients (unlike NP's saveInc()/SB's saveRev(), which always posted), so PE income never
+  // showed up on the General Ledger or Trial Balance tabs even though PE expenses did.
+  if(_rPEI>=0)updateLedgerEntry(c,item.id,_defaultCashCode(c),item.acctCode||'4010',Number(item.amt||0),item.name||'Income','income');
+  else postToLedger(c,_defaultCashCode(c),item.acctCode||'4010',Number(item.amt||0),item.name||'Income','income',item.id);
+  if(_rPEI>=0)c.income[_rPEI]=item;else c.income.push(item);sv();dwUpsertIncome(c,item);renderPeInc(c);renderBudgetMultiYear();renderReports();closeM('m-peinc');['pi-n','pi-c','pi-a','pi-d'].forEach(function(id){g(id).value='';}); }
 // ── FIX-6: Balance sheet cash asset adjustment ──────────────────────────────
 // Uses bsAssetId (stable ID) — never array index.
 function getBSAsset(c,bsAssetId){
@@ -4615,7 +4585,9 @@ function syncVendorFromExpense(c,item){
     if(item.is1099&&!exists.is1099){exists.is1099=true;if(item.tin1099&&!exists.tin)exists.tin=item.tin1099;}
     return;
   }
-  c.vendors.push({id:uid(),name:name,defaultCat:item.cat||'',defaultAcctCode:item.acctCode||'',is1099:!!item.is1099,tin:item.tin1099||'',email:'',phone:'',address:'',notes:''});
+  var _newVendor2={id:uid(),name:name,defaultCat:item.cat||'',defaultAcctCode:item.acctCode||'',is1099:!!item.is1099,tin:item.tin1099||'',email:'',phone:'',address:'',notes:''};
+  c.vendors.push(_newVendor2);
+  if(typeof dwUpsertVendor==='function')dwUpsertVendor(c,_newVendor2);
 }
 
 function deleteFromModal(type){
@@ -4938,6 +4910,7 @@ function saveActivity(){
         if(!c.income)c.income=[];
         var incItem={id:uid(),name:d.name,cat:'Individual donation',status:'Received',proj:amt,recv:amt,date:date,fund:fund,acctCode:'4010',fromActivityId:act.id,donorId:d.id};
         c.income.push(incItem);
+        if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,incItem);
         act.linkedIncome=incItem.id;
         if(typeof postToLedger==='function')postToLedger(c,'1010','4010',amt,'Donation: '+d.name,'income',incItem.id);
         markDirty('funding','budget','reports','bs');
@@ -4951,6 +4924,7 @@ function saveActivity(){
         if(!c.income)c.income=[];
         var pledgeItem={id:uid(),name:d.name+' (Pledge)',cat:'Individual donation',status:'Awarded',proj:pAmt,recv:0,date:date,fund:pFund,acctCode:'4010',fromActivityId:act.id,donorId:d.id};
         c.income.push(pledgeItem);
+        if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,pledgeItem);
         act.linkedPledge=pledgeItem.id;
         markDirty('funding','budget','reports');
       }
@@ -5046,6 +5020,7 @@ function _donForceLog(){
   var _p=window._donPendingRecord;
   _p.c.donors[_p.di].donations.push(_p.record);
   _postDonationLedger(_p.c,_p.di,_p.record);
+  if(typeof dwUpsertDonation==='function')dwUpsertDonation(_p.c,_p.c.donors[_p.di],_p.record);
   sv();renderDonors(_p.c);closeM('m-donation');
   window._donPendingRecord=null;
 }
@@ -5090,7 +5065,7 @@ function editBudgetLine(i){
   if(g('b-overspend'))g('b-overspend').value=b.overspendPolicy||'warn';
   openM('m-budget');
 }
-function delBudgetLine(i){var c=gc();if(!c||!c.budgetItems[i])return;if(!confirm('Delete "'+c.budgetItems[i].cat+'"?'))return;c.budgetItems.splice(i,1);sv();renderBudgetMultiYear();}
+function delBudgetLine(i){var c=gc();if(!c||!c.budgetItems[i])return;if(!confirm('Delete "'+c.budgetItems[i].cat+'"?'))return;var bi=c.budgetItems[i];c.budgetItems.splice(i,1);if(typeof dwDeleteBudgetItem==='function')dwDeleteBudgetItem(c,bi);sv();renderBudgetMultiYear();}
 function saveBudget(){
   if(BUDGET_VIEW==='proposed'){saveProposedBudget();return;}
   var c=gc();if(!c.budgetItems)c.budgetItems=[];
@@ -5108,10 +5083,11 @@ function saveBudget(){
     _editItem.fund=g('b-fund')&&g('b-fund').value||'';
     _editItem.overspendPolicy=g('b-overspend')&&g('b-overspend').value||'warn';
     _BUDGET_EDIT_CAT='';_BUDGET_EDIT_TYPE='';
+    if(typeof dwUpsertBudgetItem==='function')dwUpsertBudgetItem(c,_editItem);
   }else{
     var ex=c.budgetItems.find(function(b){return b.cat===cat&&b.type===type;});
-    if(ex){ex.amt=amt;ex.group=grp;ex.fund=g('b-fund')&&g('b-fund').value||'';ex.overspendPolicy=g('b-overspend')&&g('b-overspend').value||'warn';}
-    else{c.budgetItems.push({cat:cat,type:type,amt:amt,group:grp,fund:g('b-fund')&&g('b-fund').value||'',overspendPolicy:g('b-overspend')&&g('b-overspend').value||'warn'});syncBudgetToCOA(c,cat,type,grp);}
+    if(ex){ex.amt=amt;ex.group=grp;ex.fund=g('b-fund')&&g('b-fund').value||'';ex.overspendPolicy=g('b-overspend')&&g('b-overspend').value||'warn';if(typeof dwUpsertBudgetItem==='function')dwUpsertBudgetItem(c,ex);}
+    else{var _newBudgetItem={cat:cat,type:type,amt:amt,group:grp,fund:g('b-fund')&&g('b-fund').value||'',overspendPolicy:g('b-overspend')&&g('b-overspend').value||'warn'};c.budgetItems.push(_newBudgetItem);syncBudgetToCOA(c,cat,type,grp);if(typeof dwUpsertBudgetItem==='function')dwUpsertBudgetItem(c,_newBudgetItem);}
   }
   // Sort budgetItems by account code so they render in COA order
   c.budgetItems.sort(function(a,b){

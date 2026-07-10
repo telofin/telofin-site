@@ -348,6 +348,679 @@ async function dwUpsertRevenue(c,item){
   }
 }
 
+// Bills, unlike expenses/income/revenue, don't go through the generic
+// delItem() soft-delete — delBill() hard-splices locally, so the Supabase
+// side mirrors that with a real row delete (dwDeleteBill) rather than a
+// deleted flag.
+async function dwUpsertBill(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,
+      vendor:item.vendor||null,description:item.desc||null,
+      amt:item.amt||null,received:item.received||null,due:item.due||null,
+      acct_code:item.acctCode||null,cat:item.cat||null,status:item.status||'Unpaid',
+      notes:item.notes||null,paid_date:item.paidDate||null,instr_num:item.instrNum||null,
+      is_1099:!!item.is1099,tin_1099:item.tin1099||null
+    };
+    await sb.from('bills').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertBill failed (blob save unaffected):',e);
+  }
+}
+
+async function dwDeleteBill(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('bills').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteBill failed (blob save unaffected):',e);
+  }
+}
+
+// Loans, like bills, hard-delete locally (delLoan() splices) rather than
+// going through delItem()'s soft-delete, so dwDeleteLoan mirrors with a
+// real row delete.
+async function dwUpsertLoan(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,
+      name:item.name||null,principal:item.principal||null,rate:item.rate||null,
+      term:item.term||null,start_date:item.startDate||null,
+      opening_balance:item.openingBalance||null,posted:item.posted||[]
+    };
+    await sb.from('loans').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertLoan failed (blob save unaffected):',e);
+  }
+}
+
+async function dwDeleteLoan(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('loans').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteLoan failed (blob save unaffected):',e);
+  }
+}
+
+// Upserts the donor row and returns its Supabase id, for donation/milestone/
+// interaction dual-write to key off — mirrors dwResolveClientId's resolve-or-
+// create shape, except donors are always upserted fresh (cheap, and keeps the
+// row current) rather than only created once.
+async function dwUpsertDonor(c,donor){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!donor.id)return null;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return null;
+    var payload={
+      client_id:clientId,old_id:donor.id,
+      name:donor.name||null,email:donor.email||null,phone:donor.phone||null,
+      address:donor.address||null,notes:donor.notes||null,
+      constituent_type:donor.constituentType||null,tier:donor.tier||null,
+      stage:donor.stage||null,solicitor:donor.solicitor||null,
+      ask_amt:donor.askAmt||null,ask_date:donor.askDate||null,
+      platform:donor.platform||null,employer:donor.employer||null,
+      key_dates:donor.keyDates||{},
+      audit:Array.isArray(donor.audit)?donor.audit:(donor.audit?[donor.audit]:[])
+    };
+    var res=await sb.from('donors').upsert(payload,{onConflict:'client_id,old_id'}).select('id').single();
+    return res.data?res.data.id:null;
+  }catch(e){
+    console.warn('[clarity] dwUpsertDonor failed (blob save unaffected):',e);
+    return null;
+  }
+}
+
+async function dwDeleteDonor(c,donor){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!donor.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('donors').delete().eq('client_id',clientId).eq('old_id',donor.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteDonor failed (blob save unaffected):',e);
+  }
+}
+
+// donations is keyed by donor_id, not client_id — resolves the donor row
+// (upserting it first if needed) via dwUpsertDonor before writing the
+// donation itself. project_id/bank_txn_id left null, same reasoning as
+// dwUpsertExpense's other not-yet-dual-written FK fields.
+async function dwUpsertDonation(c,donor,record){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!record||!record.id)return;
+  try{
+    var donorId=await dwUpsertDonor(c,donor);
+    if(!donorId)return;
+    var payload={
+      donor_id:donorId,old_id:record.id,
+      amt:record.amt||null,date:record.date||null,fund:record.fund||null,
+      receipted:record.rec==='Yes',thank_you_sent:record.ty==='Yes',
+      restriction_type:record.rst||null,in_kind:record.inkind==='Yes',
+      fmv:record.fmv||null,item_description:record.itemDescription||null,
+      auctioned:!!record.auctioned,auction_date:record.auctionDate||null,
+      auction_sale_price:record.auctionSalePrice||null,
+      auction_buyer_name:record.auctionBuyerName||null,qpq:record.qpq||null,
+      from_bank:!!record.fromBank,
+      audit:Array.isArray(record.audit)?record.audit:(record.audit?[record.audit]:[])
+    };
+    await sb.from('donations').upsert(payload,{onConflict:'donor_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertDonation failed (blob save unaffected):',e);
+  }
+}
+
+async function dwDeleteDonation(c,donor,record){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!record||!record.id)return;
+  try{
+    var donorId=await dwUpsertDonor(c,donor);
+    if(!donorId)return;
+    await sb.from('donations').delete().eq('donor_id',donorId).eq('old_id',record.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteDonation failed (blob save unaffected):',e);
+  }
+}
+
+// Only mirrors the columns confirmed to exist from migration.js's original insert
+// (client_id, num, client_name, description, amt, date, due, status, notes,
+// bad_debt, bad_debt_date) — paidDate/disputed/disputedAt/disputeNote/amtPaid/
+// payments aren't in that insert, so those columns may not exist on this table;
+// including an unknown column would fail the whole upsert, not just that field.
+// `status` itself does capture Paid/Partial/Disputed/Written Off either way.
+async function dwUpsertInvoice(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,
+      num:item.num||null,client_name:item.client||null,
+      description:item.desc||null,amt:item.amt||null,date:item.date||null,
+      due:item.due||null,status:item.status||'Draft',notes:item.notes||null,
+      bad_debt:!!item.badDebt,bad_debt_date:item.badDebtDate||null
+    };
+    await sb.from('invoices').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertInvoice failed (blob save unaffected):',e);
+  }
+}
+
+async function dwDeleteInvoice(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('invoices').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteInvoice failed (blob save unaffected):',e);
+  }
+}
+
+// Only mirrors columns confirmed in migration.js's original insert (name, type,
+// last_4) — the check-printing fields (nextCheckNum, checkFormat, offsets,
+// checkCalibrated) were added to the app after that migration ran, so those
+// columns likely don't exist on this table yet.
+async function dwUpsertBankAcct(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={client_id:clientId,old_id:item.id,name:item.name||null,type:item.type||null,last_4:item.last4||null};
+    await sb.from('bank_accounts').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertBankAcct failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteBankAcct(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('bank_accounts').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteBankAcct failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertCC(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={client_id:clientId,old_id:item.id,name:item.name||null,last_4:item.last4||null,limit:item.limit||null,network:item.network||null};
+    await sb.from('credit_cards').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertCC failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteCC(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('credit_cards').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteCC failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertPayroll(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,date:item.date||null,period:item.period||null,
+      gross:item.gross||null,taxes:item.taxes||null,net:item.net||null,
+      employees:item.employees||[],reconciled:!!item.reconciled
+    };
+    await sb.from('payroll').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertPayroll failed (blob save unaffected):',e);
+  }
+}
+async function dwDeletePayroll(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('payroll').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeletePayroll failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertPettyCash(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={client_id:clientId,old_id:item.id,date:item.date||null,type:item.type||null,amt:item.amt||null,description:item.desc||null,cat:item.cat||null};
+    await sb.from('petty_cash').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertPettyCash failed (blob save unaffected):',e);
+  }
+}
+async function dwDeletePettyCash(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('petty_cash').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeletePettyCash failed (blob save unaffected):',e);
+  }
+}
+
+// deleteReimb() soft-deletes locally (r.deleted=true, no splice) — but `deleted`
+// isn't a confirmed column (not in migration.js's original insert), so it isn't
+// included here; a deleted reimbursement's Supabase mirror stays as last synced.
+async function dwUpsertReimb(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,who:item.who||null,amt:item.amt||null,
+      description:item.desc||null,cat:item.cat||null,date:item.date||null,
+      notes:item.notes||null,receipt_url:item.receiptUrl||null,receipt_path:item.receiptPath||null,
+      status:item.status||'Pending',flagged:!!item.flagged,no_receipt_reason:item.noReceiptReason||null,
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('reimbursements').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertReimb failed (blob save unaffected):',e);
+  }
+}
+
+// Covers every postToLedger()/updateLedgerEntry()/voidLedgerEntry() call across
+// the whole app in one place, rather than the dozens of individual call sites —
+// those three shared functions are the only paths that ever touch c.ledgerEntries.
+// source_id intentionally omitted, same as migration.js's original insert: the
+// local sourceId is a same-blob id (an expense/bill/loan/etc id), not a real FK
+// into another Supabase table's row, so it can't be written into a real FK column.
+// Lines are always deleted + re-inserted fresh — a ledger entry's lines never
+// change in place once posted, only its `superseded` flag does, so this stays
+// correct (and idempotent) whether this call is a brand-new entry or just a
+// flag update on an existing one.
+async function dwUpsertLedgerEntry(c,entry){
+  var sb=sbClient();if(!sb||!_user||!c||!entry||!entry.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:entry.id,
+      date:entry.date||null,memo:entry.memo||null,
+      source_type:entry.sourceType||null,superseded:!!entry.superseded
+    };
+    var res=await sb.from('ledger_entries').upsert(payload,{onConflict:'client_id,old_id'}).select('id').single();
+    var entryId=res.data?res.data.id:null;
+    if(!entryId)return;
+    await sb.from('ledger_lines').delete().eq('ledger_entry_id',entryId);
+    var lines=(entry.lines||[]).map(function(l){return{ledger_entry_id:entryId,account_code:l.accountCode||null,debit:l.dr||0,credit:l.cr||0};});
+    if(lines.length)await sb.from('ledger_lines').insert(lines);
+  }catch(e){
+    console.warn('[clarity] dwUpsertLedgerEntry failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertJE(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,date:item.date||null,type:item.type||null,
+      memo:item.memo||null,source_type:item.isClosingEntry?'closing':'manual',
+      is_closing_entry:!!item.isClosingEntry,closing_fy:item.closingFY||null,
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('journal_entries').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertJE failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteJE(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('journal_entries').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteJE failed (blob save unaffected):',e);
+  }
+}
+
+// No dwDelete — grants can't be deleted locally (only edited), so nothing to mirror.
+async function dwUpsertGrant(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,name:item.name||null,funder:item.funder||null,
+      awarded:item.awarded||null,status:item.status||null,deadline:item.deadline||null,
+      app_deadline:item.appDeadline||null,portal_url:item.portalUrl||null,match:item.match||null,
+      match_required:item.matchRequired||null,restrict:item.restrict||null,
+      reconciled:!!item.reconciled,requirements:item.requirements||[]
+    };
+    await sb.from('grants').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertGrant failed (blob save unaffected):',e);
+  }
+}
+
+// grant_id left null — grants dual-write exists but resolving it here would need its own
+// resolve-or-upsert chain; same "FK to a not-yet-linked table" deferral used elsewhere.
+async function dwUpsertProject(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,name:item.name||null,description:item.desc||null,
+      budget:item.budget||null,notes:item.notes||null,is_multi_year:!!item.isMultiYear,
+      budget_lines:item.budgetLines||[],proposed_budget:item.proposedBudget||[],
+      adopted_budgets:item.adoptedBudgets||[],periods:item.periods||[]
+    };
+    await sb.from('projects').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertProject failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteProject(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('projects').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteProject failed (blob save unaffected):',e);
+  }
+}
+
+// No dwDelete — vendors can't be deleted locally (only edited), so nothing to mirror.
+async function dwUpsertVendor(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,name:item.name||null,
+      default_cat:item.defaultCat||null,default_acct_code:item.defaultAcctCode||null,
+      is_1099:!!item.is1099,tin:item.tin||null,email:item.email||null,phone:item.phone||null,
+      address:item.address||null,notes:item.notes||null,is_member:!!item.isMember
+    };
+    await sb.from('vendors').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertVendor failed (blob save unaffected):',e);
+  }
+}
+
+// No dwDelete — customers can't be deleted locally (only edited), so nothing to mirror.
+async function dwUpsertCustomer(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,name:item.name||null,email:item.email||null,
+      phone:item.phone||null,address:item.address||null,
+      default_payment_terms:item.defaultPaymentTerms||null,notes:item.notes||null
+    };
+    await sb.from('customers').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertCustomer failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertMileage(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,date:item.date||null,miles:item.miles||null,
+      purpose:item.purpose||null,from_location:item.from||null,to_location:item.to||null,
+      rate:item.rate||null,deduction:item.deduction||null,notes:item.notes||null
+    };
+    await sb.from('mileage').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertMileage failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteMileage(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('mileage').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteMileage failed (blob save unaffected):',e);
+  }
+}
+
+// grant_id left null, same reasoning as dwUpsertProject.
+async function dwUpsertProc(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,vendor:item.vendor||null,scope:item.scope||null,
+      bid_amt:item.bidAmt||null,bid_date:item.bidDate||null,status:item.status||null,
+      fund:item.fund||null,federal:!!item.federal,winner:item.winner||null,
+      justification:item.justification||null,doc_ref:item.docRef||null,
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('procurement').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertProc failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteProc(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('procurement').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteProc failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertRelease(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,fund_name:item.fundName||null,
+      amount:item.amount||null,date:item.date||null,note:item.note||null
+    };
+    await sb.from('restriction_releases').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertRelease failed (blob save unaffected):',e);
+  }
+}
+
+// No dwDelete — fiscal sponsorships can be deleted (deleteFiscalSponsor), wired separately.
+async function dwUpsertFiscalSponsor(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,sponsor_name:item.sponsorName||null,
+      project_name:item.projectName||null,agreement_date:item.agreementDate||null,
+      funds_received:item.fundsReceived||null,funds_expended:item.fundsExpended||null,
+      restrictions:item.restrictions||null,status:item.status||'active'
+    };
+    await sb.from('fiscal_sponsorships').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertFiscalSponsor failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteFiscalSponsor(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('fiscal_sponsorships').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteFiscalSponsor failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertDocument(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,old_id:item.id,name:item.name||null,category:item.category||null,
+      path:item.path||null,size:item.size||null,mime_type:item.mimeType||null,
+      notes:item.notes||null,linked_to:item.linkedTo||null
+    };
+    await sb.from('documents').upsert(payload,{onConflict:'client_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertDocument failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteDocument(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.id)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('documents').delete().eq('client_id',clientId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteDocument failed (blob save unaffected):',e);
+  }
+}
+
+// import_rules/tax_jurisdictions have no local .id — keyed on their natural
+// unique field (keyword / name) instead of old_id.
+async function dwUpsertImportRule(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.keyword)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={client_id:clientId,keyword:item.keyword,cat:item.cat||null,acct_code:item.acctCode||null};
+    await sb.from('import_rules').upsert(payload,{onConflict:'client_id,keyword'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertImportRule failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteImportRule(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.keyword)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('import_rules').delete().eq('client_id',clientId).eq('keyword',item.keyword);
+  }catch(e){
+    console.warn('[clarity] dwDeleteImportRule failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertJurisdiction(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.name)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={client_id:clientId,name:item.name,rate:item.rate||null,freq:item.freq||null,authority:item.authority||null};
+    await sb.from('tax_jurisdictions').upsert(payload,{onConflict:'client_id,name'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertJurisdiction failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteJurisdiction(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.name)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('tax_jurisdictions').delete().eq('client_id',clientId).eq('name',item.name);
+  }catch(e){
+    console.warn('[clarity] dwDeleteJurisdiction failed (blob save unaffected):',e);
+  }
+}
+
+// budget_items has no local .id — keyed on (client_id, cat, type), the same
+// identity saveBudget() itself already uses to find-or-create a line.
+async function dwUpsertBudgetItem(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.cat||!item.type)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    var payload={
+      client_id:clientId,cat:item.cat,type:item.type,amt:item.amt||null,
+      group_name:item.group||null,overspend_policy:item.overspendPolicy||'warn',
+      audit:Array.isArray(item.audit)?item.audit:(item.audit?[item.audit]:[])
+    };
+    await sb.from('budget_items').upsert(payload,{onConflict:'client_id,cat,type'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertBudgetItem failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteBudgetItem(c,item){
+  var sb=sbClient();if(!sb||!_user||!c||!item||!item.cat||!item.type)return;
+  try{
+    var clientId=await dwResolveClientId(c);
+    if(!clientId)return;
+    await sb.from('budget_items').delete().eq('client_id',clientId).eq('cat',item.cat).eq('type',item.type);
+  }catch(e){
+    console.warn('[clarity] dwDeleteBudgetItem failed (blob save unaffected):',e);
+  }
+}
+
+// donor_milestones/donor_interactions — keyed by donor_id, same
+// resolve-via-dwUpsertDonor pattern as dwUpsertDonation.
+async function dwUpsertMilestone(c,donor,item){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!item||!item.id)return;
+  try{
+    var donorId=await dwUpsertDonor(c,donor);
+    if(!donorId)return;
+    var payload={donor_id:donorId,old_id:item.id,type:item.type||null,date:item.date||null,notes:item.notes||null};
+    await sb.from('donor_milestones').upsert(payload,{onConflict:'donor_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertMilestone failed (blob save unaffected):',e);
+  }
+}
+
+async function dwUpsertInteraction(c,donor,item){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!item||!item.id)return;
+  try{
+    var donorId=await dwUpsertDonor(c,donor);
+    if(!donorId)return;
+    var payload={
+      donor_id:donorId,old_id:item.id,type:item.type||null,date:item.date||null,
+      who:item.who||null,note:item.note||null,followup_date:item.followupDate||null,
+      followup_note:item.followupNote||null,completed:!!item.completed
+    };
+    await sb.from('donor_interactions').upsert(payload,{onConflict:'donor_id,old_id'});
+  }catch(e){
+    console.warn('[clarity] dwUpsertInteraction failed (blob save unaffected):',e);
+  }
+}
+async function dwDeleteInteraction(c,donor,item){
+  var sb=sbClient();if(!sb||!_user||!c||!donor||!item||!item.id)return;
+  try{
+    var donorId=await dwUpsertDonor(c,donor);
+    if(!donorId)return;
+    await sb.from('donor_interactions').delete().eq('donor_id',donorId).eq('old_id',item.id);
+  }catch(e){
+    console.warn('[clarity] dwDeleteInteraction failed (blob save unaffected):',e);
+  }
+}
+
 async function checkSyncConflict(){
   // Before saving, check if the server has a newer version than what we loaded.
   // Covers two scenarios:

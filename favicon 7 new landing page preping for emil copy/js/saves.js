@@ -45,7 +45,7 @@ function delItem(type,i){
   if(type==='expenses'&&typeof dwUpsertExpense==='function')dwUpsertExpense(c,item);
   else if(type==='income'&&typeof dwUpsertIncome==='function')dwUpsertIncome(c,item);
   else if(type==='revenue'&&typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,item);
-  renderAll();
+  renderAll(true);
 }
 
 function restoreItem(type,i){
@@ -59,14 +59,14 @@ function restoreItem(type,i){
     if(reversal!==0)applyBSAssetDelta(c,item.bsAssetId,reversal);
   }
   delete item.deleted;delete item.deletedAt;delete item.deletedType;
-  sv();renderAll();
+  sv();renderAll(true);
 }
 
 function purgeItem(type,i){
   var c=gc();if(!confirm('Permanently delete? This cannot be undone.'))return;
   var item=c[type]&&c[type][i];
   if(item&&item.id)voidLedgerEntry(c,item.id);
-  c[type].splice(i,1);sv();renderAll();
+  c[type].splice(i,1);sv();renderAll(true);
 }
 
 function writeBadDebt(i){
@@ -79,24 +79,31 @@ function writeBadDebt(i){
   // PERIOD LOCK GUARD
   if(isDateLocked(c,todayNum())){periodLockAlert(c.closedThrough);return;}
   if(!confirm('Write off "'+escHtml(inv.client||'this invoice')+'" ('+fmt(inv.amt)+') as bad debt?\n\nThis will post a Bad Debt Expense entry and mark the invoice as written off. It cannot be undone.'))return;
-  var badDebtCode=c.type==='np'?'5800':'5900';
+  // Dedicated account by name (not a hardcoded 5800/5900) — those numeric codes are
+  // already taken by "Depreciation" (NP) / "Cost of goods sold" (SB) in the default
+  // COA, so every bad debt write-off was silently inflating one of those categories
+  // instead of its own line. See healMiscodedOperationalExpenses() (data.js).
+  var badDebtCode=_ensureDedicatedCOA(c,'Bad debt expense','Expense','Bad Debt');
   var arCode=_defaultARCode(c);
   var expId=uid();
   var memo='Bad debt write-off — Invoice #'+(inv.num||inv.id)+' ('+(inv.client||'unknown')+')';
   // Post expense entry for reporting
   if(!c.expenses)c.expenses=[];
-  c.expenses.push({
+  var badDebtExpItem={
     id:expId,desc:memo,cat:'Bad Debt',amt:Number(inv.amt||0),
     date:todayNum(),acctCode:badDebtCode,recurring:'None',
     freq:'One-time',fixed:'Variable',reconciled:false,
     audit:[{action:'bad_debt_writeoff',invoiceId:inv.id,at:new Date().toISOString()}]
-  });
+  };
+  c.expenses.push(badDebtExpItem);
+  if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,badDebtExpItem);
   // Double-entry: Dr Bad Debt Expense / Cr AR
   postToLedger(c,badDebtCode,arCode,Number(inv.amt||0),memo,'expense',expId);
   // Mark invoice
   inv.status='Written Off';inv.badDebt=true;inv.badDebtDate=todayNum();
-  markDirty('ar','reports','bs');
-  sv();renderAll();
+  if(typeof dwUpsertInvoice==='function')dwUpsertInvoice(c,inv);
+  markDirty('ar','sbexp','reports','bs');
+  sv();renderAll(true);
 }
 
 function voidItem(type,i){
@@ -135,7 +142,7 @@ function voidItem(type,i){
   if(type==='expenses'&&item.inkindRef){
     (c.income||[]).forEach(function(r){if(r.inkindRef&&r.name===item.desc)r.voided=true;});
   }
-  sv();renderAll();
+  sv();renderAll(true);
 }
 
 function unvoidItem(type,i){
@@ -165,7 +172,7 @@ function unvoidItem(type,i){
       if(delta2!==0)applyBSAssetDelta(c,it.bsAssetId,delta2);
     }
   }
-  sv();renderAll();
+  sv();renderAll(true);
 }
 
 function renderTrash(c){
@@ -199,7 +206,7 @@ function editItem(type,i){
   if(r&&r.isReversal){alert('Reversal entries cannot be edited directly.');return;}
   // Guard: warn before editing a reconciled item — it may affect a closed period
   if(r&&r.reconciled){if(!confirm('This transaction has been reconciled.\n\nEditing it may affect a closed period. Continue?'))return;}
-  if(type==='income'){if(c.type==='np'){g('i-n').value=r.name||'';var _ic=g('i-c');if(_ic)_ic.setAttribute('data-pending-val',r.cat||'');var _is=g('i-s');if(_is)_is.value=r.status||'';g('i-p').value=r.proj||'';g('i-r').value=r.recv||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('i-fund'))g('i-fund').value=r.fund||'';if(g('i-dt'))g('i-dt').value=r.date||'';if(g('i-party-type'))g('i-party-type').value=r.partyType||'';var _iacct=g('i-acct');if(_iacct){_iacct.value=r.acctCode||'';setTimeout(function(){if(_iacct.value!==r.acctCode)_iacct.value=r.acctCode||'';},50);}openM('m-inc');var _delIncBtn=g('del-inc-btn');if(_delIncBtn)_delIncBtn.style.display='';var ibank=g('i-bank');if(ibank){if(r.bankId)ibank.value='bank:'+r.bankId;else if(r.bsAssetId)ibank.value='bsasset:'+r.bsAssetId;else ibank.value='';};}else{g('pi-n').value=r.name||'';var _pic=g('pi-c');if(_pic)_pic.setAttribute('data-pending-val',r.cat||'');g('pi-a').value=r.amt||'';g('pi-f').value=r.freq||'Monthly';g('pi-d').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');openM('m-peinc');}}
+  if(type==='income'){if(c.type==='np'){g('i-n').value=r.name||'';var _ic=g('i-c');if(_ic)_ic.setAttribute('data-pending-val',r.cat||'');var _is=g('i-s');if(_is)_is.value=r.status||'';g('i-p').value=r.proj||'';g('i-r').value=r.recv||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('i-fund'))g('i-fund').value=r.fund||'';if(g('i-dt'))g('i-dt').value=r.date||'';if(g('i-party-type'))g('i-party-type').value=r.partyType||'';var _iacct=g('i-acct');if(_iacct){_iacct.value=r.acctCode||'';setTimeout(function(){if(_iacct.value!==r.acctCode)_iacct.value=r.acctCode||'';},50);}openM('m-inc');var _delIncBtn=g('del-inc-btn');if(_delIncBtn)_delIncBtn.style.display='';var ibank=g('i-bank');if(ibank){if(r.bankId)ibank.value='bank:'+r.bankId;else if(r.bsAssetId)ibank.value='bsasset:'+r.bsAssetId;else ibank.value='';};}else{g('pi-n').value=r.name||'';var _pic=g('pi-c');if(_pic)_pic.setAttribute('data-pending-val',r.cat||'');g('pi-a').value=r.amt||'';g('pi-f').value=r.freq||'Monthly';g('pi-d').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');var _piacct=g('pi-acct');if(_piacct){_piacct.value=r.acctCode||'';setTimeout(function(){if(_piacct.value!==r.acctCode)_piacct.value=r.acctCode||'';},50);}openM('m-peinc');}}
   else if(type==='revenue'){g('r-n').value=r.name||'';if(g('r-cust'))g('r-cust').value=r.customerName||'';var _rc=g('r-c');if(_rc)_rc.setAttribute('data-pending-val',r.cat||'');g('r-cf').value=r.conf||'Confirmed';g('r-p').value=r.proj||'';g('r-a').value=r.act||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('r-dt'))g('r-dt').value=r.date||'';if(g('r-taxrate'))g('r-taxrate').value=r.taxRate||0;if(g('r-taxamt'))g('r-taxamt').value=r.taxAmt||'';if(g('r-taxjur'))g('r-taxjur').value=r.taxJurisdiction||'';openM('m-rev');var rbank=g('r-bank');if(rbank){if(r.bankId)rbank.value='bank:'+r.bankId;else if(r.bsAssetId)rbank.value='bsasset:'+r.bsAssetId;else rbank.value='';}}  else if(type==='expenses'){if(c.type==='np'){g('e-d').value=r.desc||'';var _ec1=g('e-c');if(_ec1)_ec1.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-dt').value=r.date||'';g('e-f').value=r.fund||'';var _990El=g('e-990line');if(_990El)_990El.value=r.line990||'';var _egidEl=g('e-gid');if(_egidEl)_egidEl.setAttribute('data-pending-gid',r.grantId||'');var _egpctEl2=g('e-gpct');if(_egpctEl2)_egpctEl2.value=r.grantPct!=null?r.grantPct:'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-func'))g('e-func').value=r.functional||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';if(g('e-vendor'))g('e-vendor').value=r.vendor1099||r.desc||'';if(g('e-1099'))g('e-1099').value=r.is1099?'yes':'';var _eacct=g('e-acct');if(_eacct){_eacct.value=r.acctCode||'';setTimeout(function(){if(_eacct.value!==r.acctCode&&r.acctCode)_eacct.value=r.acctCode||'';},50);}openM('m-exp');var _expTitle=g('m-exp')&&g('m-exp').querySelector('.m-title');if(_expTitle)_expTitle.textContent='Edit expense';var _delExpBtn=g('del-exp-btn');if(_delExpBtn)_delExpBtn.style.display='';var ebank=g('e-bank');if(ebank){
   if(r.bankId){ebank.value='bank:'+r.bankId;
     // If value didn't match any option, try to find by bankName
@@ -213,7 +220,7 @@ function editItem(type,i){
   }else if(r.ccId)ebankSb.value='cc:'+r.ccId;
   else if(r.bsAssetId)ebankSb.value='bsasset:'+r.bsAssetId;
   else ebankSb.value='';
-};}else{g('e-d').value=r.desc||'';var _ec3=g('e-c');if(_ec3)_ec3.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-fr').value=r.freq||'Monthly';g('e-dt').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';if(g('e-vendor'))g('e-vendor').value=r.vendor1099||r.desc||'';if(g('e-1099'))g('e-1099').value=r.is1099?'yes':'';openM('m-exp');var _expTitlePe=g('m-exp')&&g('m-exp').querySelector('.m-title');if(_expTitlePe)_expTitlePe.textContent='Edit expense';var _delExpBtnPe=g('del-exp-btn');if(_delExpBtnPe)_delExpBtnPe.style.display='';var ebankPe=g('e-bank');if(ebankPe){
+};}else{g('e-d').value=r.desc||'';var _ec3=g('e-c');if(_ec3)_ec3.setAttribute('data-pending-val',r.cat||'');g('e-a').value=r.amt||'';g('e-fr').value=r.freq||'Monthly';g('e-dt').value=r.date||'';g('f-rec').value=r.recurring||'None';if(g('f-rec-end'))g('f-rec-end').value=r.recurEndDate||'';if(g('f-rec-count'))g('f-rec-count').value=r.recurCount||'';_toggleRecurOpts(r.recurring||'None');if(g('e-ref'))g('e-ref').value=r.checkNum||'';if(g('e-url'))g('e-url').value=r.receiptUrl||'';if(g('e-tin'))g('e-tin').value=r.tin1099||'';if(g('e-vendor'))g('e-vendor').value=r.vendor1099||r.desc||'';if(g('e-1099'))g('e-1099').value=r.is1099?'yes':'';var _eacctPe=g('e-acct');if(_eacctPe){_eacctPe.value=r.acctCode||'';setTimeout(function(){if(_eacctPe.value!==r.acctCode&&r.acctCode)_eacctPe.value=r.acctCode||'';},50);}openM('m-exp');var _expTitlePe=g('m-exp')&&g('m-exp').querySelector('.m-title');if(_expTitlePe)_expTitlePe.textContent='Edit expense';var _delExpBtnPe=g('del-exp-btn');if(_delExpBtnPe)_delExpBtnPe.style.display='';var ebankPe=g('e-bank');if(ebankPe){
   if(r.bankId){ebankPe.value='bank:'+r.bankId;
     if(!ebankPe.value||ebankPe.selectedIndex<=0){var _bMatchPe=c.bankAccounts&&c.bankAccounts.find(function(b){return b.name&&r.bankName&&b.name.toLowerCase()===r.bankName.toLowerCase();});if(_bMatchPe)ebankPe.value='bank:'+_bMatchPe.id;}
   }else if(r.bsAssetId)ebankPe.value='bsasset:'+r.bsAssetId;
@@ -471,7 +478,7 @@ function doPDF(tabOverride){
       var grpTots=cols2.map(function(){return 0;});
       groups2[grp].forEach(function(b){
         var cells=cols2.map(function(col,ci){var found=(col.items||[]).find(function(x){return x.cat===b.cat&&x.type===b.type;});var v=found?Number(found.amt||0):null;grpTots[ci]+=(v||0);if(b.type==='Income')grandInc2[ci]+=(v||0);else grandExp2[ci]+=(v||0);return'<td class="right">'+(v===null?'—':fmtN(v))+'</td>';}).join('');
-        body2+='<tr><td style="padding-left:16px;font-size:12px">'+b.cat+'</td>'+cells+'</tr>';
+        body2+='<tr><td style="padding-left:16px;font-size:12px">'+escHtml(b.cat)+'</td>'+cells+'</tr>';
       });
       body2+='<tr class="total"><td>'+grp+' total</td>'+grpTots.map(function(t){return'<td class="right">'+fmtN(t)+'</td>';}).join('')+'</tr>';
     });
@@ -1013,11 +1020,11 @@ function renderBudgetMultiYear(){
         ?'<td><div class="row-acts"><button class="e-btn" onclick="editBudgetLine('+bi+')" title="Edit">&#9998;</button><button class="d-btn" onclick="delBudgetLine('+bi+')" title="Delete">&#215;</button></div></td>'
         :'<td><div class="row-acts"><button class="add-btn" style="font-size:10px;padding:2px 7px" onclick="openBudgetFromActuals(\''+b.cat.replace(/'/g,'\\\'')+'\',\''+b.type+'\')" title="Add to budget">+ Budget</button></div></td>';
       // Planning view (no actuals): show budgeted only
-      if(!showVariance&&hb)return'<tr><td style="padding-left:1rem">'+b.cat+'</td>'+codeCell+'<td>'+fmt(bud||0)+'</td>'+acts+'</tr>';
+      if(!showVariance&&hb)return'<tr><td style="padding-left:1rem">'+escHtml(b.cat)+'</td>'+codeCell+'<td>'+fmt(bud||0)+'</td>'+acts+'</tr>';
       var _safeId=b.cat.replace(/[^a-zA-Z0-9]/g,'-');
       var _actCell=act>0?'<span style="cursor:pointer;color:var(--blue);text-decoration:underline;font-weight:500" onclick="toggleBudgetDrill(\''+_safeId+'\',\''+b.cat.replace(/\'/g,"\\\\'")+'\'\,\''+b.type+'\')" title="Click to see transactions">'+fmt(act)+'</span>':fmt(act);
       var _drillRow='<tr id="bud-drill-'+_safeId+'" style="display:none"><td colspan="6" style="padding:0"><div id="bud-drill-body-'+_safeId+'" style="background:var(--bg);border-top:1px solid var(--border);padding:.75rem 1rem"></div></td></tr>';
-      return'<tr><td style="padding-left:1rem">'+b.cat+'</td>'+codeCell+'<td>'+_actCell+'</td>'+(showVariance?vc(bud,act,b.type==='Expense'):'')+acts+'</tr>'+_drillRow;
+      return'<tr><td style="padding-left:1rem">'+escHtml(b.cat)+'</td>'+codeCell+'<td>'+_actCell+'</td>'+(showVariance?vc(bud,act,b.type==='Expense'):'')+acts+'</tr>'+_drillRow;
     }).join('');
     grandActInc+=grpActInc;grandBudInc+=grpBudInc;grandActExp+=grpActExp;grandBudExp+=grpBudExp;
     var grpAct=isExp?(grpActExp):(grpActInc-grpActExp||grpActInc);
@@ -1078,7 +1085,7 @@ function renderBudgetMultiYear(){
         var hasAudit=b.audit&&b.audit.length>0;
         var acctP=(c.accounts||[]).find(function(a){return a.cat===b.cat||a.name===b.cat;});
         var codeCellP='<td style="font-size:11px;color:var(--muted)">'+(acctP?'<span style="font-family:monospace;background:var(--soft);padding:1px 5px;border-radius:4px;">'+acctP.code+'</span>':'<span style="color:var(--border)">—</span>')+'</td>';
-        return'<tr><td style="padding-left:1rem">'+b.cat+'</td>'+codeCellP+'<td>'+fmt(b.amt)+'</td>'
+        return'<tr><td style="padding-left:1rem">'+escHtml(b.cat)+'</td>'+codeCellP+'<td>'+fmt(b.amt)+'</td>'
         +'<td><div class="row-acts">'
         +(hasAudit?'<button class="e-btn" onclick="openProposedBudgetAudit('+oi+')" title="Edit history">&#128221;</button>':'')
         +'<button class="e-btn" onclick="editProposedBudgetLine('+oi+')" title="Edit">&#9998;</button>'
@@ -1105,7 +1112,7 @@ function renderBudgetMultiYear(){
   if(BUDGET_VIEW==='adopted'){
     var adHTML=adopted.length?adopted.slice().reverse().map(function(ab,i){
       var tot=ab.items.reduce(function(s,b){return s+(b.type==='Income'?1:-1)*Number(b.amt||0);},0);
-      var rows=ab.items.map(function(b){return'<tr><td style="padding-left:1rem">'+b.cat+'</td><td style="color:var(--muted);font-size:11px">'+b.type+'</td><td>'+fmt(b.amt)+'</td></tr>';}).join('');
+      var rows=ab.items.map(function(b){return'<tr><td style="padding-left:1rem">'+escHtml(b.cat)+'</td><td style="color:var(--muted);font-size:11px">'+b.type+'</td><td>'+fmt(b.amt)+'</td></tr>';}).join('');
       return'<div class="card" style="margin-bottom:1rem"><div class="c-head"><span class="c-title">'+ab.fy+'</span><span style="font-size:11px;color:var(--muted)">Adopted '+ab.adoptedOn+'</span></div>'
       +'<table class="bud-tbl"><thead><tr><th style="width:50%">Line item</th><th style="width:20%">Type</th><th style="width:30%">Amount</th></tr></thead><tbody>'+rows
       +'<tr class="bud-total"><td colspan="2">Net</td><td class="'+(tot>=0?'vg':'vr')+'">'+fmt(tot)+'</td></tr></tbody></table></div>';
@@ -1178,12 +1185,31 @@ function saveInv(){
   if(_invLockDate&&isDateLocked(c,_invLockDate)){periodLockAlert(c.closedThrough);return;}
   var amt=Number(g('inv-amt').value||0);if(!amt){alert('Please enter an amount.');return;}
   var _rINV=typeof resolveEI==='function'?resolveEI(c.invoices):(EI<c.invoices.length?EI:-1);
+  var _oldInv=_rINV>=0?c.invoices[_rINV]:null;
   var item={id:_rINV>=0?(c.invoices[_rINV].id||uid()):uid(),num:g('inv-num').value||'INV-'+Date.now().toString(36).toUpperCase(),client:g('inv-client').value,desc:g('inv-desc').value,amt:amt,date:g('inv-date').value,due:g('inv-due').value,status:g('inv-status').value||'Draft',notes:g('inv-notes').value};
-  if(typeof markDirty==='function')markDirty('ar','reports');if(_rINV>=0)c.invoices[_rINV]=item;else c.invoices.push(item);
-  sv();renderAR(c);closeM('m-inv');['inv-num','inv-client','inv-desc','inv-amt','inv-date','inv-due','inv-notes'].forEach(function(id){g(id).value='';});
+  // Carry forward payment/write-off tracking fields the form doesn't expose — otherwise
+  // editing a Paid or Written-Off invoice (e.g. just fixing a typo) would silently wipe them.
+  if(_oldInv){if(_oldInv.paidDate)item.paidDate=_oldInv.paidDate;if(_oldInv.badDebt){item.badDebt=_oldInv.badDebt;item.badDebtDate=_oldInv.badDebtDate;}if(_oldInv.status==='Paid'||_oldInv.status==='Written Off')item.status=_oldInv.status;}
+  if(typeof markDirty==='function')markDirty('ar','reports','bs');
+  if(_rINV>=0)c.invoices[_rINV]=item;else c.invoices.push(item);
+  if(typeof dwUpsertInvoice==='function')dwUpsertInvoice(c,item);
+  // ACCRUAL: an issued (Sent/Overdue) invoice recognizes revenue immediately — Dr AR / Cr
+  // Revenue, same timing as Bills' Dr Expense / Cr AP. A Draft invoice hasn't been sent, so
+  // it isn't a real receivable yet — no posting (and any prior posting is voided if status
+  // moves back to Draft). Paid/Written-Off invoices are left alone here — their AR was
+  // already cleared (markInvPaid) or written off (writeBadDebt); re-touching the ledger on a
+  // routine edit would incorrectly reopen a receivable that's already settled.
+  if(item.status!=='Paid'&&item.status!=='Written Off'){
+    var arCode=_defaultARCode(c);
+    var revCode=lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+    var memo='Invoice '+(item.num||item.id)+(item.client?' — '+item.client:'');
+    if(item.status==='Draft')voidLedgerEntry(c,item.id);
+    else updateLedgerEntry(c,item.id,arCode,revCode,item.amt,memo,'invoice');
+  }
+  sv();renderAR(c);renderBalanceSheet(c);closeM('m-inv');['inv-num','inv-client','inv-desc','inv-amt','inv-date','inv-due','inv-notes'].forEach(function(id){g(id).value='';});
 }
 function editInv(i){var c=gc();if(!c.invoices[i])return;EI=i;if(typeof _editItemId!=='undefined')_editItemId=c.invoices[i].id||null;var inv=c.invoices[i];g('inv-num').value=inv.num||'';g('inv-client').value=inv.client||'';g('inv-desc').value=inv.desc||'';g('inv-amt').value=inv.amt||'';g('inv-date').value=inv.date||'';g('inv-due').value=inv.due||'';g('inv-status').value=inv.status||'Draft';g('inv-notes').value=inv.notes||'';openM('m-inv');}
-function delInv(i){var c=gc();if(!confirm('Delete this invoice?'))return;c.invoices.splice(i,1);sv();renderAR(c);}
+function delInv(i){var c=gc();if(!confirm('Delete this invoice?'))return;var inv=c.invoices[i];c.invoices.splice(i,1);if(inv&&typeof dwDeleteInvoice==='function')dwDeleteInvoice(c,inv);sv();renderAR(c);}
 function copyPayReminder(i){var c=gc();if(!c||!c.invoices[i])return;var inv=c.invoices[i];var txt='Subject: Invoice '+(inv.num||'')+(inv.due?' — Due '+inv.due:'')+'\n\nHi '+(inv.client||'there')+',\n\nThis is a friendly reminder that invoice '+(inv.num||'')+(inv.due?' was due on '+inv.due:'')+' for '+fmt(inv.amt)+(inv.desc?' ('+inv.desc+')':'')+'.\n\nPlease remit payment at your earliest convenience. If you have any questions, don\'t hesitate to reach out.\n\nThank you,\n'+c.name;if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){alert('Payment reminder copied to clipboard.');});}else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('Payment reminder copied to clipboard.');}}
 
 function emailInv(i){
@@ -1207,12 +1233,21 @@ function markInvPaid(i){
   if(banks2.length)depositBankId=banks2[0].id;
   else if(bsAssets2.length)depositBsAssetId=bsAssets2[0].id;
   c.invoices[i].status='Paid';c.invoices[i].paidDate=todayNum();
+  if(typeof dwUpsertInvoice==='function')dwUpsertInvoice(c,c.invoices[i]);
   if(!c.revenue)c.revenue=[];
   var inv=c.invoices[i];
-  var revItem={id:uid(),name:'Invoice: '+(inv.client||inv.num),cat:'Invoiced Revenue',proj:inv.amt,act:inv.amt,conf:'Confirmed',recurring:'None',invoiceId:inv.id,acctCode:lookupAcctByCAT(c,'Revenue','Income')||''};
+  // This revenue record is a display/1099-tracking row (mirrors how a paid Bill pushes an
+  // expenses[] row) — revenue was already recognized on the ledger in saveInv() when the
+  // invoice was Sent; this does not post it again.
+  var cashCode=_defaultCashCode(c);
+  var revItem={id:uid(),name:'Invoice: '+(inv.client||inv.num),cat:'Invoiced Revenue',proj:inv.amt,act:inv.amt,date:c.invoices[i].paidDate,conf:'Confirmed',recurring:'None',invoiceId:inv.id,acctCode:lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010'};
   if(depositBankId)revItem.bankId=depositBankId;
-  if(depositBsAssetId){revItem.bsAssetId=depositBsAssetId;revItem.acctCode=ensureBSAssetCOA(c,depositBsAssetId)||revItem.acctCode;applyBSAssetDelta(c,depositBsAssetId,Number(inv.amt||0));}
+  if(depositBsAssetId){revItem.bsAssetId=depositBsAssetId;cashCode=ensureBSAssetCOA(c,depositBsAssetId)||cashCode;revItem.acctCode=cashCode;applyBSAssetDelta(c,depositBsAssetId,Number(inv.amt||0));}
   c.revenue.push(revItem);
+  if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,revItem);
+  // DOUBLE ENTRY: clear the receivable recognized at Sent time -- Dr Cash / Cr AR
+  var arCode=_defaultARCode(c);
+  postToLedger(c,cashCode,arCode,Number(inv.amt||0),'Received payment: Invoice '+(inv.num||inv.id)+(inv.client?' — '+inv.client:''),'invoice',inv.id+':pay');
   sv();renderAR(c);renderRev(c);renderBalanceSheet(c);
 }
 
@@ -1250,12 +1285,14 @@ function recordPartialPayment(i){
   inv.amtPaid=Number((Number(inv.amtPaid||0)+pmtAmt).toFixed(2));
   if(Math.abs(Number(inv.amt||0)-inv.amtPaid)<0.01){inv.status='Paid';inv.paidDate=todayNum();}
   else{inv.status='Partial';}
+  if(typeof dwUpsertInvoice==='function')dwUpsertInvoice(c,inv);
   if(!c.revenue)c.revenue=[];
   var revItem={id:uid(),name:'Partial payment — Inv #'+(inv.num||inv.id)+' ('+(inv.client||'')+')',cat:'Invoiced Revenue',proj:0,act:pmtAmt,conf:'Confirmed',recurring:'None',invoiceId:inv.id,date:todayNum(),acctCode:lookupAcctByCAT(c,'Revenue','Income')||'4010'};
   c.revenue.push(revItem);
+  if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,revItem);
   postToLedger(c,_defaultCashCode(c),_defaultARCode(c),pmtAmt,'Partial payment — Inv #'+(inv.num||inv.id),'revenue',revItem.id);
   markDirty('ar','revenue','reports','bs');
-  sv();renderAll();
+  sv();renderAll(true);
 }
 
 function toggleDispute(i){
@@ -1271,20 +1308,37 @@ function toggleDispute(i){
     inv.disputed=true;inv.disputedAt=new Date().toISOString();inv.disputeNote=note||'';
     if(inv.status!=='Paid')inv.status='Disputed';
   }
+  if(typeof dwUpsertInvoice==='function')dwUpsertInvoice(c,inv);
   markDirty('ar','reports');
   sv();renderAR(c);
 }
 
 
+// saveJE(): manual Journal Entry. Was broken end-to-end — the modal only had free-text
+// "Debit account"/"Credit account" inputs (no real COA code), so debitCode/creditCode were
+// always empty and this never called postToLedger() at all, despite delJE() already trying
+// to void a ledger entry that never existed. Fixed: je-debit-acct/je-credit-acct are now
+// real account-code selects (openM()'s acctMods, modals.js), and this now posts a proper
+// Dr debitCode / Cr creditCode entry — same create/edit pattern as everywhere else in this
+// app (updateLedgerEntry supersedes-then-reposts on edit, sourceId=item.id).
 function saveJE(){
   var c=gc();if(!c.journalEntries)c.journalEntries=[];
   var _jeLockDate=g('je-date')&&g('je-date').value.trim();
   if(_jeLockDate&&isDateLocked(c,_jeLockDate)){periodLockAlert(c.closedThrough);return;}
   var amt=Number(g('je-amt').value||0);if(!amt){alert('Please enter an amount.');return;}
+  var debitCode=g('je-debit-acct')&&g('je-debit-acct').value||'';
+  var creditCode=g('je-credit-acct')&&g('je-credit-acct').value||'';
+  if(!debitCode||!creditCode){alert('Please select both a debit account and a credit account.');return;}
+  if(debitCode===creditCode){alert('Debit and credit accounts must be different.');return;}
+  var debitAcctObj=(c.accounts||[]).find(function(a){return a.code===debitCode;});
+  var creditAcctObj=(c.accounts||[]).find(function(a){return a.code===creditCode;});
   var _rJE=typeof resolveEI==='function'?resolveEI(c.journalEntries):(EI<c.journalEntries.length?EI:-1);
   var _oldJE=_rJE>=0?c.journalEntries[_rJE]:null;
-  var _jeWatched=['date','type','memo','debitAcct','creditAcct','debitCode','amt','notes'];
-  var item={id:_rJE>=0?(c.journalEntries[_rJE].id||uid()):uid(),date:g('je-date').value,type:g('je-type').value,memo:g('je-memo').value,debitAcct:g('je-debit').value,creditAcct:g('je-credit').value,debitCode:g('je-acct')&&g('je-acct').value||'',creditCode:'',amt:amt,notes:g('je-notes').value};
+  var _jeWatched=['date','type','memo','debitAcct','creditAcct','debitCode','creditCode','amt','notes'];
+  var item={id:_rJE>=0?(c.journalEntries[_rJE].id||uid()):uid(),date:g('je-date').value,type:g('je-type').value,memo:g('je-memo').value,
+    debitAcct:debitAcctObj?(debitAcctObj.code+' '+debitAcctObj.name):debitCode,
+    creditAcct:creditAcctObj?(creditAcctObj.code+' '+creditAcctObj.name):creditCode,
+    debitCode:debitCode,creditCode:creditCode,amt:amt,notes:g('je-notes').value};
   // Audit trail — diff on edit, created stamp on new
   if(_rJE>=0&&_oldJE){
     var _jeLog=(_oldJE.audit||[]).slice();var _ts=new Date().toISOString();
@@ -1293,11 +1347,25 @@ function saveJE(){
   }else{
     item.audit=[{field:'created',oldValue:'',newValue:'Entry created',timestamp:new Date().toISOString()}];
   }
-  if(typeof markDirty==='function')markDirty('je','bs','reports');if(_rJE>=0)c.journalEntries[_rJE]=item;else c.journalEntries.push(item);
-  sv();renderJournalEntries(c);renderBalanceSheet(c);closeM('m-je');['je-date','je-memo','je-debit','je-credit','je-amt','je-notes'].forEach(function(id){g(id).value='';});
+  if(_rJE>=0)updateLedgerEntry(c,item.id,debitCode,creditCode,amt,item.memo||'Journal entry','je');
+  else postToLedger(c,debitCode,creditCode,amt,item.memo||'Journal entry','je',item.id);
+  if(typeof markDirty==='function')markDirty('je','gl','trialbal','bs','reports');if(_rJE>=0)c.journalEntries[_rJE]=item;else c.journalEntries.push(item);
+  if(typeof dwUpsertJE==='function')dwUpsertJE(c,item);
+  sv();renderAll(true);closeM('m-je');['je-date','je-memo','je-amt','je-notes'].forEach(function(id){g(id).value='';});
 }
-function editJE(i){var c=gc();if(!c.journalEntries[i])return;EI=i;if(typeof _editItemId!=='undefined')_editItemId=c.journalEntries[i].id||null;var e=c.journalEntries[i];g('je-date').value=e.date||'';g('je-type').value=e.type||'Other';g('je-memo').value=e.memo||'';g('je-debit').value=e.debitAcct||'';g('je-credit').value=e.creditAcct||'';g('je-amt').value=e.amt||'';g('je-notes').value=e.notes||'';openM('m-je');}
-function delJE(i){var c=gc();if(!confirm('Delete this entry?'))return;var je=c.journalEntries&&c.journalEntries[i];if(je&&je.id)voidLedgerEntry(c,je.id);c.journalEntries.splice(i,1);sv();renderJournalEntries(c);renderBalanceSheet(c);}
+function editJE(i){
+  var c=gc();if(!c.journalEntries[i])return;EI=i;if(typeof _editItemId!=='undefined')_editItemId=c.journalEntries[i].id||null;
+  var e=c.journalEntries[i];
+  g('je-date').value=e.date||'';g('je-type').value=e.type||'Other';g('je-memo').value=e.memo||'';g('je-amt').value=e.amt||'';g('je-notes').value=e.notes||'';
+  openM('m-je');
+  // openM() just rebuilt je-debit-acct/je-credit-acct's <option> list — setting .value
+  // beforehand would be wiped, same bug class already fixed for e-acct/pi-acct elsewhere.
+  setTimeout(function(){
+    if(g('je-debit-acct'))g('je-debit-acct').value=e.debitCode||'';
+    if(g('je-credit-acct'))g('je-credit-acct').value=e.creditCode||'';
+  },50);
+}
+function delJE(i){var c=gc();if(!confirm('Delete this entry?'))return;var je=c.journalEntries&&c.journalEntries[i];if(je&&je.id)voidLedgerEntry(c,je.id);c.journalEntries.splice(i,1);if(je&&typeof dwDeleteJE==='function')dwDeleteJE(c,je);sv();renderAll(true);}
 
 // ══════════════════════════════════════════
 // #16 — BALANCE SHEET (SB)
@@ -2099,6 +2167,7 @@ function saveBankAcct(){
   var nextCheckVal=g('ba-next-check')&&g('ba-next-check').value.trim();
   var item={id:old?(old.id||uid()):uid(),name:name,type:g('ba-type').value,last4:g('ba-last4').value.trim(),nextCheckNum:nextCheckVal?Number(nextCheckVal):(old&&old.nextCheckNum||''),checkFormat:g('ba-check-format')&&g('ba-check-format').value||'voucher2',checkOffsetX:Number(g('ba-check-offx')&&g('ba-check-offx').value||0),checkOffsetY:Number(g('ba-check-offy')&&g('ba-check-offy').value||0)};
   if(BANK_ACCT_EI>=0)c.bankAccounts[BANK_ACCT_EI]=item;else c.bankAccounts.push(item);
+  if(typeof dwUpsertBankAcct==='function')dwUpsertBankAcct(c,item);
   // Auto-create COA account for this bank
   if(!c.accounts)c.accounts=[];
   var coaExists=c.accounts.find(function(a){return a.name===name&&a.type==='Asset';});
@@ -2146,7 +2215,9 @@ function editBankAcct(i){
 }
 function deleteBankAcct(id){
   var c=gc();if(!confirm('Remove this bank account?'))return;
+  var acct=(c.bankAccounts||[]).find(function(b){return b.id===id;});
   c.bankAccounts=(c.bankAccounts||[]).filter(function(b){return b.id!==id;});
+  if(acct&&typeof dwDeleteBankAcct==='function')dwDeleteBankAcct(c,acct);
   RECON_ACCT='bank:default';sv();renderReconciliation(c);
 }
 
@@ -2189,7 +2260,9 @@ function saveRelease(){
   if(amt>_naWithBal+0.01){alert('This release ($'+amt.toFixed(2)+') is more than the current balance of Net assets with donor restrictions ($'+_naWithBal.toFixed(2)+'). You can\'t release more than what\'s actually restricted.');return;}
   if(!c.restrictionReleases)c.restrictionReleases=[];
   var relId=uid();
-  c.restrictionReleases.push({id:relId,fundName:fundName,amount:amt,date:date,note:note,created:new Date().toISOString()});
+  var relItem={id:relId,fundName:fundName,amount:amt,date:date,note:note,created:new Date().toISOString()};
+  c.restrictionReleases.push(relItem);
+  if(typeof dwUpsertRelease==='function')dwUpsertRelease(c,relItem);
   // Double-entry: Dr Temp Restricted Net Assets (3020) / Cr Unrestricted Net Assets (3010)
   var memo='Restriction release — '+fundName+(note?' — '+note:'');
   postToLedger(c,'3020','3010',amt,memo,'release',relId);

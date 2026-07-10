@@ -21,7 +21,13 @@ function openM(id){
     'm-rev':{'sel':'r-acct','cat':'r-c','filter':'Income'},
     'm-peinc':{'sel':'pi-acct','cat':'pi-c','filter':'Income'},
     'm-grant':{'sel':'g-acct','cat':null,'filter':null},
-    'm-je':{'sel':'je-acct','cat':null,'filter':null}
+    // je-debit-acct/je-credit-acct: the manual Journal Entry modal's two account-code
+    // selects. Was registered here as 'je-acct' pointing at an element that never
+    // actually existed in the modal HTML — saveJE() read free-text 'je-debit'/'je-credit'
+    // inputs instead, so debitCode/creditCode were always empty and no journal entry ever
+    // posted to the real ledger. Fixed by adding the real selects (see m-je HTML, renders.js)
+    // and populating both here via the new secondSel config field.
+    'm-je':{'sel':'je-debit-acct','cat':null,'filter':null,'secondSel':'je-credit-acct'}
     // m-bill intentionally not listed here — bill-acct is populated by the dedicated
     // _billPopulateAcctOptions() (features.js), which groups Asset/Liability/Expense
     // accounts by type. That used to run first and then get silently overwritten by this
@@ -35,6 +41,10 @@ function openM(id){
         var acct=(c2.accounts||[]).find(function(a){return a.code===sel2.value;});
         if(acct&&cfg.cat&&g(cfg.cat))g(cfg.cat).value=acct.cat;
       };
+    }
+    if(cfg.secondSel){
+      var sel3=g(cfg.secondSel);
+      if(sel3&&c2)sel3.innerHTML=acctOpts(c2,cfg.filter);
     }
     // Populate project dropdown if projects exist
   var projDropMods=['m-exp','m-inc','m-rev','m-peinc'];
@@ -59,10 +69,10 @@ function openM(id){
       });
       bsel2.style.display='';
       bsel2.innerHTML='<option value="">— Select account —</option>'
-        +banks2.map(function(b){return'<option value="bank:'+b.id+'">'+b.name+'</option>';}).join('')
-        +coaAssets.map(function(a){return'<option value="coaasset:'+a.id+'">'+a.name+'</option>';}).join('')
-        +ccs2.map(function(cc){return'<option value="cc:'+cc.id+'">'+cc.name+' (CC charge)</option>';}).join('')
-        +(cashAssets2.length?cashAssets2.map(function(a){return'<option value="bsasset:'+a.id+'">'+a.name+' (cash asset)</option>';}).join(''):'')
+        +banks2.map(function(b){return'<option value="bank:'+b.id+'">'+escHtml(b.name)+'</option>';}).join('')
+        +coaAssets.map(function(a){return'<option value="coaasset:'+a.id+'">'+escHtml(a.name)+'</option>';}).join('')
+        +ccs2.map(function(cc){return'<option value="cc:'+cc.id+'">'+escHtml(cc.name)+' (CC charge)</option>';}).join('')
+        +(cashAssets2.length?cashAssets2.map(function(a){return'<option value="bsasset:'+a.id+'">'+escHtml(a.name)+' (cash asset)</option>';}).join(''):'')
         +'<option value="__addbank__">＋ Add account…</option>';
       // Wire the inline "Add account" option + COA asset auto-promote
       bsel2.onchange=function(){
@@ -294,7 +304,7 @@ function populateExpCatDropdown(selId,currentVal){
     html+='<optgroup label="── Expense Accounts">';
     expAccts.forEach(function(a){
       var v=a.cat||a.name;
-      html+='<option value="'+v+'" data-code="'+a.code+'"'+(v===currentVal?' selected':'')+'>'+a.code+' '+a.name+'</option>';
+      html+='<option value="'+escHtml(v)+'" data-code="'+escHtml(a.code)+'"'+(v===currentVal?' selected':'')+'>'+escHtml(a.code)+' '+escHtml(a.name)+'</option>';
     });
     html+='</optgroup>';
   }
@@ -302,7 +312,7 @@ function populateExpCatDropdown(selId,currentVal){
     html+='<optgroup label="── Income / Contra-Revenue">';
     incAccts.forEach(function(a){
       var v=a.cat||a.name;
-      html+='<option value="'+v+'" data-code="'+a.code+'"'+(v===currentVal?' selected':'')+'>'+a.code+' '+a.name+'</option>';
+      html+='<option value="'+escHtml(v)+'" data-code="'+escHtml(a.code)+'"'+(v===currentVal?' selected':'')+'>'+escHtml(a.code)+' '+escHtml(a.name)+'</option>';
     });
     html+='</optgroup>';
   }
@@ -385,12 +395,12 @@ function populateBudgetCatDropdown(selId,currentVal,currentType){
   var html='<option value="">— Select line item —</option>';
   if(expAccts.length){
     html+='<optgroup label="── Expense">';
-    expAccts.forEach(function(a){var v=makeVal(a);html+='<option value="'+v+'" data-acct-type="Expense"'+(isSelected(a)?' selected':'')+'>'+a.code+' '+a.name+'</option>';});
+    expAccts.forEach(function(a){var v=makeVal(a);html+='<option value="'+escHtml(v)+'" data-acct-type="Expense"'+(isSelected(a)?' selected':'')+'>'+escHtml(a.code)+' '+escHtml(a.name)+'</option>';});
     html+='</optgroup>';
   }
   if(incAccts.length){
     html+='<optgroup label="── Income">';
-    incAccts.forEach(function(a){var v=makeVal(a);html+='<option value="'+v+'" data-acct-type="Income"'+(isSelected(a)?' selected':'')+'>'+a.code+' '+a.name+'</option>';});
+    incAccts.forEach(function(a){var v=makeVal(a);html+='<option value="'+escHtml(v)+'" data-acct-type="Income"'+(isSelected(a)?' selected':'')+'>'+escHtml(a.code)+' '+escHtml(a.name)+'</option>';});
     html+='</optgroup>';
   }
   html+='<option value="__new__">＋ New category…</option>';
@@ -466,7 +476,7 @@ function populateIncCatDropdown(selId,currentVal,typeFilter){
   var html='<option value="">— Select category —</option>';
   if(incAccts.length){
     html+='<optgroup label="── Income Accounts">';
-    incAccts.forEach(function(a){var v=a.cat||a.name;html+='<option value="'+v+'" data-code="'+a.code+'"'+(v===currentVal?' selected':'')+'>'+a.code+' '+a.name+'</option>';});
+    incAccts.forEach(function(a){var v=a.cat||a.name;html+='<option value="'+escHtml(v)+'" data-code="'+escHtml(a.code)+'"'+(v===currentVal?' selected':'')+'>'+escHtml(a.code)+' '+escHtml(a.name)+'</option>';});
     html+='</optgroup>';
   }
   html+='<option value="__new__">＋ New category…</option>';
@@ -617,11 +627,13 @@ function impSavePDFToVault(input){
   storageUpload(c.id,file).then(function(res){
     if(res.error){alert('Could not save to vault: '+res.error);return;}
     if(!c.documents)c.documents=[];
-    c.documents.push({
+    var _vaultDoc1={
       id:uid(),name:file.name,category:'Statement',
       path:res.path,size:file.size,mimeType:file.type,
       uploadedAt:new Date().toISOString(),notes:'',linkedTo:''
-    });
+    };
+    c.documents.push(_vaultDoc1);
+    if(typeof dwUpsertDocument==='function')dwUpsertDocument(c,_vaultDoc1);
     sv();
     if(typeof renderDocumentVault==='function')renderDocumentVault(c);
     // Show toast
@@ -656,8 +668,8 @@ function updateTpl(type){
     if(bsel){
       var banks=(c.bankAccounts||[]);var ccs=(c.creditCards||[]);
       bsel.innerHTML='<option value="">— Default account —</option>'
-        +banks.map(function(b){return'<option value="bank:'+b.id+'">'+b.name+'</option>';}).join('')
-        +ccs.map(function(cc){return'<option value="cc:'+cc.id+'">'+cc.name+' (CC)</option>';}).join('');
+        +banks.map(function(b){return'<option value="bank:'+b.id+'">'+escHtml(b.name)+'</option>';}).join('')
+        +ccs.map(function(cc){return'<option value="cc:'+cc.id+'">'+escHtml(cc.name)+' (CC)</option>';}).join('');
     }
   }
   if(ccRow&&c){
@@ -665,7 +677,7 @@ function updateTpl(type){
     var ccsel=g('imp-cc-id');
     if(ccsel){
       ccsel.innerHTML='<option value="">— Select card —</option>'
-        +(c.creditCards||[]).map(function(cc){return'<option value="'+cc.id+'">'+cc.name+'</option>';}).join('');
+        +(c.creditCards||[]).map(function(cc){return'<option value="'+cc.id+'">'+escHtml(cc.name)+'</option>';}).join('');
     }
   }
 }
@@ -865,23 +877,6 @@ function applyFlag(item,flagResult){
   return item;
 }
 
-function dismissFlag(type,id){
-  var c=gc();if(!c)return;
-  var arr=type==='income'?(c.type==='sb'?c.revenue:c.income):c.expenses;
-  var item=(arr||[]).find(function(x){return x.id===id;});
-  if(!item)return;
-  var note=prompt('Add a note for dismissing this flag (optional):');
-  if(note===null)return;// cancelled
-  item.flagged=false;
-  item.flagDismissed=true;
-  item.flagDismissedAt=new Date().toISOString();
-  item.flagDismissNote=note||'';
-  (item.audit=item.audit||[]).push({field:'flag-dismissed',oldValue:item.flagReason||'',newValue:'Dismissed'+(note?' — '+note:''),timestamp:new Date().toISOString()});
-  sv();
-  if(typeof renderAll==='function')renderAll();
-  if(typeof renderFlaggedTransactions==='function')renderFlaggedTransactions(c);
-}
-
 function confirmImport(){
   if(!_importPending)return;
   var rows=_importPending.rows,type=_importPending.type,c=_importPending.c;
@@ -913,6 +908,7 @@ function confirmImport(){
       if(impBankId)eitem.bankId=impBankId;if(impCcId)eitem.ccId=impCcId;
       applyFlag(eitem,checkSuspiciousActivity(c,eitem,eitem.desc,eitem.amt));
       c.expenses.push(eitem);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,eitem);
     }
     else if(type==='income'){
       var amt=Number(row[fk(['amount','amt','actual','recv'])]||0),name=String(row[fk(['name','source'])]||'Imported'),cat=String(row[fk(['cat','category'])]||'Imported');
@@ -921,9 +917,9 @@ function confirmImport(){
       if(iacct&&!iacctCode){iacctCode=quickAddAcctFromImport(c,iacct,'Income')||'';}
       var impBankVal2=g('imp-bank')&&g('imp-bank').value||'';
       var impBankId2=impBankVal2.indexOf('bank:')=== 0?impBankVal2.slice(5):'';
-      if(c.type==='sb'){if(!c.revenue)c.revenue=[];var ri2={id:uid(),name:name,cat:cat,proj:Number(row[fk(['proj'])]||amt),act:amt,conf:'Confirmed',acctCode:iacctCode,recurring:'None'};if(impBankId2)ri2.bankId=impBankId2;applyFlag(ri2,checkSuspiciousActivity(c,ri2,ri2.name,ri2.act));c.revenue.push(ri2);}
-      else if(c.type==='np'){if(!c.income)c.income=[];var ni={id:uid(),name:name,cat:cat,proj:Number(row[fk(['proj'])]||amt),recv:amt,status:'Received',acctCode:iacctCode,recurring:'None'};if(impBankId2)ni.bankId=impBankId2;applyFlag(ni,checkSuspiciousActivity(c,ni,ni.name,ni.recv));c.income.push(ni);}
-      else{if(!c.income)c.income=[];var pei={id:uid(),name:name,cat:cat,amt:amt,freq:String(row[fk(['freq'])]||'Monthly'),acctCode:iacctCode,recurring:'None'};if(impBankId2)pei.bankId=impBankId2;applyFlag(pei,checkSuspiciousActivity(c,pei,pei.name,pei.amt));c.income.push(pei);}
+      if(c.type==='sb'){if(!c.revenue)c.revenue=[];var ri2={id:uid(),name:name,cat:cat,proj:Number(row[fk(['proj'])]||amt),act:amt,conf:'Confirmed',acctCode:iacctCode,recurring:'None'};if(impBankId2)ri2.bankId=impBankId2;applyFlag(ri2,checkSuspiciousActivity(c,ri2,ri2.name,ri2.act));c.revenue.push(ri2);if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,ri2);}
+      else if(c.type==='np'){if(!c.income)c.income=[];var ni={id:uid(),name:name,cat:cat,proj:Number(row[fk(['proj'])]||amt),recv:amt,status:'Received',acctCode:iacctCode,recurring:'None'};if(impBankId2)ni.bankId=impBankId2;applyFlag(ni,checkSuspiciousActivity(c,ni,ni.name,ni.recv));c.income.push(ni);if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,ni);}
+      else{if(!c.income)c.income=[];var pei={id:uid(),name:name,cat:cat,amt:amt,freq:String(row[fk(['freq'])]||'Monthly'),acctCode:iacctCode,recurring:'None'};if(impBankId2)pei.bankId=impBankId2;applyFlag(pei,checkSuspiciousActivity(c,pei,pei.name,pei.amt));c.income.push(pei);if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,pei);}
     }
     else if(type==='cc'){
       var ccSel=g('imp-cc-id')&&g('imp-cc-id').value;
@@ -937,6 +933,7 @@ function confirmImport(){
       var ccItem={id:uid(),desc:ccDesc,cat:ccCat,amt:ccAmt,date:ccDate,acctCode:ccAcct,ccId:ccSel,reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable'};
       applyFlag(ccItem,checkSuspiciousActivity(c,ccItem,ccItem.desc,ccItem.amt));
       c.expenses.push(ccItem);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,ccItem);
     }
     else if(type==='donors'){
       if(!c.donors)c.donors=[];
@@ -1060,6 +1057,7 @@ function saveSplitRow(){
     if(sp.ccId)eitem.ccId=sp.ccId;
     applyFlag(eitem,checkSuspiciousActivity(c,eitem,eitem.desc,eitem.amt));
     c.expenses.push(eitem);
+    if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,eitem);
   });
   _splitIdx++;
   g('m-split').classList.remove('open');
@@ -1074,6 +1072,7 @@ function skipSplitRow(){
   if(sp.bankId)eitem.bankId=sp.bankId;
   applyFlag(eitem,checkSuspiciousActivity(c,eitem,eitem.desc,eitem.amt));
   c.expenses.push(eitem);
+  if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,eitem);
   _splitIdx++;
   g('m-split').classList.remove('open');
   setTimeout(openSplitReview,200);
@@ -1118,18 +1117,18 @@ function renderBankReviewRow(){
   // Pre-fill suggestion
   if(!row._cat&&rule){row._cat=rule.cat;row._acct=rule.acctCode;row._confirmed=false;}
   else if(!row._cat&&matchedAcct){row._cat=matchedAcct.cat||'';row._acct=matchedAcct.code;row._confirmed=false;}
-  var acctOpts='<option value="">— Uncategorized —</option>'+accts.map(function(a){return'<option value="'+a.code+'"'+(row._acct===a.code?' selected':'')+'>'+a.code+' '+a.name+'</option>';}).join('');
-  var suggestion=rule?'<span class="badge b-green" style="margin-left:6px">Rule: '+rule.keyword+'</span>':billMatch?'<span class="badge b-amber">Matches bill: '+billMatch.vendor+'</span>':loanMatch?'<span class="badge b-blue">Possible loan payment: '+loanMatch.name+'</span>':'';
+  var acctOpts='<option value="">— Uncategorized —</option>'+accts.map(function(a){return'<option value="'+escHtml(a.code)+'"'+(row._acct===a.code?' selected':'')+'>'+escHtml(a.code)+' '+escHtml(a.name)+'</option>';}).join('');
+  var suggestion=rule?'<span class="badge b-green" style="margin-left:6px">Rule: '+escHtml(rule.keyword)+'</span>':billMatch?'<span class="badge b-amber">Matches bill: '+escHtml(billMatch.vendor)+'</span>':loanMatch?'<span class="badge b-blue">Possible loan payment: '+escHtml(loanMatch.name)+'</span>':'';
   el.innerHTML='<div style="margin-bottom:1.25rem">'
   +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:.75rem">'
-  +'<div><div style="font-size:15px;font-weight:500">'+row.desc+suggestion+'</div><div style="font-size:12px;color:var(--muted);margin-top:3px">'+(row.date||'No date')+' · <span class="'+(row.isDebit?'vr':'vg')+'">'+(row.isDebit?'-':'+')+''+fmt(row.amt)+'</span></div></div>'
+  +'<div><div style="font-size:15px;font-weight:500">'+escHtml(row.desc)+suggestion+'</div><div style="font-size:12px;color:var(--muted);margin-top:3px">'+(row.date||'No date')+' · <span class="'+(row.isDebit?'vr':'vg')+'">'+(row.isDebit?'-':'+')+''+fmt(row.amt)+'</span></div></div>'
   +'<div style="font-size:11px;color:var(--muted)">'+remaining.length+' remaining</div></div>'
   // Loan payment confirmation
-  +(loanMatch&&row.isDebit?'<div style="background:var(--blue-bg);border-radius:8px;padding:.875rem;margin-bottom:.75rem;font-size:13px"><strong>Is this a loan payment?</strong> If yes, interest will be auto-split using the amortization schedule.<div style="display:flex;gap:8px;margin-top:.75rem"><button class="sv-btn" style="background:var(--blue);padding:6px 14px;font-size:12px" onclick="confirmLoanPayment('+ri+',\''+loanMatch.name.replace(/'/g,'')+'\')">Yes — split interest/principal</button><button class="add-btn" onclick="dismissLoan('+ri+')">No — regular expense</button></div></div>':'')
+  +(loanMatch&&row.isDebit?'<div style="background:var(--blue-bg);border-radius:8px;padding:.875rem;margin-bottom:.75rem;font-size:13px"><strong>Is this a loan payment?</strong> If yes, interest will be auto-split using the amortization schedule.<div style="display:flex;gap:8px;margin-top:.75rem"><button class="sv-btn" style="background:var(--blue);padding:6px 14px;font-size:12px" onclick="confirmLoanPayment('+ri+',\''+escHtml(loanMatch.name).replace(/'/g,'')+'\')">Yes — split interest/principal</button><button class="add-btn" onclick="dismissLoan('+ri+')">No — regular expense</button></div></div>':'')
   // Bill match confirmation
-  +(billMatch&&row.isDebit?'<div style="background:var(--amber-bg);border-radius:8px;padding:.875rem;margin-bottom:.75rem;font-size:13px"><strong>Matches open bill:</strong> '+billMatch.vendor+' '+fmt(billMatch.amt)+'<div style="display:flex;gap:8px;margin-top:.75rem"><button class="sv-btn" style="background:var(--amber);padding:6px 14px;font-size:12px" onclick="confirmBillMatch('+ri+',\''+billMatch.id+'\')">Yes — mark bill paid</button><button class="add-btn" onclick="dismissBill('+ri+')">No — separate transaction</button></div></div>':'')
+  +(billMatch&&row.isDebit?'<div style="background:var(--amber-bg);border-radius:8px;padding:.875rem;margin-bottom:.75rem;font-size:13px"><strong>Matches open bill:</strong> '+escHtml(billMatch.vendor)+' '+fmt(billMatch.amt)+'<div style="display:flex;gap:8px;margin-top:.75rem"><button class="sv-btn" style="background:var(--amber);padding:6px 14px;font-size:12px" onclick="confirmBillMatch('+ri+',\''+billMatch.id+'\')">Yes — mark bill paid</button><button class="add-btn" onclick="dismissBill('+ri+')">No — separate transaction</button></div></div>':'')
   // Category fields
-  +'<div class="fr"><div class="fl" style="margin-bottom:0"><label style="font-size:11px;color:var(--muted)">Account (COA)</label><div class="sw" style="width:100%"><select id="br-acct" style="width:100%" onchange="var a=BANK_CLIENT.accounts.find(function(x){return x.code===this.value;}.bind(this));if(a){g(\'br-cat\').value=a.cat||\'\';}BANK_ROWS['+ri+']._acct=this.value;">'+acctOpts+'</select></div></div><div class="fl" style="margin-bottom:0"><label style="font-size:11px;color:var(--muted)">Category</label><input type="text" id="br-cat" value="'+(row._cat||'')+'" placeholder="e.g. Software" oninput="BANK_ROWS['+ri+']._cat=this.value" style="font-size:13px"></div></div>'
+  +'<div class="fr"><div class="fl" style="margin-bottom:0"><label style="font-size:11px;color:var(--muted)">Account (COA)</label><div class="sw" style="width:100%"><select id="br-acct" style="width:100%" onchange="var a=BANK_CLIENT.accounts.find(function(x){return x.code===this.value;}.bind(this));if(a){g(\'br-cat\').value=a.cat||\'\';}BANK_ROWS['+ri+']._acct=this.value;">'+acctOpts+'</select></div></div><div class="fl" style="margin-bottom:0"><label style="font-size:11px;color:var(--muted)">Category</label><input type="text" id="br-cat" value="'+escHtml(row._cat||'')+'" placeholder="e.g. Software" oninput="BANK_ROWS['+ri+']._cat=this.value" style="font-size:13px"></div></div>'
   +'<div class="fl" style="margin-top:.75rem;margin-bottom:0"><label style="font-size:11px;color:var(--muted)">Save as rule? (keyword to auto-apply next time)</label><input type="text" id="br-rule" placeholder="e.g. Adobe, Verizon, Chase" style="font-size:13px"></div>'
   +'<div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap">'
   +'<button class="sv-btn" onclick="confirmBankRow('+ri+')">Confirm →</button>'
@@ -1183,14 +1182,15 @@ function commitBankImport(){
   BANK_ROWS.forEach(function(row){
     if(row._skip)return;
     if(row._isLoan){
-      var loan=(c.loans||[]).find(function(l){return l.name===row._loanName;});
-      if(!c.expenses)c.expenses=[];
-      var lExp={id:uid(),desc:row.desc,cat:'Loan Payment',amt:row.amt,date:row.date,acctCode:'2200',reconciled:true,recurring:'None',freq:'One-time',fixed:'Fixed',notes:'Interest: '+fmt(row._interest)+' | Principal: '+fmt(row._principal)};
-      if(_importBankId)lExp.bankId=_importBankId;
-      applyFlag(lExp,checkSuspiciousActivity(c,lExp,lExp.desc,lExp.amt));
-      c.expenses.push(lExp);
-      if(row._interest>0.01){var iExp={id:uid(),desc:'Interest — '+row._loanName+' pmt #'+row._loanNum,cat:'Interest',amt:row._interest,date:row.date,acctCode:'5700',reconciled:true,recurring:'None',freq:'One-time',fixed:'Fixed'};if(_importBankId)iExp.bankId=_importBankId;c.expenses.push(iExp);}
-      if(loan){if(!loan.posted)loan.posted=[];loan.posted.push(row._loanNum);}
+      // Delegates to the real postLoanPayment() (features.js) instead of hand-building
+      // expense records — this used to hardcode acctCode '2200'/'5700' (only correct for
+      // SB's default COA, wrong for NP/PE) and never called postToLedger() at all, so any
+      // loan payment recognized via bank import silently never reached the ledger while
+      // still marking that payment number "posted" (permanently hiding the gap, same bug
+      // class already fixed for postDepreciation() this week). postLoanPayment() already
+      // resolves the right dedicated accounts via _ensureDedicatedCOA() and posts correctly.
+      var loanIdx=(c.loans||[]).findIndex(function(l){return l.name===row._loanName;});
+      if(loanIdx>=0&&typeof postLoanPayment==='function')postLoanPayment(loanIdx,row._loanNum,row._interest,row._principal);
     }else if(row._billId){
       var bill=(c.bills||[]).find(function(b){return b.id===row._billId;});
       if(bill){bill.status='Paid';bill.paidDate=row.date;}
@@ -1199,15 +1199,17 @@ function commitBankImport(){
       if(_importBankId)bExp.bankId=_importBankId;
       applyFlag(bExp,checkSuspiciousActivity(c,bExp,bExp.desc,bExp.amt));
       c.expenses.push(bExp);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,bExp);
     }else if(row.isDebit){
       if(!c.expenses)c.expenses=[];
       var dExp={id:uid(),desc:row.desc,cat:row._cat||'Uncategorized',amt:row.amt,date:row.date,acctCode:row._acct||'',reconciled:true,recurring:'None',freq:'One-time',fixed:'Variable'};
       if(_importBankId)dExp.bankId=_importBankId;
       applyFlag(dExp,checkSuspiciousActivity(c,dExp,dExp.desc,dExp.amt));
       c.expenses.push(dExp);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,dExp);
     }else{
-      if(c.type==='sb'){if(!c.revenue)c.revenue=[];var rRev={id:uid(),name:row.desc,cat:row._cat||'Uncategorized',proj:row.amt,act:row.amt,conf:'Confirmed',acctCode:row._acct||'',recurring:'None'};if(_importBankId)rRev.bankId=_importBankId;applyFlag(rRev,checkSuspiciousActivity(c,rRev,rRev.name,rRev.act));c.revenue.push(rRev);}
-      else{if(!c.income)c.income=[];var rInc={id:uid(),name:row.desc,cat:row._cat||'Uncategorized',amt:row.amt,recv:row.amt,proj:row.amt,date:row.date,acctCode:row._acct||'',status:'Received',recurring:'None'};if(_importBankId)rInc.bankId=_importBankId;applyFlag(rInc,checkSuspiciousActivity(c,rInc,rInc.name,rInc.recv));c.income.push(rInc);}
+      if(c.type==='sb'){if(!c.revenue)c.revenue=[];var rRev={id:uid(),name:row.desc,cat:row._cat||'Uncategorized',proj:row.amt,act:row.amt,conf:'Confirmed',acctCode:row._acct||'',recurring:'None'};if(_importBankId)rRev.bankId=_importBankId;applyFlag(rRev,checkSuspiciousActivity(c,rRev,rRev.name,rRev.act));c.revenue.push(rRev);if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,rRev);}
+      else{if(!c.income)c.income=[];var rInc={id:uid(),name:row.desc,cat:row._cat||'Uncategorized',amt:row.amt,recv:row.amt,proj:row.amt,date:row.date,acctCode:row._acct||'',status:'Received',recurring:'None'};if(_importBankId)rInc.bankId=_importBankId;applyFlag(rInc,checkSuspiciousActivity(c,rInc,rInc.name,rInc.recv));c.income.push(rInc);if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,rInc);}
     }
     posted++;
     // Check if this matches a payroll net pay — auto-reconcile

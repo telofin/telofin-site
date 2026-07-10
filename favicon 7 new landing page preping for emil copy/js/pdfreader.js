@@ -1058,9 +1058,11 @@ function _pdfImportBank(c, parsed) {
     if (!t.date || t.amount === null) return;
     var id = uid();
     if (t.amount < 0 || t.type === 'debit') {
-      c.expenses.push({ id:id, desc:t.description, amt:Math.abs(t.amount), date:t.date, cat:t.category==='service_charge'?'Bank Fees':'Uncategorized', acctCode:'', reconciled:false, fromImport:true });
+      var _dwTmp={ id:id, desc:t.description, amt:Math.abs(t.amount), date:t.date, cat:t.category==='service_charge'?'Bank Fees':'Uncategorized', acctCode:'', reconciled:false, fromImport:true };c.expenses.push(_dwTmp);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,_dwTmp);
     } else {
-      c.income.push({ id:id, name:t.description, recv:t.amount, proj:t.amount, date:t.date, cat:'Other Income', acctCode:'', reconciled:false, fromImport:true });
+      var _dwTmp={ id:id, name:t.description, recv:t.amount, proj:t.amount, date:t.date, cat:'Other Income', acctCode:'', reconciled:false, fromImport:true };c.income.push(_dwTmp);
+      if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,_dwTmp);
     }
     imported++;
   });
@@ -1076,12 +1078,15 @@ function _pdfImportCC(c, parsed) {
     if (!t.date || t.amount === null) return;
     if (t.category === 'payment') {
       // Log payment as a transfer — not a regular expense
-      c.expenses.push({ id:uid(), desc:'CC Payment — '+t.description, amt:Math.abs(t.amount), date:t.date, cat:'Credit Card Payment', acctCode:t.suggestedCode||'2100', reconciled:false, fromImport:true, ccPayment:true });
+      var _dwTmp={ id:uid(), desc:'CC Payment — '+t.description, amt:Math.abs(t.amount), date:t.date, cat:'Credit Card Payment', acctCode:t.suggestedCode||'2100', reconciled:false, fromImport:true, ccPayment:true };c.expenses.push(_dwTmp);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,_dwTmp);
     } else if (t.category === 'credit') {
       // Credit/refund — negative expense
-      c.expenses.push({ id:uid(), desc:t.description, amt:-Math.abs(t.amount), date:t.date, cat:'CC Refund', acctCode:t.suggestedCode||'', reconciled:false, fromImport:true });
+      var _dwTmp={ id:uid(), desc:t.description, amt:-Math.abs(t.amount), date:t.date, cat:'CC Refund', acctCode:t.suggestedCode||'', reconciled:false, fromImport:true };c.expenses.push(_dwTmp);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,_dwTmp);
     } else {
-      c.expenses.push({ id:uid(), desc:t.description, amt:Math.abs(t.amount), date:t.date, cat:'Uncategorized', acctCode:t.suggestedCode||'', reconciled:false, fromImport:true, ccCategory:t.category });
+      var _dwTmp={ id:uid(), desc:t.description, amt:Math.abs(t.amount), date:t.date, cat:'Uncategorized', acctCode:t.suggestedCode||'', reconciled:false, fromImport:true, ccCategory:t.category };c.expenses.push(_dwTmp);
+      if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,_dwTmp);
     }
     imported++;
   });
@@ -1103,7 +1108,8 @@ function _pdfImportRegister(c, parsed) {
   var imported = 0;
   (parsed.transactions || []).forEach(function(t){
     if (!t.date) return;
-    c.expenses.push({ id:uid(), desc:t.description, amt:Math.abs(t.amount||0), date:t.date, cat:'Uncategorized', reconciled:t.reconciled||false, fromImport:true });
+    var _dwTmp={ id:uid(), desc:t.description, amt:Math.abs(t.amount||0), date:t.date, cat:'Uncategorized', reconciled:t.reconciled||false, fromImport:true };c.expenses.push(_dwTmp);
+    if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,_dwTmp);
     imported++;
   });
   sv();
@@ -1115,7 +1121,8 @@ function _pdfImportDonation(c, parsed) {
   if (!c.income) c.income = [];
   var imported = 0;
   (parsed.transactions || []).forEach(function(t){
-    c.income.push({ id:uid(), name:t.description, recv:t.net, proj:t.gross, date:t.date, cat:'Donations', platformFee:t.fee, fromImport:true, reconciled:false });
+    var _dwTmp={ id:uid(), name:t.description, recv:t.net, proj:t.gross, date:t.date, cat:'Donations', platformFee:t.fee, fromImport:true, reconciled:false };c.income.push(_dwTmp);
+    if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,_dwTmp);
     imported++;
   });
   sv();
@@ -1183,13 +1190,15 @@ function _pdfSaveToVaultOnly() {
   storageUpload(c.id, file).then(function(res) {
     if (res.error) { alert('Could not save to vault: ' + res.error); return; }
     if (!c.documents) c.documents = [];
-    c.documents.push({
+    var _vaultDoc2 = {
       id: uid(), name: file.name, category: 'Bank Statement',
       path: res.path, size: file.size, mimeType: file.type,
       uploadedAt: new Date().toISOString(),
       notes: 'Uploaded via PDF import — transactions entered manually',
       linkedTo: ''
-    });
+    };
+    c.documents.push(_vaultDoc2);
+    if (typeof dwUpsertDocument === 'function') dwUpsertDocument(c, _vaultDoc2);
     sv();
     pdfCancel();
     if (typeof renderDocumentVault === 'function') renderDocumentVault(c);

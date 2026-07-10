@@ -76,7 +76,7 @@ function renderProjectsHTML(c){
       html+=metrics+'<div class="card"><div class="c-head"><span class="c-title">Budget vs Actual'+(periodLabel?' — '+periodLabel:'')+'</span><button class="add-btn" onclick="'+addFn+'">+ Add line</button></div>'+(curLines.length?'<div style="overflow-x:auto"><table><thead><tr><th>Category</th><th>Type</th><th>Budgeted</th><th>Actual</th><th>Remaining</th><th></th></tr></thead><tbody>'+curRows+'</tbody></table><div class="rpt-total" style="margin-top:.5rem"><span>Totals</span><span style="display:flex;gap:24px"><span>Income: '+fmt(totalBudgetI)+' / Actual: <span class="vg">'+fmt(totalActI)+'</span></span><span>Expenses: '+fmt(totalBudgetE)+' / Actual: <span class="vr">'+fmt(totalActE)+'</span></span></span></div></div>':'<div style="font-size:12px;color:var(--muted);padding:.75rem">No budget lines yet. Add lines to track budget vs actual.</div>')+'</div>';
     }else if(PROJ_BUDGET_VIEW==='proposed'){
       var propLines=selProj.proposedBudget||[];
-      var propRows=propLines.map(function(bl,i){return'<tr><td style="font-weight:500">'+bl.cat+'</td><td style="color:var(--muted);font-size:11px">'+bl.type+'</td><td>'+fmt(bl.amt)+'</td><td><button class="d-btn" onclick="delProjProposedLine(\''+selProj.id+'\','+i+')">&#215;</button></td></tr>';}).join('');
+      var propRows=propLines.map(function(bl,i){return'<tr><td style="font-weight:500">'+escHtml(bl.cat)+'</td><td style="color:var(--muted);font-size:11px">'+bl.type+'</td><td>'+fmt(bl.amt)+'</td><td><button class="d-btn" onclick="delProjProposedLine(\''+selProj.id+'\','+i+')">&#215;</button></td></tr>';}).join('');
       var propI=propLines.filter(function(l){return l.type==='Income';}).reduce(function(s,l){return s+Number(l.amt||0);},0);
       var propE=propLines.filter(function(l){return l.type==='Expense';}).reduce(function(s,l){return s+Number(l.amt||0);},0);
       html+='<div class="card"><div class="c-head"><span class="c-title">Proposed budget — next year</span><button class="add-btn" onclick="openProjBudgetLine(\''+selProj.id+'\',\'proposed\')">+ Add line</button></div>'+(propLines.length?'<div style="overflow-x:auto"><table><thead><tr><th>Category</th><th>Type</th><th>Amount</th><th></th></tr></thead><tbody>'+propRows+'</tbody></table><div class="rpt-total" style="margin-top:.5rem"><span>Total proposed</span><span>Income: '+fmt(propI)+' &nbsp; Expenses: '+fmt(propE)+'</span></div></div>':'<div style="font-size:12px;color:var(--muted);padding:.75rem">No proposed lines yet.</div>')+'</div>';
@@ -89,7 +89,7 @@ function renderProjectsHTML(c){
       }else{
         var past=selProj.adoptedBudgets||[];
         if(!past.length)html+='<div style="font-size:12px;color:var(--muted)">No past adopted budgets yet.</div>';
-        else html+=past.slice().reverse().map(function(ab){var abRows=(ab.items||[]).map(function(bl){return'<tr><td>'+bl.cat+'</td><td style="color:var(--muted);font-size:11px">'+bl.type+'</td><td>'+fmt(bl.amt)+'</td></tr>';}).join('');var abI=(ab.items||[]).filter(function(l){return l.type==='Income';}).reduce(function(s,l){return s+Number(l.amt||0);},0);var abE=(ab.items||[]).filter(function(l){return l.type==='Expense';}).reduce(function(s,l){return s+Number(l.amt||0);},0);return'<div class="card"><div class="c-title" style="margin-bottom:.5rem">'+ab.fy+(ab.adoptedOn?' <span style="font-size:11px;color:var(--muted)">adopted '+ab.adoptedOn+'</span>':'')+'</div>'+(ab.items&&ab.items.length?'<table><thead><tr><th>Category</th><th>Type</th><th>Amount</th></tr></thead><tbody>'+abRows+'</tbody></table><div style="font-size:11px;color:var(--muted);margin-top:.5rem">Income: '+fmt(abI)+' &nbsp; Expenses: '+fmt(abE)+'</div>':'<div style="font-size:12px;color:var(--muted)">No lines.</div>')+'</div>';}).join('');
+        else html+=past.slice().reverse().map(function(ab){var abRows=(ab.items||[]).map(function(bl){return'<tr><td>'+escHtml(bl.cat)+'</td><td style="color:var(--muted);font-size:11px">'+bl.type+'</td><td>'+fmt(bl.amt)+'</td></tr>';}).join('');var abI=(ab.items||[]).filter(function(l){return l.type==='Income';}).reduce(function(s,l){return s+Number(l.amt||0);},0);var abE=(ab.items||[]).filter(function(l){return l.type==='Expense';}).reduce(function(s,l){return s+Number(l.amt||0);},0);return'<div class="card"><div class="c-title" style="margin-bottom:.5rem">'+ab.fy+(ab.adoptedOn?' <span style="font-size:11px;color:var(--muted)">adopted '+ab.adoptedOn+'</span>':'')+'</div>'+(ab.items&&ab.items.length?'<table><thead><tr><th>Category</th><th>Type</th><th>Amount</th></tr></thead><tbody>'+abRows+'</tbody></table><div style="font-size:11px;color:var(--muted);margin-top:.5rem">Income: '+fmt(abI)+' &nbsp; Expenses: '+fmt(abE)+'</div>':'<div style="font-size:12px;color:var(--muted)">No lines.</div>')+'</div>';}).join('');
       }
     }
   }else if(PROJ_VIEW==='transactions'){
@@ -141,13 +141,16 @@ function saveProject(){
   var existing=PROJ_EI>=0?c.projects[PROJ_EI]:{};
   var item={id:PROJ_EI>=0?(existing.id||uid()):uid(),name:name,desc:g('proj-desc').value,budget:Number(g('proj-budget').value||0),notes:g('proj-notes').value,isMultiYear:isMultiYear,grantId:grantId,budgetLines:existing.budgetLines||[],proposedBudget:existing.proposedBudget||[],adoptedBudgets:existing.adoptedBudgets||[],periods:existing.periods||[]};
   if(PROJ_EI>=0)c.projects[PROJ_EI]=item;else{c.projects.push(item);PROJ_SEL=item.id;}
+  if(typeof dwUpsertProject==='function')dwUpsertProject(c,item);
   PROJ_EI=-1;sv();renderBudgetMultiYear();closeM('m-project');
 }
 function delProject(id){
   var c=gc();if(!confirm('Delete this project? Transactions tagged to it will remain but lose the project tag.'))return;
+  var proj=c.projects.find(function(pr){return pr.id===id;});
   (c.expenses||[]).forEach(function(e){if(e.projectId===id)delete e.projectId;});
   (c.income||[]).concat(c.revenue||[]).forEach(function(r){if(r.projectId===id)delete r.projectId;});
   c.projects=c.projects.filter(function(pr){return pr.id!==id;});
+  if(proj&&typeof dwDeleteProject==='function')dwDeleteProject(c,proj);
   PROJ_SEL=c.projects.length?c.projects[0].id:null;
   sv();renderBudgetMultiYear();
 }
@@ -314,7 +317,7 @@ function renderImportRulesPanel(c){
   div.innerHTML='<div class="card" style="margin-top:1.25rem"><div class="c-head"><span class="c-title">Import rules</span></div><table><thead><tr><th>Keyword</th><th>Category</th><th>Account</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   p.appendChild(div);
 }
-function delImportRule(i){var c=gc();if(!c.importRules)return;c.importRules.splice(i,1);sv();renderImportRulesPanel(c);renderImportRulesPanel(c);}// double call to re-render
+function delImportRule(i){var c=gc();if(!c.importRules)return;var r=c.importRules[i];c.importRules.splice(i,1);if(r&&typeof dwDeleteImportRule==='function')dwDeleteImportRule(c,r);sv();renderImportRulesPanel(c);renderImportRulesPanel(c);}// double call to re-render
 function resetAcctForm(){
   ['acct-code','acct-name'].forEach(function(id){var el=g(id);if(el)el.value='';});
   var t=g('acct-type');if(t)t.value='Expense';
@@ -543,7 +546,22 @@ function importPayroll(input){
       var periods={};
       rows.forEach(function(row){
         var keys=Object.keys(row);
-        var fk=function(terms){return keys.find(function(k){return terms.some(function(t){return k.toLowerCase().includes(t);});})||keys[0];};
+        // Checks terms in priority order across ALL columns first, falling back to weaker
+        // terms only if nothing more specific matched anywhere — NOT columns-in-order checking
+        // any term. The old order (columns outer, terms inner) meant a short/generic term late
+        // in a list (e.g. 'ss' for FICA) could match an EARLIER, unrelated column before the
+        // specific term ('fica') ever got a chance at any column — confirmed live: 'ss' is a
+        // substring of "Gross" ("gro-SS"), and since Gross almost always appears before a FICA
+        // column in real payroll exports, this was silently pulling the gross wage figure into
+        // the FICA/tax total on effectively every realistic CSV.
+        var fk=function(terms){
+          for(var ti=0;ti<terms.length;ti++){
+            var t=terms[ti];
+            var match=keys.find(function(k){return k.toLowerCase().includes(t);});
+            if(match)return match;
+          }
+          return keys[0];
+        };
         var date=String(row[fk(['date','pay date','check date'])]||'').trim();
         var period=String(row[fk(['period','pay period','week','cycle'])]||date).trim();
         var gross=Number(row[fk(['gross','wages','salary','gross wages'])]||0);
@@ -561,15 +579,47 @@ function importPayroll(input){
       });
       if(!c.payroll)c.payroll=[];
       if(!c.expenses)c.expenses=[];
+      var cashCode=_defaultCashCode(c);
       Object.values(periods).forEach(function(p){
         var run={id:uid(),date:p.date,period:p.period,gross:p.gross,taxes:p.taxes,net:p.net,employees:p.employees,reconciled:false};
         c.payroll.push(run);
-        // Post gross wages to expenses (5010)
-        if(p.gross>0)c.expenses.push({id:uid(),desc:'Payroll — '+p.period,cat:'Salaries & wages',amt:p.gross,date:p.date,acctCode:'5010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Fixed',payrollId:run.id});
-        // Post taxes to expenses (5020)
-        if(p.taxes>0)c.expenses.push({id:uid(),desc:'Payroll taxes — '+p.period,cat:'Payroll taxes & benefits',amt:p.taxes,date:p.date,acctCode:'5020',reconciled:false,recurring:'None',freq:'One-time',fixed:'Fixed',payrollId:run.id});
+        if(typeof dwUpsertPayroll==='function')dwUpsertPayroll(c,run);
+        // Post gross wages to expenses (5010) — pushed straight into c.expenses[] rather than
+        // through saveExp(), so it needs its own ledger post same as every other bulk-import
+        // path; this was previously missing entirely, so payroll never showed up on the
+        // General Ledger or Trial Balance even though it showed in the Expense log.
+        //
+        // CORRECTNESS FIX: this used to ALSO post p.taxes (federal+state withholding+employee
+        // FICA — confirmed by the app's own net=gross-taxes fallback above) as a SEPARATE
+        // "5020 Payroll taxes" expense, crediting Cash a second time for it. That double-counts:
+        // withheld tax is not an additional employer cost, it's part of the SAME gross wage
+        // expense already recognized, redirected to a tax authority instead of the employee's
+        // pocket — and it hadn't actually left the bank yet (it's owed until remitted). Total
+        // credited to Cash was gross+taxes when only net pay actually left the bank, and total
+        // expense was gross+taxes when the true wage expense is just gross. Both entries were
+        // individually balanced (dr=cr), so Trial Balance never caught this — it's a treatment
+        // bug, not a posting-mechanics bug. Fixed: gross wages is the only expense recognized;
+        // its credit side splits between actual cash paid (net) and a new dedicated "Payroll
+        // taxes payable" liability (withheld amount, not yet remitted). True EMPLOYER-side
+        // payroll costs (FUTA/SUTA/employer FICA match) aren't captured by this CSV parser at
+        // all — there's no reliable column to source them from — so they're out of scope here,
+        // not silently assumed to be zero from a design standpoint, just genuinely absent from
+        // this import path's data.
+        if(p.gross>0){
+          var grossId=uid();
+          var grossItem={id:grossId,desc:'Payroll — '+p.period,cat:'Salaries & wages',amt:p.gross,date:p.date,acctCode:'5010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Fixed',payrollId:run.id};
+          c.expenses.push(grossItem);
+          if(p.taxes>0&&p.net>0){
+            var payTaxCode=_ensureDedicatedCOA(c,'Payroll taxes payable','Liability','Payroll');
+            postToLedger(c,'5010',cashCode,p.net,'Payroll (net pay) — '+p.period,'expense',grossId+':net');
+            postToLedger(c,'5010',payTaxCode,p.taxes,'Payroll (taxes withheld) — '+p.period,'expense',grossId+':withheld');
+          }else{
+            postToLedger(c,'5010',cashCode,p.gross,'Payroll — '+p.period,'expense',grossId);
+          }
+          dwUpsertExpense(c,grossItem);
+        }
       });
-      sv();renderAll();
+      sv();renderAll(true);
       alert(Object.keys(periods).length+' payroll run(s) imported and posted to expenses.');
     }catch(err){alert('Error reading file. Check your CSV format.');}
   };
@@ -580,8 +630,21 @@ function delPayroll(i){
   var c=gc();if(!confirm('Delete this payroll run? Associated expenses will also be removed.'))return;
   var run=c.payroll[i];
   c.payroll.splice(i,1);
+  if(run&&typeof dwDeletePayroll==='function')dwDeletePayroll(c,run);
+  var linkedExp=(c.expenses||[]).filter(function(e){return e.payrollId===run.id;});
+  linkedExp.forEach(function(e){
+    if(!e.id)return;
+    // The net-pay/taxes-withheld split (see importPayroll()) posts two ledger entries under
+    // sourceIds e.id+':net' / e.id+':withheld' instead of a single e.id — void both by prefix
+    // so a taxed payroll run's liability-side entry doesn't get orphaned. voidLedgerEntry() on
+    // the bare e.id is a safe no-op for entries posted that way (untaxed runs, or legacy runs
+    // from before this fix), so this covers every shape without a branch.
+    (c.ledgerEntries||[]).forEach(function(le){
+      if(le.sourceId===e.id||le.sourceId===e.id+':net'||le.sourceId===e.id+':withheld')voidLedgerEntry(c,le.sourceId);
+    });
+  });
   c.expenses=(c.expenses||[]).filter(function(e){return e.payrollId!==run.id;});
-  sv();renderAll();
+  sv();renderAll(true);
 }
 // ── END PAYROLL ───────────────────────────
 // ══════════════════════════════════════════
@@ -682,16 +745,23 @@ function saveBill(){
   if(!acctCode){alert('Please select an account for this bill.');return;}
   var acctObj=(c.accounts||[]).find(function(a){return a.code===acctCode;});
   var billId=BILL_EI>=0?(c.bills[BILL_EI].id||uid()):uid();
-  var item={id:billId,vendor:vendor,desc:sanitizeInput(g('bill-desc').value.trim()),amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:acctCode,cat:(acctObj&&acctObj.cat)||'Uncategorized',status:'Unpaid',notes:g('bill-notes').value};
+  var is1099=g('bill-1099')&&g('bill-1099').value==='yes';
+  var tin1099=g('bill-tin')&&g('bill-tin').value.trim().replace(/[^0-9\-]/g,'')||'';
+  var item={id:billId,vendor:vendor,desc:sanitizeInput(g('bill-desc').value.trim()),amt:Number(g('bill-amt').value||0),received:g('bill-recv').value,due:g('bill-due').value,acctCode:acctCode,cat:(acctObj&&acctObj.cat)||'Uncategorized',status:'Unpaid',notes:g('bill-notes').value,is1099:is1099,tin1099:tin1099};
   var isNew=BILL_EI<0;
   if(BILL_EI>=0)c.bills[BILL_EI]=item;else c.bills.push(item);
-  // AP ACCRUAL: on new bill entry post Dr Expense / Cr AP (accrual basis)
-  // On edit we void the old ledger entry and repost to keep amounts in sync
-  if(!isNew&&item.ledgerEntryId){voidLedgerEntry(c,item.ledgerEntryId);}
+  if(typeof dwUpsertBill==='function')dwUpsertBill(c,item);
+  // AP ACCRUAL: on new bill entry post Dr Expense / Cr AP (accrual basis). On edit, supersede
+  // the prior entry and repost via updateLedgerEntry (keyed by billId, same as every other
+  // edit-in-place ledger post in this app) — this used to call voidLedgerEntry(c,
+  // item.ledgerEntryId), which passed the *ledger entry's own* id where a sourceId was
+  // expected, so it never matched anything and every bill edit silently posted a second,
+  // never-superseded Dr/Cr on top of the original instead of replacing it.
   var apCode=_defaultAPCode(c);
-  var le=postToLedger(c,acctCode,apCode,item.amt,'Bill received: '+vendor+(item.desc?' — '+item.desc:''),'bill',billId);
-  if(le)item.ledgerEntryId=le.id;
-  BILL_EI=-1;sv();renderAll();closeM('m-bill');resetBillForm();
+  var memo='Bill received: '+vendor+(item.desc?' — '+item.desc:'');
+  if(isNew)postToLedger(c,acctCode,apCode,item.amt,memo,'bill',billId);
+  else updateLedgerEntry(c,billId,acctCode,apCode,item.amt,memo,'bill');
+  BILL_EI=-1;sv();renderAll(true);closeM('m-bill');resetBillForm();
 }
 // PAY_BILL_I: index of the bill currently in the "Pay bill" modal (payBill() below).
 var PAY_BILL_I=-1;
@@ -783,6 +853,9 @@ function _payBillBankChanged(){
   var bank=(c.bankAccounts||[])[Number(bankSel.value)];
   var checkNumEl=g('pb-checknum');
   if(checkNumEl&&bank)checkNumEl.value=bank.nextCheckNum||'';
+  var slotRow=g('pb-slot-row');
+  if(slotRow)slotRow.style.display=(bank&&bank.checkFormat==='standard3')?'block':'none';
+  if(g('pb-slot'))g('pb-slot').value='1';
 }
 // _payOneBill(c, b, method, instrNum, bank): the core "what happens when one bill is paid"
 // step — marks the bill paid, pushes its resulting expense record (checkNum stored as
@@ -799,10 +872,12 @@ function _payBillBankChanged(){
 function _payOneBill(c,b,method,instrNum,bank){
   var memo=b.vendor+(b.desc?' — '+b.desc:'')+(instrNum?' ['+instrNum+']':'');
   b.status='Paid';b.paidDate=todayNum();b.instrNum=instrNum||'';
+  if(typeof dwUpsertBill==='function')dwUpsertBill(c,b);
   if(!c.expenses)c.expenses=[];
   var expId=uid();
   var expItem={id:expId,desc:memo,cat:b.cat||'Accounts Payable',amt:b.amt,date:b.paidDate,acctCode:b.acctCode||'2010',reconciled:false,recurring:'None',freq:'One-time',fixed:'Variable',is1099:b.is1099||false,vendor1099:b.vendor||'',tin1099:b.tin1099||'',checkNum:instrNum||'',billId:b.id,matchId:null,bankId:(method==='check'&&bank)?bank.id:null,checkPrinted:method==='check'&&!!bank};
   c.expenses.push(expItem);
+  if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,expItem);
   // DOUBLE ENTRY: paying a bill clears the AP accrual entry -- Dr AP / Cr Cash
   var apCode=_defaultAPCode(c);var cashCode=_defaultCashCode(c);
   postToLedger(c,apCode,cashCode,b.amt,'Pay bill: '+memo,'expense',expId);
@@ -845,11 +920,12 @@ function confirmPayBill(){
     var numPart=parseInt(instrNum,10);
     if(bankIdx>=0&&!isNaN(numPart))c.bankAccounts[bankIdx].nextCheckNum=numPart+1;
   }
-  sv();renderAll();closeM('m-pay-bill');
+  sv();renderAll(true);closeM('m-pay-bill');
   PAY_BILL_I=-1;
   if(method==='check'&&bank){
     var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===b.vendor.toLowerCase();});
-    if(typeof printCheck==='function')printCheck(c,bank,{payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum});
+    var slot=Number((g('pb-slot')&&g('pb-slot').value)||1);
+    if(typeof printCheck==='function')printCheck(c,bank,{payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum,slot:slot});
   }
 }
 // PAY_BILLS_BATCH_IDS: bill ids currently loaded into the m-pay-bills-batch modal, snapshotted
@@ -887,6 +963,9 @@ function _payBillsBatchBankChanged(){
   var bank=(c.bankAccounts||[])[Number(bankSel.value)];
   var startEl=g('pbb-startnum');
   if(startEl&&bank)startEl.value=bank.nextCheckNum||'';
+  var slotRow=g('pbb-slot-row');
+  if(slotRow)slotRow.style.display=(bank&&bank.checkFormat==='standard3')?'block':'none';
+  if(g('pbb-slot'))g('pbb-slot').value='1';
   _payBillsBatchRenderNums();
 }
 // Assigned check numbers are a display-only readout (starting number + index) — matches how
@@ -927,12 +1006,16 @@ function confirmPayBillsBatch(){
   var tot=bills.reduce(function(s,b){return s+Number(b.amt||0);},0);
   if(!confirm('Mark '+bills.length+' bill'+(bills.length===1?'':'s')+' totaling '+fmt(tot)+' as paid and post to expenses?'))return;
   var checksToPrint=[];
+  var batchSlot=Number((g('pbb-slot')&&g('pbb-slot').value)||1);
   bills.forEach(function(b,i){
     var instrNum=method==='check'?String(startNum+i):refnum;
     _payOneBill(c,b,method,instrNum,bank);
     if(method==='check'&&bank){
       var vendorRec=(c.vendors||[]).find(function(v){return v.name.toLowerCase()===b.vendor.toLowerCase();});
-      checksToPrint.push({payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum});
+      // Slot offset only applies to the first check in the job — later checks in the same
+      // batch each assume a fresh full sheet, matching the "Which slot for the first check"
+      // label in the modal.
+      checksToPrint.push({payee:b.vendor,address:vendorRec&&vendorRec.address||'',amount:b.amt,date:b.paidDate,memo:b.desc||'',checkNum:instrNum,slot:i===0?batchSlot:1});
     }
   });
   if(method==='check'&&bank){
@@ -940,12 +1023,12 @@ function confirmPayBillsBatch(){
     if(bankIdx>=0)c.bankAccounts[bankIdx].nextCheckNum=startNum+bills.length;
   }
   AP_SELECTED={};PAY_BILLS_BATCH_IDS=[];
-  sv();renderAll();closeM('m-pay-bills-batch');
+  sv();renderAll(true);closeM('m-pay-bills-batch');
   if(checksToPrint.length&&typeof printChecksBatch==='function')printChecksBatch(c,bank,checksToPrint);
 }
-function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';_billPopulateAcctOptions(b.acctCode||'');openM('m-bill');}
-function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;c.bills.splice(i,1);sv();renderAll();}
-function resetBillForm(){['bill-vendor','bill-desc','bill-amt','bill-recv','bill-due','bill-cat','bill-notes'].forEach(function(id){var el=g(id);if(el)el.value='';});}
+function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';if(g('bill-1099'))g('bill-1099').value=b.is1099?'yes':'';if(g('bill-tin'))g('bill-tin').value=b.tin1099||'';_billPopulateAcctOptions(b.acctCode||'');openM('m-bill');}
+function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;var b=c.bills[i];c.bills.splice(i,1);if(b&&typeof dwDeleteBill==='function')dwDeleteBill(c,b);sv();renderAll(true);}
+function resetBillForm(){['bill-vendor','bill-desc','bill-amt','bill-recv','bill-due','bill-cat','bill-notes','bill-1099','bill-tin'].forEach(function(id){var el=g(id);if(el)el.value='';});}
 
 
 function printAPAging(){
@@ -995,60 +1078,6 @@ function printAPAging(){
   body+='</div>';
   if(typeof openPDF==='function')openPDF(body,c,'A/P Aging Schedule');
 }
-
-// ══════════════════════════════════════════
-// CREDIT CARDS
-// ══════════════════════════════════════════
-var CC_EI=-1;
-function renderCC(c){
-  if(!c||!(c.creditCards||[]).length)return'<div style="margin-bottom:1rem"><button class="add-btn" style="font-size:11px" onclick="openM(\'m-cc\')">+ Add credit card</button></div>';
-  var html='';
-  (c.creditCards||[]).forEach(function(cc,ci){
-    var charges=(c.expenses||[]).filter(function(e){return e.ccId===cc.id;});
-    var unpaid=charges.filter(function(e){return!e.ccPaid;});
-    var balance=unpaid.reduce(function(s,e){return s+Number(e.amt||0);},0);
-    var limit=Number(cc.limit||0);
-    var util=limit>0?Math.min(100,Math.round((balance/limit)*100)):null;
-    var rows=unpaid.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).map(function(e){
-      var oi=(c.expenses||[]).indexOf(e);
-      return'<tr><td style="color:var(--muted);font-size:11px">'+(e.date||'\u2014')+'</td><td>'+escHtml(e.desc)+'</td><td style="color:var(--muted);font-size:11px">'+escHtml(e.cat||'\u2014')+'</td><td class="vr">'+fmt(e.amt)+'</td>'
-      +'<td><div class="row-acts"><button class="e-btn" style="color:var(--green)" onclick="markCCPaid('+oi+')" title="Mark cleared">\u2713</button><button class="d-btn" onclick="delItem(\'expenses\','+oi+')" title="Delete">&#215;</button></div></td></tr>';
-    }).join('');
-    html+='<div class="card" style="border-left:3px solid var(--blue);margin-bottom:1.25rem">'
-    +'<div class="c-head"><span class="c-title">'+escHtml(cc.name)+(cc.last4?' \u00b7\u00b7\u00b7'+cc.last4:'')+'</span>'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +(limit?'<span style="font-size:11px;color:var(--muted)">'+fmt(balance)+' / '+fmt(limit)+'</span>':'<span style="font-size:11px;color:var(--muted)">Balance: '+fmt(balance)+'</span>')
-    +'<button class="add-btn" onclick="openCCCharge(\''+cc.id+'\')">+ Charge</button>'
-    +'<button class="e-btn" style="border:1px solid var(--border);border-radius:7px;padding:4px 9px;font-size:12px" onclick="editCC('+ci+')">&#9998;</button>'
-    +'<button class="d-btn" style="border:1px solid var(--red-bg);border-radius:7px;padding:4px 9px;font-size:12px" onclick="deleteCC(\''+cc.id+'\')">&#215;</button>'
-    +'</div></div>'
-    +(util!==null?'<div style="margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px"><span>Utilization</span><span>'+util+'%</span></div><div class="pbar" style="height:6px"><div class="pfill" style="width:'+util+'%;background:'+(util>80?'var(--red)':util>50?'var(--amber)':'var(--blue)')+'"></div></div></div>':'')
-    +(unpaid.length
-      ?'<table><thead><tr><th style="width:11%">Date</th><th style="width:34%">Description</th><th style="width:16%">Category</th><th style="width:12%">Amount</th><th style="width:27%"></th></tr></thead><tbody>'+rows+'</tbody></table>'
-      :'<div style="font-size:12px;color:var(--green);padding:.25rem 0">\u2713 No unpaid charges</div>')
-    +'</div>';
-  });
-  return html+'<div style="margin-bottom:1rem"><button class="add-btn" style="font-size:11px" onclick="openM(\'m-cc\')">+ Add credit card</button></div>';
-}
-function openCCCharge(ccId){EI=-1;openM('m-exp');setTimeout(function(){var s=g('e-bank');if(s)s.value='cc:'+ccId;},60);}
-function markCCPaid(i){var c=gc();if(!c||!c.expenses[i])return;c.expenses[i].ccPaid=true;c.expenses[i].reconciled=true;sv();renderAll();}
-function saveCC(){
-  var c=gc();if(!c.creditCards)c.creditCards=[];
-  var name=g('cc-name').value.trim();if(!name){alert('Please enter a card name.');return;}
-  var item={id:CC_EI>=0?(c.creditCards[CC_EI].id||uid()):uid(),name:name,last4:g('cc-last4').value.trim(),limit:Number(g('cc-limit').value||0),network:g('cc-network').value};
-  if(!c.accounts)c.accounts=[];
-  var coaName=name+(item.last4?' \u00b7\u00b7\u00b7'+item.last4:'');
-  if(!c.accounts.find(function(a){return a.name===coaName&&a.type==='Liability';})){
-    var used=c.accounts.filter(function(a){return a.code.indexOf('2')===0;}).map(function(a){return parseInt(a.code)||0;});
-    var nc=String(used.length?(Math.max.apply(null,used)+10):2100);
-    c.accounts.push({id:uid(),code:nc,name:coaName,type:'Liability',cat:'Credit Cards'});
-    c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
-  }
-  if(CC_EI>=0)c.creditCards[CC_EI]=item;else c.creditCards.push(item);
-  CC_EI=-1;sv();renderAll();closeM('m-cc');['cc-name','cc-last4','cc-limit'].forEach(function(id){var el=g(id);if(el)el.value='';});
-}
-function editCC(i){var c=gc();if(!c.creditCards[i])return;CC_EI=i;var cc=c.creditCards[i];g('cc-name').value=cc.name||'';g('cc-last4').value=cc.last4||'';g('cc-limit').value=cc.limit||'';g('cc-network').value=cc.network||'Visa';openM('m-cc');}
-function deleteCC(id){var c=gc();if(!confirm('Remove this card? Charges remain as expenses.'))return;c.creditCards=(c.creditCards||[]).filter(function(cc){return cc.id!==id;});(c.expenses||[]).forEach(function(e){if(e.ccId===id)delete e.ccId;});sv();renderAll();}
 
 // ══════════════════════════════════════════
 // AMORTIZATION TABLE
@@ -1104,26 +1133,64 @@ function postLoanPayment(li,num,interest,principal){
   var c=gc();if(!c.loans[li])return;
   var loan=c.loans[li];var date=todayNum();
   if(!c.expenses)c.expenses=[];
-  // Post interest to expenses
-  if(interest>0.01)c.expenses.push({id:uid(),desc:'Loan interest — '+loan.name+' pmt #'+num,cat:'Interest',amt:Number(interest.toFixed(2)),date:date,acctCode:'5700',reconciled:false,recurring:'None',freq:'One-time',fixed:'Fixed'});
-  // Reduce loan liability balance in COA (account 2200 or loan's acctCode)
-  var loanAcct=c.accounts.find(function(a){return a.code===(loan.acctCode||'2200');});
-  if(loanAcct){if(!loanAcct.balance)loanAcct.balance=Number(loan.principal);loanAcct.balance=Math.max(0,(loanAcct.balance||Number(loan.principal))-principal);}
+  var cashCode=_defaultCashCode(c);
+  var acctCode=loan.acctCode||_ensureDedicatedCOA(c,loan.name,'Liability','Loans');
+  if(!loan.acctCode)loan.acctCode=acctCode;
+  var interestCode=_ensureDedicatedCOA(c,'Interest expense','Expense','Interest');
+  // Post interest to expenses — deterministic id (not uid()) so it doubles as the ledger
+  // sourceId, matching the id-equals-sourceId convention every other expense-generating path
+  // in this app already follows. That means the generic delItem('expenses', i) path can
+  // safely void just this one entry too, not only the loan-level delLoan() below.
+  var interestId=loan.id+':pmt:'+num+':interest';
+  if(interest>0.01){
+    var interestItem={id:interestId,desc:'Loan interest — '+loan.name+' pmt #'+num,cat:'Interest',amt:Number(interest.toFixed(2)),date:date,acctCode:interestCode,reconciled:false,recurring:'None',freq:'One-time',fixed:'Fixed'};
+    c.expenses.push(interestItem);
+    if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,interestItem);
+    postToLedger(c,interestCode,cashCode,Number(interest.toFixed(2)),'Loan interest — '+loan.name+' pmt #'+num,'expense',interestId);
+  }
+  // Principal: Dr [loan's account] / Cr Cash — clears down the liability. sourceType:'payment'
+  // so the COA debit/credit-normal guard doesn't misfire (it already excepts a payment paying
+  // down a liability, same exception bills already rely on).
+  if(principal>0.01){
+    postToLedger(c,acctCode,cashCode,Number(principal.toFixed(2)),'Loan principal payment — '+loan.name+' pmt #'+num,'payment',loan.id+':pmt:'+num+':principal');
+  }
   if(!loan.posted)loan.posted=[];
   loan.posted.push(num);
-  sv();renderAll();
-  // Note: principal reduction is confirmed when bank statement import matches this payment
+  if(typeof dwUpsertLoan==='function')dwUpsertLoan(c,loan);
+  sv();renderAll(true);
 }
 function saveLoan(){
   var c=gc();if(!c.loans)c.loans=[];
   var name=g('loan-name').value.trim();if(!name){alert('Please enter a loan name.');return;}
+  var isNewLoan=LOAN_EI<0;
   var item={id:LOAN_EI>=0?(c.loans[LOAN_EI].id||uid()):uid(),name:name,principal:Number(g('loan-principal').value||0),rate:Number(g('loan-rate').value||0),term:Number(g('loan-term').value||12),startDate:g('loan-start').value,posted:LOAN_EI>=0?(c.loans[LOAN_EI].posted||[]):[]};
   if(!item.principal||!item.term){alert('Please enter principal and term.');return;}
+  item.acctCode=_ensureDedicatedCOA(c,name,'Liability','Loans');
   if(LOAN_EI>=0)c.loans[LOAN_EI]=item;else{c.loans.push(item);LOAN_VIEW=c.loans.length-1;}
-  LOAN_EI=-1;sv();renderAll();closeM('m-loan');resetLoanForm();
+  if(typeof dwUpsertLoan==='function')dwUpsertLoan(c,item);
+  // Dr Cash / Cr [loan's dedicated account] — proceeds received. Previously never posted at
+  // all (see CLARITY_TODO queue item 2 in getCashFlowStatement()'s comment).
+  var memo='Loan proceeds: '+name;
+  if(isNewLoan)postToLedger(c,_defaultCashCode(c),item.acctCode,item.principal,memo,'loan',item.id);
+  else updateLedgerEntry(c,item.id,_defaultCashCode(c),item.acctCode,item.principal,memo,'loan');
+  LOAN_EI=-1;sv();renderAll(true);closeM('m-loan');resetLoanForm();
 }
 function editLoan(i){var c=gc();if(!c.loans[i])return;LOAN_EI=i;var l=c.loans[i];g('loan-name').value=l.name||'';g('loan-principal').value=l.principal||'';g('loan-rate').value=l.rate||'';g('loan-term').value=l.term||'';g('loan-start').value=l.startDate||'';openM('m-loan');}
-function delLoan(i){var c=gc();if(!confirm('Delete this loan and its amortization schedule?'))return;c.loans.splice(i,1);LOAN_VIEW=c.loans.length?0:null;sv();renderAll();}
+function delLoan(i){
+  var c=gc();if(!confirm('Delete this loan and its amortization schedule?'))return;
+  var loan=c.loans[i];
+  if(loan){
+    if(loan.id)voidLedgerEntry(c,loan.id);
+    (loan.posted||[]).forEach(function(num){
+      voidLedgerEntry(c,loan.id+':pmt:'+num+':interest');
+      voidLedgerEntry(c,loan.id+':pmt:'+num+':principal');
+    });
+    c.expenses=(c.expenses||[]).filter(function(e){return e.id.indexOf(loan.id+':pmt:')!==0;});
+  }
+  c.loans.splice(i,1);LOAN_VIEW=c.loans.length?0:null;
+  if(loan&&typeof dwDeleteLoan==='function')dwDeleteLoan(c,loan);
+  sv();renderAll(true);
+}
 function resetLoanForm(){['loan-name','loan-principal','loan-rate','loan-term','loan-start'].forEach(function(id){var el=g(id);if(el)el.value='';}); }
 // ── END AMORTIZATION ─────────────────────
 
@@ -1203,6 +1270,7 @@ function saveProc(){
     var item={id:PROC_EI>=0?(c.procurement[PROC_EI].id||uid()):uid(),vendor:vendor,scope:g('proc-scope').value,bidAmt:Number(g('proc-amt').value||0),bidDate:g('proc-date').value,status:g('proc-status').value||'Soliciting',grantId:g('proc-grant').value||'',fund:g('proc-fund').value,federal:g('proc-federal').value==='yes',winner:g('proc-winner').value,justification:g('proc-just').value,docRef:docUrl||existingDoc,audit:PROC_EI>=0?(c.procurement[PROC_EI].audit||[]):[]};
     if(PROC_EI>=0){var old=c.procurement[PROC_EI];if(old.status!==item.status)item.audit.push({field:'status',oldValue:old.status,newValue:item.status,timestamp:now});if(old.vendor!==item.vendor)item.audit.push({field:'vendor',oldValue:old.vendor,newValue:item.vendor,timestamp:now});c.procurement[PROC_EI]=item;}
     else{item.audit.push({field:'created',oldValue:'',newValue:'Bid added',timestamp:now});c.procurement.push(item);}
+    if(typeof dwUpsertProc==='function')dwUpsertProc(c,item);
     PROC_EI=-1;sv();renderProcurement(c);closeM('m-proc');resetProcForm();
     if(btn){btn.textContent='Save bid record';btn.disabled=false;}
   }
@@ -1215,7 +1283,7 @@ function saveProc(){
   }else{doSave(null);}
 }
 function editProc(i){var c=gc();if(!c.procurement[i])return;PROC_EI=i;var b=c.procurement[i];g('proc-vendor').value=b.vendor||'';g('proc-scope').value=b.scope||'';g('proc-amt').value=b.bidAmt||'';g('proc-date').value=b.bidDate||'';g('proc-status').value=b.status||'Soliciting';g('proc-grant').value=b.grantId||'';g('proc-fund').value=b.fund||'';g('proc-federal').value=b.federal?'yes':'no';g('proc-winner').value=b.winner||'';g('proc-just').value=b.justification||'';g('proc-doc').value=b.docRef||'';openM('m-proc');}
-function delProc(i){var c=gc();if(!confirm('Delete this bid record? This cannot be undone.'))return;c.procurement.splice(i,1);sv();renderProcurement(c);}
+function delProc(i){var c=gc();if(!confirm('Delete this bid record? This cannot be undone.'))return;var p=c.procurement[i];c.procurement.splice(i,1);if(p&&typeof dwDeleteProc==='function')dwDeleteProc(c,p);sv();renderProcurement(c);}
 function openProcAudit(i){
   var c=gc();if(!c.procurement[i])return;
   var log=c.procurement[i].audit||[];
@@ -1394,16 +1462,23 @@ function savePettyCash(){
     createdAt:new Date().toISOString()
   };
   c.pettyCash.push(item);
+  if(typeof dwUpsertPettyCash==='function')dwUpsertPettyCash(c,item);
   // Mirror disbursements to expenses for P&L reporting
   if(type==='disbursement'){
     if(!c.expenses)c.expenses=[];
     var expId=uid();
+    // Dedicated account by name (not a hardcoded '5210') — that numeric code is already
+    // taken by "Utilities" (NP) / "Office supplies" (SB) in the default COA, so every
+    // petty cash disbursement was silently inflating one of those categories instead of
+    // its own line. See healMiscodedOperationalExpenses() (data.js) for the historical fix.
+    var pcAcctCode=_ensureDedicatedCOA(c,'Petty cash expense','Expense','Petty Cash');
     var expItem={id:expId,desc:'Petty cash: '+desc,cat:item.cat||'Petty Cash',
-      amt:amt,date:item.date,acctCode:'5210',recurring:'None',
+      amt:amt,date:item.date,acctCode:pcAcctCode,recurring:'None',
       freq:'One-time',fixed:'Variable',reconciled:false,pettyCashId:item.id,
       audit:[{action:'created',at:item.createdAt}]};
     c.expenses.push(expItem);
-    postToLedger(c,'5210',_defaultCashCode(c),amt,'Petty cash: '+desc,'expense',expId);
+    if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,expItem);
+    postToLedger(c,pcAcctCode,_defaultCashCode(c),amt,'Petty cash: '+desc,'expense',expId);
   }
   markDirty('reports');
   sv();renderPettyCash(c);closeM('m-pettycash');resetPCForm();
@@ -1412,7 +1487,10 @@ function savePettyCash(){
 function deletePettyCashEntry(i){
   var c=gc();if(!c.pettyCash||!c.pettyCash[i])return;
   if(!confirm('Delete this petty cash entry? Any linked expense will remain.'))return;
-  c.pettyCash.splice(i,1);sv();renderPettyCash(c);
+  var pc=c.pettyCash[i];
+  c.pettyCash.splice(i,1);
+  if(pc&&typeof dwDeletePettyCash==='function')dwDeletePettyCash(c,pc);
+  sv();renderPettyCash(c);
 }
 
 function editPettyCashFund(){
@@ -1976,6 +2054,7 @@ function saveVendor(){
     if(c.vendors.find(function(v){return v.name.toLowerCase()===name.toLowerCase();})){alert('A vendor with that name already exists.');return;}
     c.vendors.push(item);
   }
+  if(typeof dwUpsertVendor==='function')dwUpsertVendor(c,item);
   VENDOR_EI=-1;sv();renderVendors(c);closeM('m-vendor');resetVendorForm();
 }
 function editVendor(i){
@@ -2082,6 +2161,7 @@ function saveCustomer(){
     if(c.customers.find(function(cu){return cu.name.toLowerCase()===name.toLowerCase();})){alert('A customer with that name already exists.');return;}
     c.customers.push(item);
   }
+  if(typeof dwUpsertCustomer==='function')dwUpsertCustomer(c,item);
   CUST_EI=-1;sv();renderCustomers(c);closeM('m-customer');resetCustomerForm();
 }
 function editCustomer(i){
@@ -2173,6 +2253,7 @@ function saveImportRule(){
     if(c.importRules.find(function(r){return r.keyword===kw;})){alert('A rule for that keyword already exists.');return;}
     c.importRules.push(item);
   }
+  if(typeof dwUpsertImportRule==='function')dwUpsertImportRule(c,item);
   RULE_EI=-1;sv();renderImportRules(c);closeM('m-importrule');resetRuleForm();
 }
 function editImportRule(i){
@@ -2601,7 +2682,9 @@ function saveJurisdiction(){
   if(c.taxJurisdictions.find(function(j){return j.name===name;})){alert('A jurisdiction named "'+name+'" already exists.');return;}
   var freq=g('jur-freq')&&g('jur-freq').value||'monthly';
   var auth=g('jur-auth')&&g('jur-auth').value.trim()||'';
-  c.taxJurisdictions.push({name:name,rate:rate,freq:freq,authority:auth});
+  var jurItem={name:name,rate:rate,freq:freq,authority:auth};
+  c.taxJurisdictions.push(jurItem);
+  if(typeof dwUpsertJurisdiction==='function')dwUpsertJurisdiction(c,jurItem);
   sv();closeM('m-tax-jur');
   ['jur-name','jur-rate','jur-auth'].forEach(function(id){var el=g(id);if(el)el.value='';});
   renderSalesTax(c);
@@ -2609,7 +2692,9 @@ function saveJurisdiction(){
 function delJurisdiction(i){
   var c=gc();if(!c||!c.taxJurisdictions||!c.taxJurisdictions[i])return;
   if(!confirm('Remove jurisdiction "'+c.taxJurisdictions[i].name+'"?'))return;
+  var jur=c.taxJurisdictions[i];
   c.taxJurisdictions.splice(i,1);
+  if(typeof dwDeleteJurisdiction==='function')dwDeleteJurisdiction(c,jur);
   sv();renderSalesTax(c);
 }
 function prefillJurisdiction(sel){
@@ -2624,7 +2709,9 @@ function prefillJurisdiction(sel){
   if(!confirm('Add '+name+' at '+rate+'% ('+freq+')? Verify this rate with your tax authority before using it.')){
     sel.value='';return;
   }
-  c.taxJurisdictions.push({name:name,rate:rate,freq:freq,authority:auth});
+  var jurItem2={name:name,rate:rate,freq:freq,authority:auth};
+  c.taxJurisdictions.push(jurItem2);
+  if(typeof dwUpsertJurisdiction==='function')dwUpsertJurisdiction(c,jurItem2);
   sv();sel.value='';renderSalesTax(c);
 }
 
@@ -2651,6 +2738,7 @@ function remitSalesTax(){
     bankId:bankVal.indexOf('bank:')===0?bankVal.slice(5):'',
     audit:[{action:'created',at:new Date().toISOString()}]};
   c.expenses.push(expItem);
+  if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,expItem);
   // Post to ledger: debit stax payable (reducing liability), credit cash
   postToLedger(c,stCode,_defaultCashCode(c),amt,desc,'expense',expId);
   markDirty('revenue','reports','bs');
@@ -3441,101 +3529,6 @@ function renderHelpGlossary(type){
 }
 
 // ══════════════════════════════════════════
-// ONBOARDING
-// ══════════════════════════════════════════
-var _obClientId=null;
-
-function showOnboarding(clientId){
-  _obClientId=clientId;
-  var c=D.clients.find(function(x){return x.id===clientId;});
-  if(!c||c.onboardingComplete)return;
-  // Pre-fill from existing client data
-  var nm=g('ob-name');if(nm)nm.value=c.name&&c.name!==('My '+tl(c.type))&&c.name!==('New '+tl(c.type))?c.name:'';
-  var tp=g('ob-type');if(tp)tp.value=c.type||'np';
-  var fye=g('ob-fye');if(fye)fye.value=c.fiscalYearEnd||'12/31';
-  var basis=g('ob-basis');if(basis)basis.value=c.basisType||'accrual';
-  obSetStep(1);
-  openM('m-onboard');
-}
-
-function obTypeChange(){
-  var tp=g('ob-type');if(!tp)return;
-  var basis=g('ob-basis');
-  if(basis)basis.value=defaultBasis(tp.value);
-}
-
-function obSetStep(n){
-  [1,2,3].forEach(function(s){
-    var el=g('ob-step-'+s);if(el)el.style.display=s===n?'block':'none';
-    var dot=g('ob-dot-'+s);
-    if(dot)dot.style.background=s===n?'var(--accent)':s<n?'var(--green)':'var(--border)';
-  });
-  var titles={1:'Step 1 of 3 — Organization',2:'Step 2 of 3 — Fiscal year',3:'Step 3 of 3 — Chart of accounts'};
-  var t=g('ob-title');if(t)t.textContent=titles[n]||'Setup';
-  if(n===3)obBuildCoaOpts();
-}
-
-function obBuildCoaOpts(){
-  var tp=g('ob-type');var type=tp?tp.value:'np';
-  var opts=g('ob-coa-opts');var note=g('ob-coa-note');if(!opts)return;
-  var templates={
-    np:{label:'Nonprofit standard',desc:'Includes donation income, grant tracking, restricted/unrestricted net assets, and functional expense categories aligned to Form 990 Part IX.'},
-    sb:{label:'Small business standard',desc:'Includes sales/service revenue, COGS, accounts payable/receivable, owner equity, and common operating expense categories.'},
-    pe:{label:'Personal finance',desc:'Includes employment income, housing, food, transportation, and other common personal expense categories.'}
-  };
-  var t=templates[type]||templates.np;
-  opts.innerHTML='<label style="display:flex;align-items:flex-start;gap:10px;padding:.75rem;border:1.5px solid var(--accent);border-radius:8px;cursor:pointer;background:var(--soft)">'
-    +'<input type="radio" name="ob-coa" value="default" checked style="margin-top:2px">'
-    +'<div><div style="font-weight:500;font-size:13px">'+t.label+'</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+t.desc+'</div></div></label>'
-    +'<label style="display:flex;align-items:flex-start;gap:10px;padding:.75rem;border:1px solid var(--border);border-radius:8px;cursor:pointer">'
-    +'<input type="radio" name="ob-coa" value="blank" style="margin-top:2px">'
-    +'<div><div style="font-weight:500;font-size:13px">Start blank</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">No pre-built accounts. Add your own chart of accounts from scratch.</div></div></label>';
-  if(note)note.textContent=type==='np'?'Tip: Accrual basis + the nonprofit COA template is the recommended setup for 990 filers.':type==='sb'?'Tip: Your accountant may have a preferred COA — you can always edit accounts under Settings.':'Tip: You can rename or remove any category that doesn\'t fit your situation.';
-}
-
-function obNext(step){
-  if(step===1){
-    var nm=g('ob-name').value.trim();
-    if(!nm){alert('Please enter an organization name.');return;}
-    obSetStep(2);
-  } else if(step===2){
-    obSetStep(3);
-  }
-}
-
-function obBack(step){
-  obSetStep(step-1);
-}
-
-function obFinish(){
-  var c=D.clients.find(function(x){return x.id===_obClientId;});
-  if(!c)return;
-  // Apply step 1
-  var nm=g('ob-name').value.trim();if(nm)c.name=nm;
-  c.type=g('ob-type').value||c.type;
-  // Apply step 2
-  c.fiscalYearEnd=g('ob-fye').value||'12/31';
-  c.basisType=g('ob-basis').value||'accrual';
-  // Apply step 3 — COA template
-  var coaSel=document.querySelector('input[name="ob-coa"]:checked');
-  if(coaSel&&coaSel.value==='default'){
-    c.accounts=getDefaultCOA(c.type);
-  }
-  c.onboardingComplete=true;
-  sv();
-  // Refresh UI with new name/type
-  renderSB();renderMobSel();
-  if(typeof buildDynMods==='function')buildDynMods(c.type);
-  renderAll();
-  // Update dashboard header
-  var dn=g('d-name');if(dn)dn.textContent=c.name;
-  var dav=g('d-av');if(dav){dav.textContent=ini(c.name);dav.className='d-av '+avc(c.type);}
-  closeM('m-onboard');
-}
-
-// ══════════════════════════════════════════
 // DOCUMENT VAULT
 // ══════════════════════════════════════════
 var DOC_CATS_NP=['Tax Returns','Sales Tax Exempt Certificate','Articles of Incorporation','Grant Agreements','Audit Reports','Board Minutes','W-9 / W-2','1099s','Insurance','Contracts','Other'];
@@ -3689,6 +3682,7 @@ async function vaultSaveUpload(){
   var docEntry={id:docId,name:name,category:cat,path:res.path,size:file.size,mimeType:file.type,uploadedAt:new Date().toISOString(),notes:notes,linkedTo:linkedTo||''};
   if(!c.documents)c.documents=[];
   c.documents.push(docEntry);
+  if(typeof dwUpsertDocument==='function')dwUpsertDocument(c,docEntry);
   // Wire into transaction if this is a receipt/invoice attachment
   if(linkedType==='expenses'&&linkedOi!=null&&c.expenses[linkedOi]){
     c.expenses[linkedOi].receiptPath=res.path;
@@ -3725,6 +3719,7 @@ async function vaultDelete(docId){
   if(!confirm('Delete "'+doc.name+'"? This cannot be undone.'))return;
   if(doc.path)await storageDelete(doc.path);
   c.documents.splice(idx,1);
+  if(typeof dwDeleteDocument==='function')dwDeleteDocument(c,doc);
   sv();renderDocumentVault(c);
 }
 
@@ -3844,7 +3839,9 @@ function editFiscalSponsor(i){
 function deleteFiscalSponsor(i){
   var c=gc();if(!c)return;
   if(!confirm('Remove this fiscal sponsorship record?'))return;
+  var sp=c.fiscalSponsorships[i];
   c.fiscalSponsorships.splice(i,1);
+  if(sp&&typeof dwDeleteFiscalSponsor==='function')dwDeleteFiscalSponsor(c,sp);
   sv();renderGrants(c);
 }
 
@@ -3865,6 +3862,7 @@ function saveFiscalSponsor(){
     status:g('fs-status').value||'active'
   };
   if(_fsEI>=0&&c.fiscalSponsorships[_fsEI]){c.fiscalSponsorships[_fsEI]=rec;}else{c.fiscalSponsorships.push(rec);}
+  if(typeof dwUpsertFiscalSponsor==='function')dwUpsertFiscalSponsor(c,rec);
   sv();closeM('m-fiscal-sponsor');renderGrants(c);
 }
 
@@ -4091,10 +4089,11 @@ async function saveReimb(){
   if(who){
     if(!c.vendors)c.vendors=[];
     var existing_v=c.vendors.find(function(v){return(v.name||'').toLowerCase()===who.toLowerCase();});
-    if(!existing_v)c.vendors.push({id:uid(),name:who,isMember:true,added:new Date().toISOString()});
+    if(!existing_v){var _newVendor={id:uid(),name:who,isMember:true,added:new Date().toISOString()};c.vendors.push(_newVendor);if(typeof dwUpsertVendor==='function')dwUpsertVendor(c,_newVendor);}
   }
   item.audit.push({action:_ri>=0?'edited':'created',by:'user',timestamp:new Date().toISOString()});
   if(_ri>=0)c.reimbursements[_ri]=item;else c.reimbursements.push(item);
+  if(typeof dwUpsertReimb==='function')dwUpsertReimb(c,item);
   sv();renderReimbursements(c);closeM('m-reimb');
 }
 
@@ -4107,6 +4106,7 @@ function approveReimb(id){
   r.status='Approved';r.approvedDate=new Date().toISOString();
   if(reason)r.noReceiptReason=reason;
   r.audit=(r.audit||[]);r.audit.push({action:'approved',reason:reason||'',timestamp:new Date().toISOString()});
+  if(typeof dwUpsertReimb==='function')dwUpsertReimb(c,r);
   sv();renderReimbursements(c);
 }
 
@@ -4116,12 +4116,14 @@ function markReimbPaid(id){
   if(!confirm('Mark this reimbursement as paid and post to expenses?\n\n'+escHtml(r.who)+' — '+fmt(r.amt)+'\n'+escHtml(r.desc)))return;
   r.status='Paid';r.paidDate=new Date().toISOString();
   r.audit=(r.audit||[]);r.audit.push({action:'paid',timestamp:new Date().toISOString()});
+  if(typeof dwUpsertReimb==='function')dwUpsertReimb(c,r);
   // Post real expense
-  var expItem={id:uid(),desc:'Reimbursement: '+r.desc+' ('+r.who+')',cat:r.cat||'Administrative',amt:r.amt,date:r.date||new Date().toISOString().split('T')[0],vendor1099:r.who,reimbId:r.id,isReimb:true};
+  var expItem={id:uid(),desc:'Reimbursement: '+r.desc+' ('+r.who+')',cat:r.cat||'Administrative',acctCode:lookupAcctByCAT(c,r.cat,'Expense')||'5010',amt:r.amt,date:r.date||new Date().toISOString().split('T')[0],vendor1099:r.who,reimbId:r.id,isReimb:true};
   if(!c.expenses)c.expenses=[];
   c.expenses.push(expItem);
+  if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,expItem);
   if(typeof syncVendorFromExpense==='function')syncVendorFromExpense(c,expItem);
-  if(typeof postToLedger==='function')postToLedger(c,expItem.acctCode||'5010',_defaultCashCode?_defaultCashCode(c):'1010',r.amt,'Reimbursement: '+r.desc,'expense',expItem.id);
+  if(typeof postToLedger==='function')postToLedger(c,expItem.acctCode,_defaultCashCode?_defaultCashCode(c):'1010',r.amt,'Reimbursement: '+r.desc,'expense',expItem.id);
   markDirty('reimbursements','npexp','sbexp','budget','reports');
   sv();renderReimbursements(c);
   if(typeof renderNpExp==='function')renderNpExp(c);
@@ -4140,7 +4142,9 @@ function deleteReimb(id){
   var c=gc();if(!c||!c.reimbursements)return;
   if(!confirm('Delete this reimbursement request?'))return;
   var r=c.reimbursements.find(function(x){return x.id===id;});if(!r)return;
-  r.deleted=true;sv();renderReimbursements(c);
+  r.deleted=true;
+  if(typeof dwUpsertReimb==='function')dwUpsertReimb(c,r);
+  sv();renderReimbursements(c);
 }
 
 // ══════════════════════════════════════════
@@ -4168,7 +4172,7 @@ function syncAllCustomers(){
   var added=0;
   names.forEach(function(n){
     var ex=c.customers.find(function(cu){return(cu.name||'').toLowerCase()===n.toLowerCase();});
-    if(!ex){c.customers.push({id:uid(),name:n,added:new Date().toISOString()});added++;}
+    if(!ex){var _newCust5={id:uid(),name:n,added:new Date().toISOString()};c.customers.push(_newCust5);if(typeof dwUpsertCustomer==='function')dwUpsertCustomer(c,_newCust5);added++;}
   });
   sv();
   if(typeof renderCustomers==='function')renderCustomers(c);
@@ -4210,6 +4214,7 @@ function saveInteraction(){
     timestamp:new Date().toISOString()
   };
   d.interactions.push(item);
+  if(typeof dwUpsertInteraction==='function')dwUpsertInteraction(c,d,item);
   sv();renderDonors(c);renderTodoBar();closeM('m-interaction');
 }
 
@@ -4217,13 +4222,17 @@ function completeInteraction(di,ixi){
   var c=gc();if(!c||!c.donors||!c.donors[di])return;
   var ix=c.donors[di].interactions&&c.donors[di].interactions[ixi];if(!ix)return;
   ix.completed=true;ix.completedDate=new Date().toISOString().split('T')[0];
+  if(typeof dwUpsertInteraction==='function')dwUpsertInteraction(c,c.donors[di],ix);
   sv();renderDonors(c);renderTodoBar();
 }
 
 function deleteInteraction(di,ixi){
   var c=gc();if(!c||!c.donors||!c.donors[di])return;
   if(!confirm('Delete this interaction log entry?'))return;
-  c.donors[di].interactions.splice(ixi,1);
+  var d=c.donors[di];
+  var ix=d.interactions[ixi];
+  d.interactions.splice(ixi,1);
+  if(ix&&typeof dwDeleteInteraction==='function')dwDeleteInteraction(c,d,ix);
   sv();renderDonors(c);renderTodoBar();
 }
 

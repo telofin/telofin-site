@@ -78,6 +78,28 @@ function _nextAcctCode(c,coaType){
   while(taken[String(next)])next++;
   return String(next);
 }
+// _ensureDedicatedCOA(c, name, type, cat): finds an existing account by exact name+type
+// match, or creates one via _nextAcctCode. Returns the code either way. Generalizes the
+// "auto-provision a dedicated COA account on first use" pattern bank accounts and credit
+// cards already use (saveBankAcct()/bank.js saveCC()) — reused here for fixed assets, loans,
+// accumulated depreciation, and interest expense, all of which need either a per-item
+// dedicated account or a shared one that may not exist in every client's default COA (NP's
+// default COA has none of these at all; PE has specific loan types but no generic bucket).
+function _ensureDedicatedCOA(c,name,type,cat){
+  if(!c.accounts)c.accounts=[];
+  var existing=c.accounts.find(function(a){return a.name===name&&a.type===type;});
+  if(existing){
+    // A matched default-COA account may be sitting inactive (never used by this client
+    // before) — reactivate it now that something is actually posting to it, otherwise it'd
+    // silently receive entries while staying hidden from the Chart of Accounts view.
+    if(existing.active===false)existing.active=true;
+    return existing.code;
+  }
+  var code=_nextAcctCode(c,type);
+  c.accounts.push({id:uid(),code:code,name:name,type:type,cat:cat||name});
+  c.accounts.sort(function(a,b){return a.code.localeCompare(b.code);});
+  return code;
+}
 
 // ── FUND HELPERS ────────────────────────
 function getFunds(){var c=gc();return c&&c.funds?c.funds:[];}
@@ -235,6 +257,7 @@ function postToLedger(c,debitCode,creditCode,amt,memo,sourceType,sourceId){
     ]
   };
   c.ledgerEntries.push(entry);
+  if(typeof dwUpsertLedgerEntry==='function')dwUpsertLedgerEntry(c,entry);
   return entry;
 }
 
@@ -243,7 +266,10 @@ function updateLedgerEntry(c,sourceId,debitCode,creditCode,newAmt,memo,sourceTyp
   if(!c||!sourceId)return;
   if(!c.ledgerEntries)c.ledgerEntries=[];
   c.ledgerEntries.forEach(function(e){
-    if(e.sourceId===sourceId&&!e.superseded)e.superseded=true;
+    if(e.sourceId===sourceId&&!e.superseded){
+      e.superseded=true;
+      if(typeof dwUpsertLedgerEntry==='function')dwUpsertLedgerEntry(c,e);
+    }
   });
   postToLedger(c,debitCode,creditCode,newAmt,memo,sourceType,sourceId);
 }
@@ -265,6 +291,7 @@ function voidLedgerEntry(c,sourceId){
     };
     c.ledgerEntries.push(rev);
     e.superseded=true;
+    if(typeof dwUpsertLedgerEntry==='function'){dwUpsertLedgerEntry(c,e);dwUpsertLedgerEntry(c,rev);}
   });
 }
 
@@ -435,17 +462,17 @@ function _cfSection(a){
 // Builds a period cash flow statement, both direct and indirect presentations of the
 // operating section, from Date objects startDate/endDate (e.g. from getFiscalYear()).
 //
-// IMPORTANT DATA CAVEAT: fixed asset purchases and loan proceeds/principal payments do not
-// currently post to c.ledgerEntries[] (saveAsset() and saveLoan()/postLoanPayment() bypass
-// the ledger — see CLARITY_TODO queue item 2). So investing and financing activity is sourced
-// from c.fixedAssets[]/c.loans[] directly, using the loan's amortization schedule to date each
-// posted payment. Loan interest is likewise pulled from the schedule (rather than the ledger)
-// since postLoanPayment() pushes interest straight into c.expenses[] without a postToLedger()
-// call. Operating activity — everything that DOES post through postToLedger() (manual income/
-// expense entries, bills, invoices, petty cash, reimbursements, recurring transactions) — is
-// fully ledger-derived, so it always ties to the Trial Balance. Once fixed-asset/loan postings
-// are wired into the ledger, this function should be revisited to source investing/financing
-// from ledgerEntries too, for one consistent, fully auditable source of truth.
+// UPDATE (CLARITY_TODO queue item 2 — postings now exist): saveAsset()/saveLoan()/
+// postLoanPayment() now post to c.ledgerEntries[] too (each fixed asset and loan gets its own
+// dedicated COA account via _ensureDedicatedCOA). Investing/financing here still deliberately
+// read from c.fixedAssets[]/c.loans[] + the amortization schedule rather than the ledger —
+// that source was already correct and this wasn't rewritten alongside the posting fix, to
+// avoid touching a delicate, already-correct calculation in the same pass. The unpostedGap
+// check below (ending cash vs. computed net change) is the built-in proof the two sources now
+// agree: it should compute to ~0 for any client with loan/asset activity, since the schedule
+// and the ledger are describing the same cash movements. Fully re-sourcing investing/financing
+// from ledgerEntries directly remains a nice-to-have unification for later — not required for
+// correctness, since both sources already tie out.
 function getCashFlowStatement(c,startDate,endDate){
   var empty={
     direct:{operating:[],opTotal:0},
@@ -752,8 +779,8 @@ function postClosingEntries(c, fyLabel){
 
 // postDepreciation(c): compute and post one period of depreciation for each fixed asset.
 // Guard: uses c.deprPosted{} keyed by assetId+yearMonth — never posts twice in same month.
-// Debit:  Depreciation Expense (5610 NP / 5800 SB/PE)
-// Credit: Accumulated Depreciation (1610 SB) or same account if not present (NP/PE net post)
+// Debit:  Depreciation Expense (resolved by name, see below)
+// Credit: Accumulated Depreciation (resolved by name, see below)
 // Returns true if any entries were posted.
 function postDepreciation(c){
   if(!c||!c.fixedAssets||!c.fixedAssets.length)return false;
@@ -763,8 +790,17 @@ function postDepreciation(c){
   var now=new Date();now.setHours(0,0,0,0);
   var nowYear=now.getFullYear(),nowMonth=now.getMonth();// 0-based
   var monthKey=nowYear+'-'+(nowMonth+1);
-  var debitCode=c.type==='np'?'5610':'5800';
-  var creditCode=(c.accounts||[]).find(function(a){return a.code==='1610';})?'1610':debitCode;
+  // Resolved by exact name match rather than a hardcoded numeric code — a client's default
+  // '5610'/'5800' Depreciation account can get squatted by an unrelated auto-numbered account
+  // (e.g. a budget line) over the account's lifetime, which would otherwise silently post
+  // depreciation into the wrong expense line. _ensureDedicatedCOA reuses the real account by
+  // name if present, or creates one, exactly like the credit side already does below.
+  var debitCode=_ensureDedicatedCOA(c,'Depreciation','Expense','Depreciation');
+  // Previously fell back to crediting the SAME account as the debit when no 1610 existed —
+  // true for every NP client, since NP's default COA has no accumulated-depreciation line —
+  // which posted Dr 5610 / Cr 5610, a net-zero no-op that still marked the period as posted,
+  // permanently hiding that month's depreciation. Now auto-provisions a real account instead.
+  var creditCode=_ensureDedicatedCOA(c,'Accumulated depreciation','Asset','Fixed Assets');
   var anyPosted=false;
   c.fixedAssets.forEach(function(a){
     if(!a.id||!a.cost||!a.life)return;
@@ -1258,9 +1294,9 @@ function processRecurring(){
       });
       return add;
     }
-    catchUp(c.expenses||[],true,'amt',-1).forEach(function(e){c.expenses.push(e);});
-    catchUp(c.income||[],true,'recv',1).forEach(function(i){c.income.push(i);});
-    catchUp(c.revenue||[],false,'act',1).forEach(function(r){c.revenue.push(r);});
+    catchUp(c.expenses||[],true,'amt',-1).forEach(function(e){c.expenses.push(e);if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,e);});
+    catchUp(c.income||[],true,'recv',1).forEach(function(i){c.income.push(i);if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,i);});
+    catchUp(c.revenue||[],false,'act',1).forEach(function(r){c.revenue.push(r);if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,r);});
     // Post monthly depreciation for all fixed assets (guard inside prevents double-posting)
     if(postDepreciation(c))_recurPosted.push({clientId:c.id,clientName:c.name,desc:'Depreciation posted',amt:0,date:tk,type:'depreciation'});
     try{localStorage.setItem(_prKey,tk);}catch(e){}

@@ -307,12 +307,17 @@ function migrateD(){
       // ── MIGRATION: heal expense/income records coded to the wrong account type
       var typeHealSummary=healAcctTypeMismatches(c);
       if(typeHealSummary)_ACCT_HEAL_SUMMARIES.push(typeHealSummary);
+      // ── MIGRATION: heal petty cash/bad debt expenses miscoded to a hardcoded, wrong account
+      var opExpHealSummary=healMiscodedOperationalExpenses(c);
+      if(opExpHealSummary)_ACCT_HEAL_SUMMARIES.push(opExpHealSummary);
       // ── MIGRATION: heal donations logged via the Donors tab that never posted to income/ledger
       var donationHealSummary=healMissingDonationIncome(c);
       if(donationHealSummary)_ACCT_HEAL_SUMMARIES.push(donationHealSummary);
       // ── MIGRATION: heal donation-coded income entries never linked back to the Donors tab
       var donorLinkHealSummary=healMissingDonorLinks(c);
       if(donorLinkHealSummary)_ACCT_HEAL_SUMMARIES.push(donorLinkHealSummary);
+      // ── MIGRATION: backfill missing donation ids (needed for Supabase dual-write, silent)
+      healMissingDonationIds(c);
     });
   // Deduplicate: remove empty default clients if a data-filled one of same type exists
   var seen={};D.clients=D.clients.filter(function(cl){var k=cl.type;if(seen[k]){var hasD=(cl.income&&cl.income.length)||(cl.expenses&&cl.expenses.length)||(cl.revenue&&cl.revenue.length)||(cl.grants&&cl.grants.length)||(cl.donors&&cl.donors.length);return hasD;}seen[k]=true;return true;});
@@ -607,6 +612,59 @@ function healAcctTypeMismatches(c){
   };
 }
 
+// ── MISCODED PETTY CASH / BAD DEBT / IN-KIND EXPENSE HEALING ─────────────────
+// One-time-per-client repair for a bug (now fixed — see savePettyCash() in
+// features.js, writeBadDebt() in saves.js, and _postDonationLedger() in
+// renders.js) where all three posted to a hardcoded numeric account code that
+// was never actually reserved for that purpose in either default COA: petty
+// cash disbursements landed in '5210' — "Utilities" (NP) / "Office supplies"
+// (SB); bad debt write-offs landed in c.type==='np'?'5800':'5900' —
+// "Depreciation" (NP) / "Cost of goods sold" (SB); in-kind donation expenses
+// landed in '5400' — "Marketing & outreach" (NP), instead of NP's own default
+// "5410 In-kind expense" line. Every use of any of the three miscoded a real
+// expense category, not just a collision risk. All three now post to their
+// own dedicated account via _ensureDedicatedCOA() (state.js), matching the
+// pattern already used for postDepreciation()/saveLoan()/saveAsset(). This
+// heals already-posted history.
+// Conservative like healAcctTypeMismatches() above — only recodes an item still
+// sitting on the exact known-wrong hardcoded code, so an item a user later
+// re-categorized on purpose (via the inline account picker) is left alone.
+// Idempotent — guarded by c._opExpMiscodeHealed, safe to call on every load.
+function healMiscodedOperationalExpenses(c){
+  if(!c||c._opExpMiscodeHealed)return null;
+  c._opExpMiscodeHealed=true;
+  if(!c.expenses||!c.expenses.length)return null;
+  var recoded=[];
+  (c.expenses||[]).forEach(function(item){
+    if(item.deleted)return;
+    var isPettyCash=!!item.pettyCashId&&item.acctCode==='5210';
+    var isBadDebt=Array.isArray(item.audit)&&item.audit.some(function(a){return a.action==='bad_debt_writeoff';})&&(item.acctCode==='5800'||item.acctCode==='5900');
+    var isInKind=!!item.inkindRef&&item.acctCode==='5400';
+    if(!isPettyCash&&!isBadDebt&&!isInKind)return;
+    var correctCode=isPettyCash
+      ?_ensureDedicatedCOA(c,'Petty cash expense','Expense','Petty Cash')
+      :isBadDebt
+      ?_ensureDedicatedCOA(c,'Bad debt expense','Expense','Bad Debt')
+      :_ensureDedicatedCOA(c,'In-kind expense','Expense','In-Kind Expense');
+    var oldCode=item.acctCode;
+    if(oldCode===correctCode)return;
+    item.acctCode=correctCode;
+    (c.ledgerEntries||[]).forEach(function(le){
+      if(le.sourceId!==item.id)return;
+      (le.lines||[]).forEach(function(l){if(l.accountCode===oldCode)l.accountCode=correctCode;});
+    });
+    recoded.push({desc:item.desc||'',cat:item.cat,amt:Number(item.amt||0),oldCode:oldCode,newCode:correctCode});
+  });
+  if(!recoded.length)return null;
+  return{
+    clientId:c.id,clientName:c.name,
+    backfilledIds:0,
+    recoded:recoded,
+    newlyPostedCount:0,
+    newlyPostedTotal:0
+  };
+}
+
 // ── MISSING DONATION INCOME HEALING ──────────────────────────────────────────
 // One-time-per-client repair for a bug (now fixed — see _postDonationLedger in
 // renders.js) where donations logged through the main Donors tab never created
@@ -663,6 +721,7 @@ function healMissingDonationIncome(c){
       var netClass=_n==='permanently_restricted'?'with_restriction_perm':_n==='temporarily_restricted'?'with_restriction':'without_restriction';
       var incItem={id:uid(),name:donorName,cat:'Individual donation',status:'Received',proj:amt,recv:amt,date:dn.date||'',fund:dn.fund||'',acctCode:'4010',donationRef:true,netClass:netClass,donorId:d.id,audit:[]};
       c.income.push(incItem);
+      if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,incItem);
       dn.incomeRef=incItem.id;
       backfilled.push({amt:amt,donor:donorName});
     });
@@ -702,6 +761,24 @@ function healMissingDonationIncome(c){
 // catching common custom variants like "Donations". Anyone whose books already burned the V1
 // guard flag before that broadening would otherwise never get re-scanned with the better logic,
 // even though nothing was actually fixed for them yet — so this is a fresh flag, not a reuse.)
+// Donation records were the only record type in this app with no stable .id — only their
+// donor + array position identified them, since saveDonation() never called uid() for them
+// (unlike every other record type). That's not a problem for anything in-app (edits use the
+// in-memory array index, DONATION_EI), but it blocks Supabase dual-write, which needs a
+// stable id to upsert against. Silent, invisible-to-the-user backfill — never surfaced in the
+// healing notice UI, since there's nothing for the owner to actually see or act on.
+function healMissingDonationIds(c){
+  if(!c||c._donationIdsHealed)return null;
+  c._donationIdsHealed=true;
+  if(!c.donors||!c.donors.length)return null;
+  c.donors.forEach(function(d){
+    (d.donations||[]).forEach(function(dn){
+      if(!dn.id)dn.id=uid();
+    });
+  });
+  return null;
+}
+
 // Returns a summary object if it did real work, or null if there was nothing to fix.
 function healMissingDonorLinks(c){
   if(!c||c._donorLinkHealedV2)return null;
