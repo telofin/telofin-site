@@ -16,7 +16,7 @@
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T3HQNG77G9');</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -757,6 +757,7 @@ tr:hover td{background:var(--bg)}
     <div class="fr"><div class="fl" style="margin-bottom:0"><label>Amount ($) <span style="color:var(--red)">*</span></label><input type="number" id="bill-amt" placeholder="0.00" oninput="fmtAmt(this)"></div><div class="fl" style="margin-bottom:0"><label>Account (COA) <span style="color:var(--red)">*</span></label><select id="bill-acct"></select></div></div>
     <div class="fr"><div class="fl" style="margin-bottom:0"><label>Bill date (MM/DD/YYYY)</label><input type="text" id="bill-recv" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div><div class="fl" style="margin-bottom:0"><label>Due date (MM/DD/YYYY)</label><input type="text" id="bill-due" placeholder="MM/DD/YYYY" onblur="autoDate(this)" oninput="autoDate(this)"></div></div>
     <input type="hidden" id="bill-cat">
+    <div class="fr"><div class="fl" style="margin-bottom:0"><label>1099 contractor?</label><select id="bill-1099"><option value="">No</option><option value="yes">Yes</option></select></div><div class="fl" style="margin-bottom:0"><label>EIN / TIN <span style="font-size:10px;color:var(--muted)">for 1099</span></label><input type="text" id="bill-tin" placeholder="12-3456789"></div></div>
     <div class="fl" style="margin-bottom:.5rem"><label>Notes</label><input type="text" id="bill-notes" placeholder="Optional"></div>
     <div style="display:flex;gap:8px;margin-top:.5rem">
       <button class="sv-btn" onclick="saveBill()">Save bill</button>
@@ -771,6 +772,7 @@ tr:hover td{background:var(--bg)}
     <div class="fl" style="margin-bottom:.5rem"><label>Payment method</label><select id="pb-method" onchange="_payBillMethodChanged()"><option value="check">Check</option><option value="ach">ACH</option><option value="other">Other</option></select></div>
     <div id="pb-check-fields">
       <div class="fr"><div class="fl" style="margin-bottom:0"><label>Pay from account</label><select id="pb-bank" onchange="_payBillBankChanged()"></select></div><div class="fl" style="margin-bottom:0"><label>Check number</label><input type="text" id="pb-checknum"></div></div>
+      <div class="fl" id="pb-slot-row" style="display:none;margin-bottom:.5rem"><label>Which check slot is blank? <span style="font-size:10px;color:var(--muted)">(3-checks-per-sheet stock)</span></label><select id="pb-slot"><option value="1">1st (top)</option><option value="2">2nd (middle)</option><option value="3">3rd (bottom)</option></select></div>
     </div>
     <div class="fl" id="pb-ref-row" style="display:none;margin-bottom:.5rem"><label>Reference # (optional)</label><input type="text" id="pb-refnum"></div>
     <div style="display:flex;gap:8px;margin-top:.5rem">
@@ -787,6 +789,7 @@ tr:hover td{background:var(--bg)}
     <div class="fl" style="margin-bottom:.5rem"><label>Payment method</label><select id="pbb-method" onchange="_payBillsBatchMethodChanged()"><option value="check">Check</option><option value="ach">ACH</option><option value="other">Other</option></select></div>
     <div id="pbb-check-fields">
       <div class="fr"><div class="fl" style="margin-bottom:0"><label>Pay from account</label><select id="pbb-bank" onchange="_payBillsBatchBankChanged()"></select></div><div class="fl" style="margin-bottom:0"><label>Starting check number</label><input type="text" id="pbb-startnum" oninput="_payBillsBatchRenderNums()"></div></div>
+      <div class="fl" id="pbb-slot-row" style="display:none;margin-bottom:.5rem"><label>Which check slot is blank for the <em>first</em> check? <span style="font-size:10px;color:var(--muted)">(3-checks-per-sheet stock — later checks in this batch each use a fresh sheet)</span></label><select id="pbb-slot"><option value="1">1st (top)</option><option value="2">2nd (middle)</option><option value="3">3rd (bottom)</option></select></div>
       <div id="pbb-numlist" style="font-size:11px;color:var(--muted);margin-top:.5rem;line-height:1.7"></div>
     </div>
     <div class="fl" id="pbb-ref-row" style="display:none;margin-bottom:.5rem"><label>Reference # (optional)</label><input type="text" id="pbb-refnum"></div>
@@ -939,9 +942,9 @@ tr:hover td{background:var(--bg)}
 
 <!-- ALL JAVASCRIPT — loaded from external file for maintainability -->
 <!-- Load order: XLSX (CDN, above) and Supabase must be loaded before modules -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
 <script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';</script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1" integrity="sha384-fx4y4cDx8NYfissnVzdGJY3yVXWY3rn5ab5HTUjpvgT35oDiyAbjjqnLhnRmESNE" crossorigin="anonymous"></script>
 <script src="js/auth.js"></script>
 <script src="js/migration.js"></script>
 <script src="js/state.js"></script>
@@ -977,72 +980,6 @@ tr:hover td{background:var(--bg)}
   </div>
 </div>
 
-<!-- ONBOARDING MODAL -->
-<div class="overlay" id="m-onboard">
-  <div class="modal" style="max-width:480px">
-    <div class="m-title" id="ob-title">Welcome to Clarity</div>
-    <div id="ob-step-dots" style="display:flex;gap:6px;margin-bottom:1.25rem">
-      <div id="ob-dot-1" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
-      <div id="ob-dot-2" style="width:8px;height:8px;border-radius:50%;background:var(--border)"></div>
-      <div id="ob-dot-3" style="width:8px;height:8px;border-radius:50%;background:var(--border)"></div>
-    </div>
-    <!-- Step 1: Org name + type -->
-    <div id="ob-step-1">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Let's get your organization set up. You can change these anytime.</p>
-      <div class="fl"><label>Organization name</label><input type="text" id="ob-name" placeholder="e.g. Community Hope Foundation"></div>
-      <div class="fl"><label>Organization type</label>
-        <select id="ob-type" onchange="obTypeChange()">
-          <option value="np">Nonprofit (501c3 or similar)</option>
-          <option value="sb">Small business</option>
-          <option value="pe">Personal finance</option>
-        </select>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:1rem">
-        <button class="sv-btn" onclick="obNext(1)">Next →</button>
-      </div>
-    </div>
-    <!-- Step 2: Fiscal year end -->
-    <div id="ob-step-2" style="display:none">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">When does your fiscal year end? This affects reporting periods and budget cycles.</p>
-      <div class="fl"><label>Fiscal year end</label>
-        <select id="ob-fye">
-          <option value="12/31">Dec 31 — calendar year (most common)</option>
-          <option value="06/30">Jun 30 — common for nonprofits</option>
-          <option value="09/30">Sep 30</option>
-          <option value="03/31">Mar 31</option>
-          <option value="01/31">Jan 31</option>
-          <option value="02/28">Feb 28</option>
-          <option value="04/30">Apr 30</option>
-          <option value="05/31">May 31</option>
-          <option value="07/31">Jul 31</option>
-          <option value="08/31">Aug 31</option>
-          <option value="10/31">Oct 31</option>
-          <option value="11/30">Nov 30</option>
-        </select>
-      </div>
-      <div class="fl"><label>Accounting basis</label>
-        <select id="ob-basis">
-          <option value="accrual">Accrual — record when earned/incurred (required for 990 filers)</option>
-          <option value="cash">Cash — record when money changes hands</option>
-        </select>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
-        <button class="add-btn" onclick="obBack(2)">← Back</button>
-        <button class="sv-btn" onclick="obNext(2)">Next →</button>
-      </div>
-    </div>
-    <!-- Step 3: COA template -->
-    <div id="ob-step-3" style="display:none">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;line-height:1.6">Choose a chart of accounts template to start with. You can add, edit, or remove accounts at any time.</p>
-      <div id="ob-coa-opts" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem"></div>
-      <div id="ob-coa-note" style="font-size:11px;color:var(--muted);padding:.5rem .75rem;background:var(--soft);border-radius:7px;line-height:1.6"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
-        <button class="add-btn" onclick="obBack(3)">← Back</button>
-        <button class="sv-btn" onclick="obFinish()">Get started <i class="fas fa-check"></i></button>
-      </div>
-    </div>
-  </div>
-</div>
 <div class="overlay" id="m-release">
   <div class="modal" style="max-width:420px">
     <button class="cx" onclick="closeM('m-release')">&#215;</button>
