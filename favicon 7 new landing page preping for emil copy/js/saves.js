@@ -1731,8 +1731,7 @@ function renderReconciliation(c){
     var _eBankAcct=selAcct&&selAcct.ref;
     var _eCashCode=_eBankAcct&&_eBankAcct.acctCode?_eBankAcct.acctCode:_defaultCashCode(c);
     var _eLdr=0;
-    (c.ledgerEntries||[]).forEach(function(e){
-      if(e.superseded)return;
+    _activeLedgerEntries(c).forEach(function(e){
       (e.lines||[]).forEach(function(l){if(l.accountCode===_eCashCode)_eLdr+=(Number(l.dr||0)-Number(l.cr||0));});
     });
     _earlyLedgerBal=_eLdr;

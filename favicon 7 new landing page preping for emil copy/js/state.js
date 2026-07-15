@@ -360,15 +360,29 @@ function taxJurOpts(c){
     +jurs.map(function(j){return'<option value="'+escHtml(j.name)+'" data-rate="'+j.rate+'">'+escHtml(j.name)+' ('+j.rate+'%)</option>';}).join('');
 }
 
+// _activeLedgerEntries(c): the entries that should count toward any PER-ACCOUNT balance
+// (Trial Balance, Balance Sheet, Cash Flow, restriction split, reconciliation book balance).
+// A voided entry leaves two records behind: the original (superseded:true) and a mirrored
+// reversal (sourceType:'void', dr/cr swapped from the original, itself never marked
+// superseded). Filtering on !e.superseded alone drops the original but keeps the reversal —
+// leaving its half of the pair standing alone on that one account, unmatched, instead of the
+// net-zero effect a deleted transaction should have. Excluding sourceType==='void' entries too
+// restores that net-zero (the whole pair is now excluded, which is mathematically identical to
+// including both and letting them cancel). The grand total (all accounts summed) was never
+// affected by this — each entry is individually dr=cr balanced — this only ever distorted
+// individual account balances.
+function _activeLedgerEntries(c){
+  return(c&&c.ledgerEntries||[]).filter(function(e){return!e.superseded&&e.sourceType!=='void';});
+}
 // getTrialBalance(c) — returns array of {code,name,type,dr,cr,balance,normalSide}
-// Sums all non-superseded ledger entries. Grand total dr === grand total cr if books balance.
+// Sums all active ledger entries (see _activeLedgerEntries). Grand total dr === grand total cr
+// if books balance.
 function getTrialBalance(c,asOfDate){
   if(!c)return[];
   // asOfDate: 'YYYY-MM-DD' string or null (all entries)
   var asOf=asOfDate?new Date(asOfDate+' 23:59:59'):null;
   var map={};
-  (c.ledgerEntries||[]).forEach(function(e){
-    if(e.superseded)return;
+  _activeLedgerEntries(c).forEach(function(e){
     if(asOf){
       var eDate=e.date?new Date(String(e.date).length===8
         ?String(e.date).slice(0,4)+'-'+String(e.date).slice(4,6)+'-'+String(e.date).slice(6,8)
@@ -487,7 +501,7 @@ function getCashFlowStatement(c,startDate,endDate){
   function acct(code){return accts.find(function(a){return a.code===code;})||null;}
   function inPeriod(d){return d&&d>=startDate&&d<=endDate;}
 
-  var entries=(c.ledgerEntries||[]).filter(function(e){return!e.superseded&&inPeriod(parseDate(e.date));});
+  var entries=_activeLedgerEntries(c).filter(function(e){return inPeriod(parseDate(e.date));});
 
   // ── DIRECT METHOD (operating only — see data caveat above) ──────────────
   var dOp={};
@@ -626,8 +640,7 @@ function _splitIncomeByRestriction(c){
   var srcById={};
   (c.income||[]).forEach(function(r){srcById[r.id]=r;});
   (c.revenue||[]).forEach(function(r){srcById[r.id]=r;});
-  (c.ledgerEntries||[]).forEach(function(e){
-    if(e.superseded)return;
+  _activeLedgerEntries(c).forEach(function(e){
     var src=srcById[e.sourceId];
     var cls=(src&&src.netClass)||'without_restriction';
     (e.lines||[]).forEach(function(l){
