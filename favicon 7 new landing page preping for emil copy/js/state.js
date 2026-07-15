@@ -470,6 +470,12 @@ function _cfSection(a){
   if(cat.indexOf('fixed asset')>=0||cat.indexOf('investment')>=0||name.indexOf('fixed asset')>=0)return'investing';
   if(cat.indexOf('loan')>=0||cat.indexOf('credit card')>=0||cat.indexOf('mortgage')>=0||name.indexOf('loan')>=0)return'financing';
   if(name.indexOf('owner draw')>=0||name.indexOf('owner contribut')>=0||name.indexOf('paid-in capital')>=0)return'financing';
+  // Equity/net-asset accounts are financing activity — matching the explicit cf:'financing'
+  // tags the SB/PE COA templates already put on their equity accounts (NP's template has
+  // none, so NP equity fell through to 'operating'). Cash moving against equity (opening
+  // balances, capital/net-asset contributions) is not operating activity — counting it as
+  // operating made the direct method diverge from the indirect method by exactly that amount.
+  if((a.type||'').toLowerCase()==='equity')return'financing';
   return'operating';
 }
 // getCashFlowStatement(c, startDate, endDate)
@@ -505,6 +511,7 @@ function getCashFlowStatement(c,startDate,endDate){
 
   // ── DIRECT METHOD (operating only — see data caveat above) ──────────────
   var dOp={};
+  var eqFin={};// ledger-sourced financing rows for cash-vs-equity entries (see below)
   function bump(label,amt){if(!dOp[label])dOp[label]=0;dOp[label]+=amt;}
   entries.forEach(function(e){
     var lines=e.lines||[];
@@ -518,8 +525,19 @@ function getCashFlowStatement(c,startDate,endDate){
     var magTotal=nonCash.reduce(function(s,n){return s+n.mag;},0)||1;
     nonCash.forEach(function(n){
       var a=n.acct;
-      if(_cfSection(a)!=='operating')return; // investing/financing handled separately below
       var share=cashDelta*(n.mag/magTotal);
+      if(_cfSection(a)!=='operating'){
+        // Equity-vs-cash entries (opening balances, capital/net-asset contributions) have no
+        // feature array to source a financing row from — unlike loans/fixed assets, which are
+        // built from c.loans[]/c.fixedAssets[] below — so capture them from the ledger here.
+        // Without this they'd vanish from the statement entirely once classified as financing,
+        // and netChange would stop tying to the ledger's actual cash movement.
+        if(a&&(a.type||'').toLowerCase()==='equity'){
+          var eqLabel='Contributions — '+(a.cat||a.name);
+          eqFin[eqLabel]=(eqFin[eqLabel]||0)+share;
+        }
+        return; // loan/fixed-asset accounts: feature-array-sourced sections below
+      }
       var t=(a&&a.type||'').toLowerCase(),cat=a?(a.cat||a.name):'Other';
       var label;
       if(t==='income')label='Cash received — '+cat;
@@ -531,20 +549,12 @@ function getCashFlowStatement(c,startDate,endDate){
     });
   });
   var dOperating=Object.keys(dOp).sort().map(function(k){return{label:k,amt:dOp[k]};});
-
-  // ── Loan interest (schedule-sourced, see data caveat) — included in operating for both methods ──
-  var loanInterest=0;
-  (c.loans||[]).forEach(function(loan){
-    if(typeof calcAmort!=='function'||!loan.startDate)return;
-    var amort=calcAmort(Number(loan.principal||0),Number(loan.rate||0),Number(loan.term||0));
-    var posted=loan.posted||[];
-    amort.rows.forEach(function(r){
-      if(posted.indexOf(r.num)<0)return;
-      var due=parseDate(loan.startDate);if(!due)return;due.setMonth(due.getMonth()+r.num);
-      if(inPeriod(due))loanInterest+=r.interest;
-    });
-  });
-  if(loanInterest>0.005){dOperating.push({label:'Interest paid on loans',amt:-loanInterest});dOp['Interest paid on loans']=-loanInterest;}
+  // (No schedule-sourced loan-interest row here anymore: postLoanPayment() posts interest to
+  // the ledger — Dr Interest expense / Cr Cash — so the entries loop above already captures it
+  // as "Cash paid — Interest". The old fallback row predates that wiring and had started
+  // double-counting interest in both methods: equally, so the direct/indirect reconciliation
+  // never flagged it, but netChange understated actual cash movement by exactly the interest
+  // amount, showing a phantom unpostedGap for any client with posted loan payments.)
   var dOpTotal=dOperating.reduce(function(s,r){return s+r.amt;},0);
 
   // ── INVESTING & FINANCING (feature-array sourced — see data caveat) ─────
@@ -568,6 +578,7 @@ function getCashFlowStatement(c,startDate,endDate){
   });
   if(loanProceeds>0.005)financing.push({label:'Proceeds from loans',amt:loanProceeds});
   if(loanPrincipal>0.005)financing.push({label:'Principal payments on debt',amt:-loanPrincipal});
+  Object.keys(eqFin).sort().forEach(function(k){if(Math.abs(eqFin[k])>0.005)financing.push({label:k,amt:eqFin[k]});});
   var finTotal=financing.reduce(function(s,r){return s+r.amt;},0);
 
   // ── INDIRECT METHOD: net income + non-cash addbacks + working capital changes ──
@@ -578,7 +589,7 @@ function getCashFlowStatement(c,startDate,endDate){
     if(incomeCodes.indexOf(l.accountCode)>=0)incomeTotal+=Number(l.cr||0)-Number(l.dr||0);
     if(expenseCodes.indexOf(l.accountCode)>=0)expenseTotal+=Number(l.dr||0)-Number(l.cr||0);
   });});
-  var netIncome=incomeTotal-expenseTotal-loanInterest; // loan interest isn't in the ledger (see caveat) — fold it in here too
+  var netIncome=incomeTotal-expenseTotal; // interest is already in expenseTotal via the ledger (postLoanPayment posts it)
 
   var deprAmt=entries.filter(function(e){return e.sourceType==='depreciation';})
     .reduce(function(s,e){return s+(e.lines||[]).reduce(function(ls,l){return ls+Number(l.dr||0);},0);},0);
@@ -629,20 +640,33 @@ function getCashFlowStatement(c,startDate,endDate){
 
 
 // Splits currently-uncosed income (all unsuperseded ledger lines hitting Income-type accounts)
-// by net-asset restriction class, using the netClass tag saved on the originating c.income[]/
-// c.revenue[] record (see _postDonationLedger in renders.js). Entries with no matching source
-// record (manual journal entries, bank imports, invoices, etc.) default to 'without_restriction' —
-// the standard assumption for exchange/program-service revenue. Uses the exact same ledger-line
-// universe as getTrialBalance() (unsuperseded, no date filter) so the buckets sum to exactly
-// lbs.totalIncome — required for the closing entry's debits to still equal its credits.
+// by net-asset restriction class. Class resolution, in order:
+//   1. The explicit netClass tag on the originating c.income[]/c.revenue[] record — only the
+//      donations workflow sets this (see _postDonationLedger in renders.js).
+//   2. The type of the fund the record is tagged to (Restricted → with_restriction,
+//      Permanently Restricted/Endowment → with_restriction_perm). This is what catches
+//      restricted GRANT income — the saveGrant → Income tab path never sets netClass, so
+//      before this fallback every restricted grant silently closed into "without donor
+//      restrictions" at year end.
+//   3. 'without_restriction' — the standard assumption for exchange/program-service revenue
+//      and for entries with no matching source record (manual JEs, bank imports, invoices).
+// Uses the exact same ledger-line universe as getTrialBalance() (active entries, no date
+// filter) so the buckets sum to exactly lbs.totalIncome — required for the closing entry's
+// debits to still equal its credits.
 function _splitIncomeByRestriction(c){
   var buckets={without_restriction:0,with_restriction:0,with_restriction_perm:0};
   var srcById={};
   (c.income||[]).forEach(function(r){srcById[r.id]=r;});
   (c.revenue||[]).forEach(function(r){srcById[r.id]=r;});
+  var fundCls={};
+  (c.funds||[]).forEach(function(f){
+    var t=(f.type||'').toLowerCase();
+    if(t==='restricted')fundCls[f.name]='with_restriction';
+    else if(t==='permanently restricted'||t==='endowment')fundCls[f.name]='with_restriction_perm';
+  });
   _activeLedgerEntries(c).forEach(function(e){
     var src=srcById[e.sourceId];
-    var cls=(src&&src.netClass)||'without_restriction';
+    var cls=(src&&src.netClass)||(src&&src.fund&&fundCls[src.fund])||'without_restriction';
     (e.lines||[]).forEach(function(l){
       if(!l.accountCode)return;
       var a=(c.accounts||[]).find(function(x){return x.code===l.accountCode;});
