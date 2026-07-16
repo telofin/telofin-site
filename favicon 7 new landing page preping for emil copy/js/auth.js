@@ -202,7 +202,7 @@ async function loadFromSupabase(){
       D=res.data.data;
       if(res.data.data.plan)_plan=res.data.data.plan;
       _loadedServerTime=res.data.updated_at?new Date(res.data.updated_at):null;
-      shadowCompareBoxes();// Teams cutover slice 1: prove boxes match blob (read-only, logs only)
+      await useBoxesIfClean();// Teams cutover slice 2: read from boxes when they're a clean, complete copy of the blob
       return true;
     }
   }catch(e){
@@ -299,11 +299,15 @@ async function loadClientBoxes(){
   }catch(e){console.warn('[shadow] boxes load error:',e);return null;}
 }
 
-// Compares boxes to the blob's clients and logs a match/diff report. Read-only.
-async function shadowCompareBoxes(){
+// Step 2b, slice 2: READ FROM BOXES when they're a byte-identical, complete copy of
+// the blob. Maximally safe — only flips if every blob client is present in the boxes
+// AND matches exactly (no dropped clients, no stale data); otherwise stays on the blob
+// and warns. For the owner this is transparent (boxes==blob via the dual-write), and
+// it's the same path a shared teammate will use to load only the clients shared to them.
+async function useBoxesIfClean(){
   if(!_user||!D||!D.clients)return;
   var boxClients=await loadClientBoxes();
-  if(!boxClients)return;
+  if(!boxClients||!boxClients.length)return;// no boxes yet → keep blob
   var blobById={},boxById={};
   (D.clients||[]).forEach(function(c){if(c&&c.id!=null)blobById[String(c.id)]=c;});
   boxClients.forEach(function(c){if(c&&c.id!=null)boxById[String(c.id)]=c;});
@@ -315,8 +319,14 @@ async function shadowCompareBoxes(){
   });
   Object.keys(boxById).forEach(function(id){if(!blobById[id])rep.onlyInBoxes.push(boxById[id].name||id);});
   window._shadowReport=rep;
-  var ok=(rep.mismatched.length===0&&rep.onlyInBlob.length===0&&rep.onlyInBoxes.length===0);
-  console.log('%c[shadow-compare] '+(ok?'✓ boxes MATCH blob':'⚠ DIFFERENCES found'),'font-weight:bold;font-size:13px;color:'+(ok?'green':'orange'),rep);
+  var clean=(rep.mismatched.length===0&&rep.onlyInBlob.length===0&&rep.onlyInBoxes.length===0);
+  if(clean){
+    // Preserve the blob's client order; swap each client to its box copy.
+    D.clients=D.clients.map(function(c){return (c&&c.id!=null&&boxById[String(c.id)])||c;});
+    console.log('%c[cutover] ✓ reading from BOXES','font-weight:bold;font-size:13px;color:green',rep);
+  }else{
+    console.warn('%c[cutover] boxes not a clean/complete copy — staying on BLOB (safe)','font-weight:bold;font-size:13px;color:orange',rep);
+  }
 }
 
 // Resolves this client's Supabase UUID via the existing client_id_map table
