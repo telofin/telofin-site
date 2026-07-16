@@ -202,6 +202,7 @@ async function loadFromSupabase(){
       D=res.data.data;
       if(res.data.data.plan)_plan=res.data.data.plan;
       _loadedServerTime=res.data.updated_at?new Date(res.data.updated_at):null;
+      shadowCompareBoxes();// Teams cutover slice 1: prove boxes match blob (read-only, logs only)
       return true;
     }
   }catch(e){
@@ -271,6 +272,51 @@ async function dwMirrorClients(){
   }catch(e){
     console.warn('[clarity] dwMirrorClients failed (blob save unaffected):',e);
   }
+}
+
+// ══════════════════════════════════════════
+// TEAMS CUTOVER — Step 2b, slice 1: SHADOW-COMPARE (read-only, changes nothing)
+// ══════════════════════════════════════════
+// Loads the per-client boxes alongside the blob and deep-compares them, so we can
+// PROVE the boxes are a faithful copy before ever switching the app to read from
+// them. Logs a verdict to the console; never touches D or what the user sees.
+
+// Order-insensitive canonical stringify. JSONB reorders object keys on round-trip,
+// so a plain JSON.stringify would flag false diffs — this sorts keys recursively.
+function _canonJSON(v){
+  if(v===null||typeof v!=='object')return JSON.stringify(v);
+  if(Array.isArray(v))return '['+v.map(_canonJSON).join(',')+']';
+  return '{'+Object.keys(v).sort().map(function(k){return JSON.stringify(k)+':'+_canonJSON(v[k]);}).join(',')+'}';
+}
+
+// Reads this user's client_data boxes (their own + any shared) → array of client objects.
+async function loadClientBoxes(){
+  var sb=sbClient();if(!sb||!_user)return null;
+  try{
+    var res=await sb.from('client_data').select('app_client_id,data');
+    if(res.error){console.warn('[shadow] boxes load failed:',res.error.message||res.error);return null;}
+    return (res.data||[]).map(function(r){return r.data;}).filter(Boolean);
+  }catch(e){console.warn('[shadow] boxes load error:',e);return null;}
+}
+
+// Compares boxes to the blob's clients and logs a match/diff report. Read-only.
+async function shadowCompareBoxes(){
+  if(!_user||!D||!D.clients)return;
+  var boxClients=await loadClientBoxes();
+  if(!boxClients)return;
+  var blobById={},boxById={};
+  (D.clients||[]).forEach(function(c){if(c&&c.id!=null)blobById[String(c.id)]=c;});
+  boxClients.forEach(function(c){if(c&&c.id!=null)boxById[String(c.id)]=c;});
+  var rep={blobClients:Object.keys(blobById).length,boxClients:Object.keys(boxById).length,identical:0,mismatched:[],onlyInBlob:[],onlyInBoxes:[]};
+  Object.keys(blobById).forEach(function(id){
+    if(!boxById[id]){rep.onlyInBlob.push(blobById[id].name||id);return;}
+    if(_canonJSON(blobById[id])===_canonJSON(boxById[id]))rep.identical++;
+    else rep.mismatched.push(blobById[id].name||id);
+  });
+  Object.keys(boxById).forEach(function(id){if(!blobById[id])rep.onlyInBoxes.push(boxById[id].name||id);});
+  window._shadowReport=rep;
+  var ok=(rep.mismatched.length===0&&rep.onlyInBlob.length===0&&rep.onlyInBoxes.length===0);
+  console.log('%c[shadow-compare] '+(ok?'✓ boxes MATCH blob':'⚠ DIFFERENCES found'),'font-weight:bold;font-size:13px;color:'+(ok?'green':'orange'),rep);
 }
 
 // Resolves this client's Supabase UUID via the existing client_id_map table
