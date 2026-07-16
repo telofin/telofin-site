@@ -99,6 +99,7 @@ function signOut(){
   var sb=sbClient();if(!sb)return;
   sb.auth.signOut().then(function(){
     _user=null;
+    _dwOrgId=null;
     clearLocalData();
     updateAuthUI();
     if(typeof renderAll==='function')renderAll();
@@ -160,6 +161,7 @@ async function syncToSupabase(){
   if(ok===false)return;// user chose to cancel
   try{
     await sb.from('User_Data').upsert({user_id:_user.id,data:D,updated_at:new Date().toISOString()},{onConflict:'user_id',ignoreDuplicates:false});
+    dwMirrorClients();// Teams dual-write: keep per-client boxes current (blob stays authoritative)
     _lastSynced=new Date();
     _syncRetryCount=0;// reset on success
     clearTimeout(_syncRetryTimer);
@@ -221,6 +223,55 @@ async function loadFromSupabase(){
 // affect what anyone sees. Both are written to never throw outward: a
 // Supabase failure is logged and swallowed, the blob save is untouched.
 var _dwClientIdCache={};
+var _dwOrgId=null;
+
+// ══════════════════════════════════════════
+// TEAMS DUAL-WRITE — keep per-client `client_data` boxes current
+// ══════════════════════════════════════════
+// Same idea + safety as the expenses dual-write above: on every cloud save we
+// also mirror each client into its own client_data row (an org-owned "box"), so
+// the shared-books tables stay current going forward. The blob (User_Data) stays
+// authoritative; nothing reads client_data yet, and every failure here is logged
+// and swallowed so a hiccup can never touch the blob save. Cutover to reading
+// these boxes is a later, separate step.
+
+// Resolves this signed-in user's workspace (org) id, creating it if this is a
+// brand-new account that never went through the one-time migration. Cached for
+// the session; cleared on sign-out.
+async function dwResolveOrgId(){
+  var sb=sbClient();if(!sb||!_user)return null;
+  if(_dwOrgId)return _dwOrgId;
+  try{
+    var res=await sb.from('orgs').select('id').eq('owner_id',_user.id).maybeSingle();
+    if(res.data&&res.data.id){_dwOrgId=res.data.id;return _dwOrgId;}
+    var ins=await sb.from('orgs').insert({owner_id:_user.id,name:'My Workspace'}).select('id').single();
+    if(ins.error||!ins.data)return null;
+    _dwOrgId=ins.data.id;
+    return _dwOrgId;
+  }catch(e){
+    console.warn('[clarity] dwResolveOrgId failed:',e);
+    return null;
+  }
+}
+
+// Mirrors every current client into its client_data box (upsert on
+// org_id+app_client_id). Called after a successful blob sync. RLS allows these
+// writes because the signed-in user owns their own org.
+async function dwMirrorClients(){
+  var sb=sbClient();if(!sb||!_user||!D||!D.clients||!D.clients.length)return;
+  try{
+    var orgId=await dwResolveOrgId();
+    if(!orgId)return;
+    var now=new Date().toISOString();
+    var rows=D.clients.filter(function(c){return c&&c.id;}).map(function(c){
+      return {org_id:orgId,app_client_id:String(c.id),data:c,updated_at:now};
+    });
+    if(!rows.length)return;
+    await sb.from('client_data').upsert(rows,{onConflict:'org_id,app_client_id'});
+  }catch(e){
+    console.warn('[clarity] dwMirrorClients failed (blob save unaffected):',e);
+  }
+}
 
 // Resolves this client's Supabase UUID via the existing client_id_map table
 // (built once by migration.js). If no mapping exists yet — this client was
