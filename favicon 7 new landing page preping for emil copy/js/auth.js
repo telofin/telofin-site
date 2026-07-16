@@ -160,7 +160,12 @@ async function syncToSupabase(){
   var ok=await checkSyncConflict();
   if(ok===false)return;// user chose to cancel
   try{
-    await sb.from('User_Data').upsert({user_id:_user.id,data:D,updated_at:new Date().toISOString()},{onConflict:'user_id',ignoreDuplicates:false});
+    var _blobData=D;
+    if(D&&D.clients&&D.clients.some(function(c){return c&&c._shared;})){
+      // Never write clients shared TO this user into their own blob — keep it to their books.
+      _blobData=Object.assign({},D,{clients:D.clients.filter(function(c){return !(c&&c._shared);})});
+    }
+    await sb.from('User_Data').upsert({user_id:_user.id,data:_blobData,updated_at:new Date().toISOString()},{onConflict:'user_id',ignoreDuplicates:false});
     dwMirrorClients();// Teams dual-write: keep per-client boxes current (blob stays authoritative)
     _lastSynced=new Date();
     _syncRetryCount=0;// reset on success
@@ -198,13 +203,18 @@ async function loadFromSupabase(){
       if(syncMsg)syncMsg.textContent='Could not load cloud data — showing local copy';
       return false;
     }
-    if(res.data&&res.data.data&&res.data.data.clients&&res.data.data.clients.length){
-      D=res.data.data;
-      if(res.data.data.plan)_plan=res.data.data.plan;
+    var _blob=res.data&&res.data.data;
+    var _hasBlob=_blob&&_blob.clients&&_blob.clients.length;
+    if(_hasBlob){
+      D=_blob;
+      if(_blob.plan)_plan=_blob.plan;
       _loadedServerTime=res.data.updated_at?new Date(res.data.updated_at):null;
-      await useBoxesIfClean();// Teams cutover slice 2: read from boxes when they're a clean, complete copy of the blob
-      return true;
     }
+    // Bring in boxes: swap owner clients to their box copies (when clean) + append clients
+    // shared to this user. For a teammate with no blob this loads only the shared clients.
+    var _gotBoxes=await useBoxesIfClean(_hasBlob);
+    if(_hasBlob)return true;
+    if(_gotBoxes)return true;
   }catch(e){
     console.error('[clarity] loadFromSupabase exception:',e&&e.message||e);
     var syncMsg=document.getElementById('sb-sync-msg');
@@ -264,7 +274,7 @@ async function dwMirrorClients(){
     var orgId=await dwResolveOrgId();
     if(!orgId)return;
     var now=new Date().toISOString();
-    var rows=D.clients.filter(function(c){return c&&c.id;}).map(function(c){
+    var rows=D.clients.filter(function(c){return c&&c.id&&!c._shared;}).map(function(c){
       return {org_id:orgId,app_client_id:String(c.id),data:c,updated_at:now};
     });
     if(!rows.length)return;
@@ -293,40 +303,56 @@ function _canonJSON(v){
 async function loadClientBoxes(){
   var sb=sbClient();if(!sb||!_user)return null;
   try{
-    var res=await sb.from('client_data').select('app_client_id,data');
-    if(res.error){console.warn('[shadow] boxes load failed:',res.error.message||res.error);return null;}
-    return (res.data||[]).map(function(r){return r.data;}).filter(Boolean);
-  }catch(e){console.warn('[shadow] boxes load error:',e);return null;}
+    var res=await sb.from('client_data').select('app_client_id,data,owner_id');
+    if(res.error){console.warn('[boxes] load failed:',res.error.message||res.error);return null;}
+    return (res.data||[]).filter(function(r){return r&&r.data;}).map(function(r){
+      return {data:r.data,mine:(r.owner_id===_user.id)};
+    });
+  }catch(e){console.warn('[boxes] load error:',e);return null;}
 }
 
-// Step 2b, slice 2: READ FROM BOXES when they're a byte-identical, complete copy of
-// the blob. Maximally safe — only flips if every blob client is present in the boxes
-// AND matches exactly (no dropped clients, no stale data); otherwise stays on the blob
-// and warns. For the owner this is transparent (boxes==blob via the dual-write), and
-// it's the same path a shared teammate will use to load only the clients shared to them.
-async function useBoxesIfClean(){
-  if(!_user||!D||!D.clients)return;
-  var boxClients=await loadClientBoxes();
-  if(!boxClients||!boxClients.length)return;// no boxes yet → keep blob
-  var blobById={},boxById={};
-  (D.clients||[]).forEach(function(c){if(c&&c.id!=null)blobById[String(c.id)]=c;});
-  boxClients.forEach(function(c){if(c&&c.id!=null)boxById[String(c.id)]=c;});
-  var rep={blobClients:Object.keys(blobById).length,boxClients:Object.keys(boxById).length,identical:0,mismatched:[],onlyInBlob:[],onlyInBoxes:[]};
-  Object.keys(blobById).forEach(function(id){
-    if(!boxById[id]){rep.onlyInBlob.push(blobById[id].name||id);return;}
-    if(_canonJSON(blobById[id])===_canonJSON(boxById[id]))rep.identical++;
-    else rep.mismatched.push(blobById[id].name||id);
+// Step 2b, slice 3 (member loading): rebuild D.clients from the boxes — the owner's OWN
+// clients (from the blob's set, swapped to their box copies when they match) PLUS any
+// clients SHARED to this user (each marked ._shared, so the dual-write/blob never fork or
+// absorb them). Owner data is protected: if a blob client is missing from the owner's boxes
+// or its copy differs, we keep the owner's blob copies (safe) but still append shared ones.
+// Shared clients are read-only for now (no member write path yet). Returns true if boxes
+// gave us any clients. `hasBlob` tells us whether D already holds this user's own books.
+async function useBoxesIfClean(hasBlob){
+  if(!_user)return false;
+  var rows=await loadClientBoxes();
+  if(!rows||!rows.length)return false;// no boxes → leave D as-is (blob/local)
+  var myById={},shared=[];
+  rows.forEach(function(r){
+    if(r.mine){if(r.data&&r.data.id!=null)myById[String(r.data.id)]=r.data;}
+    else if(r.data){r.data._shared=true;shared.push(r.data);}
   });
-  Object.keys(boxById).forEach(function(id){if(!blobById[id])rep.onlyInBoxes.push(boxById[id].name||id);});
+  var blobClients=(hasBlob&&D&&D.clients)?D.clients:[];
+  var mismatched=[],onlyInBlob=[],identical=0;
+  blobClients.forEach(function(c){
+    if(!c||c.id==null)return;
+    var b=myById[String(c.id)];
+    if(!b){onlyInBlob.push(c.name||c.id);return;}
+    if(_canonJSON(c)===_canonJSON(b))identical++;else mismatched.push(c.name||c.id);
+  });
+  var ownClean=(mismatched.length===0&&onlyInBlob.length===0);
+  var rep={blobClients:blobClients.length,myBoxes:Object.keys(myById).length,shared:shared.length,identical:identical,mismatched:mismatched,onlyInBlob:onlyInBlob,ownClean:ownClean};
   window._shadowReport=rep;
-  var clean=(rep.mismatched.length===0&&rep.onlyInBlob.length===0&&rep.onlyInBoxes.length===0);
-  if(clean){
-    // Preserve the blob's client order; swap each client to its box copy.
-    D.clients=D.clients.map(function(c){return (c&&c.id!=null&&boxById[String(c.id)])||c;});
-    console.log('%c[cutover] ✓ reading from BOXES','font-weight:bold;font-size:13px;color:green',rep);
+  var out;
+  if(hasBlob){
+    // Own clients: from the blob's set, swapped to box copies only when fully clean.
+    out=blobClients.map(function(c){return (ownClean&&c&&c.id!=null&&myById[String(c.id)])||c;});
   }else{
-    console.warn('%c[cutover] boxes not a clean/complete copy — staying on BLOB (safe)','font-weight:bold;font-size:13px;color:orange',rep);
+    // Teammate with no blob: their clients are whatever boxes they own (usually none).
+    out=[];Object.keys(myById).forEach(function(id){out.push(myById[id]);});
   }
+  // Append shared clients not already present.
+  var have={};out.forEach(function(c){if(c&&c.id!=null)have[String(c.id)]=1;});
+  shared.forEach(function(c){if(c&&c.id!=null&&!have[String(c.id)]){out.push(c);have[String(c.id)]=1;}});
+  if(!out.length)return false;
+  D.clients=out;
+  console.log('%c[cutover] ✓ '+out.length+' client(s) from boxes'+(shared.length?(' ('+shared.length+' shared · read-only)'):'')+(hasBlob&&!ownClean?' — own kept from BLOB (not clean)':''),'font-weight:bold;font-size:13px;color:'+((ownClean||!hasBlob)?'green':'orange'),rep);
+  return true;
 }
 
 // Resolves this client's Supabase UUID via the existing client_id_map table
