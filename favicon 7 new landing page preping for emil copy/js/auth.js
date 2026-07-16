@@ -319,7 +319,7 @@ function _canonJSON(v){
 async function loadClientBoxes(){
   var sb=sbClient();if(!sb||!_user)return null;
   try{
-    var res=await sb.from('client_data').select('id,app_client_id,data,owner_id');
+    var res=await sb.from('client_data').select('id,app_client_id,data,owner_id,updated_at');
     if(res.error){console.warn('[boxes] load failed:',res.error.message||res.error);return null;}
     // Which shared boxes may I edit? (my grants in client_access)
     var canEdit={};
@@ -327,7 +327,7 @@ async function loadClientBoxes(){
     if(gr&&gr.data)gr.data.forEach(function(g){canEdit[g.client_data_id]=!!g.can_edit;});
     return (res.data||[]).filter(function(r){return r&&r.data;}).map(function(r){
       var mine=(r.owner_id===_user.id);
-      return {data:r.data,mine:mine,boxId:r.id,canEdit:mine||!!canEdit[r.id]};
+      return {data:r.data,mine:mine,boxId:r.id,canEdit:mine||!!canEdit[r.id],updatedAt:r.updated_at};
     });
   }catch(e){console.warn('[boxes] load error:',e);return null;}
 }
@@ -343,28 +343,28 @@ async function useBoxesIfClean(hasBlob){
   if(!_user)return false;
   var rows=await loadClientBoxes();
   if(!rows||!rows.length)return false;// no boxes → leave D as-is (blob/local)
-  var myById={},shared=[];
+  var myById={},myTimeById={},shared=[];
   rows.forEach(function(r){
-    if(r.mine){if(r.data&&r.data.id!=null)myById[String(r.data.id)]=r.data;}
+    if(r.mine){if(r.data&&r.data.id!=null){myById[String(r.data.id)]=r.data;myTimeById[String(r.data.id)]=r.updatedAt?new Date(r.updatedAt).getTime():0;}}
     else if(r.data){r.data._shared=true;r.data._shareBoxId=r.boxId;r.data._canEdit=r.canEdit;shared.push(r.data);}
   });
   var blobClients=(hasBlob&&D&&D.clients)?D.clients:[];
-  var mismatched=[],onlyInBlob=[],identical=0;
-  blobClients.forEach(function(c){
-    if(!c||c.id==null)return;
-    var b=myById[String(c.id)];
-    if(!b){onlyInBlob.push(c.name||c.id);return;}
-    if(_canonJSON(c)===_canonJSON(b))identical++;else mismatched.push(c.name||c.id);
-  });
-  var ownClean=(mismatched.length===0&&onlyInBlob.length===0);
-  var rep={blobClients:blobClients.length,myBoxes:Object.keys(myById).length,shared:shared.length,identical:identical,mismatched:mismatched,onlyInBlob:onlyInBlob,ownClean:ownClean};
-  window._shadowReport=rep;
+  var blobTime=(typeof _loadedServerTime!=='undefined'&&_loadedServerTime)?_loadedServerTime.getTime():0;
+  var usedBox=0,keptStale=0,noBox=0;
   var out;
   if(hasBlob){
-    // Own clients: from the blob's set, swapped to box copies only when fully clean.
-    out=blobClients.map(function(c){return (ownClean&&c&&c.id!=null&&myById[String(c.id)])||c;});
+    // Owner: for each of their clients, trust the box copy when it's at least as fresh as the
+    // blob — that's how a teammate's edits show up. If no box exists keep the blob client
+    // (never drop one); if a box is somehow OLDER than the blob (rare failed mirror) keep blob.
+    out=blobClients.map(function(c){
+      if(!c||c.id==null)return c;
+      var b=myById[String(c.id)];
+      if(!b){noBox++;return c;}
+      if((myTimeById[String(c.id)]||0)>=blobTime){usedBox++;return b;}
+      keptStale++;return c;
+    });
   }else{
-    // Teammate with no blob: their clients are whatever boxes they own (usually none).
+    // Teammate with no blob of their own: their clients are whatever boxes they own (rare).
     out=[];Object.keys(myById).forEach(function(id){out.push(myById[id]);});
   }
   // Append shared clients not already present.
@@ -372,7 +372,9 @@ async function useBoxesIfClean(hasBlob){
   shared.forEach(function(c){if(c&&c.id!=null&&!have[String(c.id)]){out.push(c);have[String(c.id)]=1;}});
   if(!out.length)return false;
   D.clients=out;
-  console.log('%c[cutover] ✓ '+out.length+' client(s) from boxes'+(shared.length?(' ('+shared.length+' shared · read-only)'):'')+(hasBlob&&!ownClean?' — own kept from BLOB (not clean)':''),'font-weight:bold;font-size:13px;color:'+((ownClean||!hasBlob)?'green':'orange'),rep);
+  var rep={owner:!!hasBlob,total:out.length,fromBox:usedBox,shared:shared.length,keptFromBlob:noBox+keptStale};
+  window._shadowReport=rep;
+  console.log('%c[teams] ✓ '+out.length+' client(s)'+(shared.length?(' ('+shared.length+' shared)'):'')+(keptStale?(' — '+keptStale+' kept from blob (box older)'):''),'font-weight:bold;font-size:13px;color:green',rep);
   return true;
 }
 
