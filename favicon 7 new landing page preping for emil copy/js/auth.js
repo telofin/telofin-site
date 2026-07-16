@@ -167,6 +167,7 @@ async function syncToSupabase(){
     }
     await sb.from('User_Data').upsert({user_id:_user.id,data:_blobData,updated_at:new Date().toISOString()},{onConflict:'user_id',ignoreDuplicates:false});
     dwMirrorClients();// Teams dual-write: keep per-client boxes current (blob stays authoritative)
+    dwWriteSharedEdits();// Teams: push a teammate's edits to editable shared clients back to the owner's box
     _lastSynced=new Date();
     _syncRetryCount=0;// reset on success
     clearTimeout(_syncRetryTimer);
@@ -284,6 +285,21 @@ async function dwMirrorClients(){
   }
 }
 
+// Writes a teammate's edits to an EDITABLE shared client back to its ORIGINAL box (the
+// owner's box, by id) — never a fork. Only touches clients marked ._shared with ._canEdit.
+// Runtime markers are stripped before writing so they never persist into the owner's box.
+async function dwWriteSharedEdits(){
+  var sb=sbClient();if(!sb||!_user||!D||!D.clients)return;
+  try{
+    var edits=D.clients.filter(function(c){return c&&c._shared&&c._canEdit&&c._shareBoxId;});
+    for(var i=0;i<edits.length;i++){
+      var c=edits[i];
+      var clean=Object.assign({},c);delete clean._shared;delete clean._shareBoxId;delete clean._canEdit;
+      await sb.from('client_data').update({data:clean,updated_at:new Date().toISOString()}).eq('id',c._shareBoxId);
+    }
+  }catch(e){console.warn('[clarity] dwWriteSharedEdits failed:',e);}
+}
+
 // ══════════════════════════════════════════
 // TEAMS CUTOVER — Step 2b, slice 1: SHADOW-COMPARE (read-only, changes nothing)
 // ══════════════════════════════════════════
@@ -303,10 +319,15 @@ function _canonJSON(v){
 async function loadClientBoxes(){
   var sb=sbClient();if(!sb||!_user)return null;
   try{
-    var res=await sb.from('client_data').select('app_client_id,data,owner_id');
+    var res=await sb.from('client_data').select('id,app_client_id,data,owner_id');
     if(res.error){console.warn('[boxes] load failed:',res.error.message||res.error);return null;}
+    // Which shared boxes may I edit? (my grants in client_access)
+    var canEdit={};
+    var gr=await sb.from('client_access').select('client_data_id,can_edit').eq('user_id',_user.id);
+    if(gr&&gr.data)gr.data.forEach(function(g){canEdit[g.client_data_id]=!!g.can_edit;});
     return (res.data||[]).filter(function(r){return r&&r.data;}).map(function(r){
-      return {data:r.data,mine:(r.owner_id===_user.id)};
+      var mine=(r.owner_id===_user.id);
+      return {data:r.data,mine:mine,boxId:r.id,canEdit:mine||!!canEdit[r.id]};
     });
   }catch(e){console.warn('[boxes] load error:',e);return null;}
 }
@@ -325,7 +346,7 @@ async function useBoxesIfClean(hasBlob){
   var myById={},shared=[];
   rows.forEach(function(r){
     if(r.mine){if(r.data&&r.data.id!=null)myById[String(r.data.id)]=r.data;}
-    else if(r.data){r.data._shared=true;shared.push(r.data);}
+    else if(r.data){r.data._shared=true;r.data._shareBoxId=r.boxId;r.data._canEdit=r.canEdit;shared.push(r.data);}
   });
   var blobClients=(hasBlob&&D&&D.clients)?D.clients:[];
   var mismatched=[],onlyInBlob=[],identical=0;
