@@ -196,6 +196,7 @@ async function syncToSupabase(){
 var _loadedServerTime=null;
 async function loadFromSupabase(){
   var sb=sbClient();if(!sb||!_user)return false;
+  await claimInvites();// Teams: accept invites addressed to my email → active shares, before loading boxes
   try{
     var res=await sb.from('User_Data').select('data,updated_at').eq('user_id',_user.id).maybeSingle();
     if(res.error){
@@ -316,6 +317,16 @@ function _canonJSON(v){
 }
 
 // Reads this user's client_data boxes (their own + any shared) → array of client objects.
+// Accepts any pending invites addressed to THIS user's verified email — flips them into
+// active shares by stamping user_id. RLS (client_access_claim) guarantees a user can only
+// claim invites to their own email, and only onto themselves. Safe to run on every sign-in.
+async function claimInvites(){
+  var sb=sbClient();if(!sb||!_user)return;
+  try{
+    await sb.from('client_access').update({user_id:_user.id}).is('user_id',null);
+  }catch(e){console.warn('[teams] claimInvites failed:',e);}
+}
+
 async function loadClientBoxes(){
   var sb=sbClient();if(!sb||!_user)return null;
   try{
