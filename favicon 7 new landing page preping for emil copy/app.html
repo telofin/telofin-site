@@ -222,6 +222,8 @@ tr:hover td{background:var(--bg)}
 .rpt-ttl{font-size:13px;font-weight:500;margin-bottom:.75rem;padding-bottom:.5rem;border-bottom:1px solid var(--soft)}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
+.acct-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;background:none;border:none;border-radius:7px;font-size:12.5px;color:var(--text);cursor:pointer;font-family:inherit;text-align:left}
+.acct-item:hover{background:var(--np-bg)}
 .modal{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:1.5rem;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
 .modal::-webkit-scrollbar{width:8px}
 .modal::-webkit-scrollbar-track{background:transparent}
@@ -461,8 +463,17 @@ tr:hover td{background:var(--bg)}
             <button class="add-btn" onclick="(function(){var c=gc();if(c){var k='fye-checked-'+c.id+'-'+new Date().getFullYear();try{localStorage.removeItem(k);}catch(e){}checkFYEExpiry(c);}})()" title="Review unreconciled transactions at fiscal year end">FYE review</button>
             <button class="add-btn" onclick="clearSampleData()" style="color:var(--red);border-color:var(--red-bg)">Clear data</button>
             <button class="add-btn" onclick="removeClient()" style="color:var(--red);border-color:var(--red-bg)">Remove</button>
-            <span id="sb-account-chip" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:0 4px" title="Signed-in account"><i class="fas fa-user-circle"></i><span id="sb-account-email"></span></span>
-            <button id="sb-signout-btn" class="add-btn" onclick="signOut()" style="display:none">Sign out</button>
+            <span id="acct-wrap" style="display:none;position:relative">
+              <span id="sb-account-chip" onclick="toggleAcctMenu(event)" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:5px 9px;cursor:pointer;border:1px solid var(--border);border-radius:8px" title="Account"><i class="fas fa-user-circle"></i><span id="sb-account-email"></span><i class="fas fa-chevron-down" style="font-size:9px;opacity:.7"></i></span>
+              <div id="acct-menu" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);min-width:220px;z-index:250;padding:6px;text-align:left">
+                <div style="padding:8px 10px;border-bottom:1px solid var(--border);margin-bottom:4px">
+                  <div id="acct-menu-name" style="font-size:13px;font-weight:600;color:var(--text)"></div>
+                  <div id="acct-menu-email" style="font-size:11px;color:var(--muted);word-break:break-all"></div>
+                </div>
+                <button class="acct-item" onclick="openProfile()"><i class="fas fa-user fa-fw"></i> Your profile</button>
+                <button class="acct-item" onclick="signOut()"><i class="fas fa-right-from-bracket fa-fw"></i> Sign out</button>
+              </div>
+            </span>
           </div>
         </div>
         <div class="tabs-row" id="tabs"></div>
@@ -966,6 +977,20 @@ tr:hover td{background:var(--bg)}
 // Load after all scripts so every getTabs/afterSwitch patch is in place
 (function(){ if(typeof load==='function') load(); })();
 </script>
+<div class="overlay" id="m-profile">
+  <div class="modal" style="max-width:420px">
+    <button class="cx" onclick="closeM('m-profile')">&#215;</button>
+    <div class="m-title">Your profile</div>
+    <div id="prof-email" style="font-size:12px;color:var(--muted);margin-bottom:1rem;word-break:break-all"></div>
+    <div class="fl" style="margin-bottom:.6rem"><label>Name</label><input type="text" id="prof-name" placeholder="e.g. Jane Smith"></div>
+    <div class="fl" style="margin-bottom:.6rem"><label>Firm / company <span style="font-size:10px;color:var(--muted)">(optional)</span></label><input type="text" id="prof-firm"></div>
+    <div class="fl" style="margin-bottom:.9rem"><label>Phone <span style="font-size:10px;color:var(--muted)">(optional)</span></label><input type="text" id="prof-phone"></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="sv-btn" onclick="saveMyProfile()">Save</button>
+      <span id="prof-msg" style="font-size:12px;color:var(--np)"></span>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="m-help">
   <div class="modal" style="max-width:680px;max-height:88vh;overflow-y:auto">
     <button class="cx" onclick="closeM('m-help')">&#215;</button>
