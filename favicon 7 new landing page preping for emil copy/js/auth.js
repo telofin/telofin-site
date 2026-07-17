@@ -226,6 +226,7 @@ function openManageUsers(){
   loadRoster();
   buildInviteClients();
   var ie=g('inv-email');if(ie)ie.value='';
+  var inote=g('inv-note');if(inote)inote.value='';
   var im=g('inv-msg');if(im)im.textContent='';
 }
 
@@ -269,8 +270,15 @@ async function sendInvite(){
     var exist=await sb.from('client_access').select('client_data_id,invited_email').in('client_data_id',boxIds);
     if(exist.error)throw exist.error;
     var have={};(exist.data||[]).forEach(function(r){if(r.invited_email&&r.invited_email.toLowerCase()===email.toLowerCase())have[r.client_data_id]=true;});
-    var toInsert=[];
-    picks.forEach(function(p){var box=boxByCid[p.cid];if(box&&!have[box])toInsert.push({client_data_id:box,invited_email:email,can_edit:p.canEdit});});
+    var toInsert=[],addedNames=[];
+    picks.forEach(function(p){
+      var box=boxByCid[p.cid];
+      if(box&&!have[box]){
+        toInsert.push({client_data_id:box,invited_email:email,can_edit:p.canEdit});
+        var c=(D.clients||[]).find(function(cl){return cl.id===p.cid;});
+        addedNames.push(c?c.name:p.cid);
+      }
+    });
     var added=0;
     if(toInsert.length){
       var ins=await sb.from('client_access').insert(toInsert);
@@ -278,10 +286,28 @@ async function sendInvite(){
       added=toInsert.length;
     }
     var skipped=picks.length-added;
+    // A3: email the invite (best-effort — the share is already created either way)
+    var emailNote='';
+    if(added){
+      try{
+        var er=await fetch('/.netlify/functions/send-invite',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            to:email,
+            inviterName:(_myProfile&&_myProfile.name)||'',
+            clients:addedNames,
+            note:(g('inv-note')?(g('inv-note').value||'').trim():''),
+            appUrl:window.location.origin+window.location.pathname
+          })
+        });
+        emailNote=er&&er.ok?' · email sent':' · (email not sent)';
+      }catch(e){console.warn('[users] invite email failed:',e);emailNote=' · (email not sent)';}
+    }
     if(msg)msg.textContent=added
-      ?('Invited '+email+' — '+added+' client'+(added>1?'s':'')+' shared'+(skipped?' ('+skipped+' already shared)':''))
+      ?('Invited '+email+' — '+added+' client'+(added>1?'s':'')+' shared'+(skipped?' ('+skipped+' already shared)':'')+emailNote)
       :'Already shared with '+email;
     g('inv-email').value='';
+    var inote2=g('inv-note');if(inote2)inote2.value='';
     Array.prototype.forEach.call(document.querySelectorAll('#inv-clients .inv-cb'),function(cb){cb.checked=false;});
     loadRoster();
   }catch(e){
