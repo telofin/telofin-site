@@ -216,6 +216,74 @@ async function saveMyProfile(){
   }
 }
 
+// ── Manage users (Teams roster) ─────────────────────────────────
+// A2.1: read-only roster of everyone the owner has shared clients with.
+// People are shown by email (owner can't yet read teammates' profile names —
+// that needs a co-member SELECT policy, added when name display lands).
+function openManageUsers(){
+  var m=document.getElementById('acct-menu');if(m)m.style.display='none';
+  openM('m-users');
+  loadRoster();
+}
+
+async function loadRoster(){
+  var host=g('users-body');if(!host)return;
+  var sb=sbClient();
+  if(!sb||!_user){host.innerHTML='<div style="color:var(--muted);font-size:13px">Please sign in.</div>';return;}
+  host.innerHTML='<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  try{
+    // My owned client boxes → map box id to the client's display name (from D.clients)
+    var boxRes=await sb.from('client_data').select('id,app_client_id').eq('owner_id',_user.id);
+    if(boxRes.error)throw boxRes.error;
+    var boxes=boxRes.data||[];
+    if(!boxes.length){host.innerHTML='<div style="color:var(--muted);font-size:13px">You don\'t have any clients to share yet.</div>';return;}
+    var boxName={};boxes.forEach(function(b){
+      var c=(D.clients||[]).find(function(cl){return cl.id===b.app_client_id;});
+      boxName[b.id]=c?c.name:b.app_client_id;
+    });
+    var boxIds=boxes.map(function(b){return b.id;});
+    // Shares + pending invites on those boxes
+    var acc=await sb.from('client_access').select('id,client_data_id,user_id,invited_email,can_edit').in('client_data_id',boxIds);
+    if(acc.error)throw acc.error;
+    var rows=acc.data||[];
+    if(!rows.length){host.innerHTML='<div style="color:var(--muted);font-size:13px">No one has been invited yet.</div>';return;}
+    // Group by person: a real teammate keys on user_id, a pending invite on its email
+    var people={};
+    rows.forEach(function(r){
+      var key=r.user_id||('email:'+(r.invited_email||'').toLowerCase());
+      if(!people[key])people[key]={email:r.invited_email||'',accepted:!!r.user_id,shares:[]};
+      if(r.user_id)people[key].accepted=true;
+      people[key].shares.push({client:boxName[r.client_data_id]||'—',canEdit:!!r.can_edit});
+    });
+    var html='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+      +'<thead><tr style="text-align:left;color:var(--muted);font-size:11px">'
+      +'<th style="padding:6px 8px;font-weight:500">Person</th>'
+      +'<th style="padding:6px 8px;font-weight:500">Clients &amp; access</th>'
+      +'<th style="padding:6px 8px;font-weight:500">Status</th></tr></thead><tbody>';
+    Object.keys(people).forEach(function(k){
+      var p=people[k];
+      var clients=p.shares.map(function(s){
+        var badge=s.canEdit
+          ?'<span class="badge" style="font-size:9px;background:var(--np-bg);color:var(--np)">Edit</span>'
+          :'<span class="badge" style="font-size:9px;background:var(--border);color:var(--muted)">View</span>';
+        return escHtml(s.client)+' '+badge;
+      }).join('<br>');
+      var status=p.accepted
+        ?'<span class="badge b-green" style="font-size:9px">Accepted</span>'
+        :'<span class="badge b-amber" style="font-size:9px">Pending</span>';
+      html+='<tr style="border-top:1px solid var(--border)">'
+        +'<td style="padding:8px;word-break:break-all;vertical-align:top">'+escHtml(p.email||'—')+'</td>'
+        +'<td style="padding:8px;line-height:1.9;vertical-align:top">'+clients+'</td>'
+        +'<td style="padding:8px;vertical-align:top">'+status+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    host.innerHTML=html;
+  }catch(e){
+    console.warn('[users] roster load failed:',e);
+    host.innerHTML='<div style="color:var(--red);font-size:13px">Could not load users: '+escHtml((e&&e.message)||String(e))+'</div>';
+  }
+}
+
 var _lastSynced=null;
 var _syncRetryTimer=null;
 var _syncRetryCount=0;
