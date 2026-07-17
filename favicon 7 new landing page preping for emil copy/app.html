@@ -471,6 +471,7 @@ tr:hover td{background:var(--bg)}
                   <div id="acct-menu-email" style="font-size:11px;color:var(--muted);word-break:break-all"></div>
                 </div>
                 <button class="acct-item" onclick="openProfile()"><i class="fas fa-user fa-fw"></i> Your profile</button>
+                <button class="acct-item" onclick="openManageUsers()"><i class="fas fa-users fa-fw"></i> Manage users</button>
                 <button class="acct-item" onclick="signOut()"><i class="fas fa-right-from-bracket fa-fw"></i> Sign out</button>
               </div>
             </span>
@@ -977,6 +978,14 @@ tr:hover td{background:var(--bg)}
 // Load after all scripts so every getTabs/afterSwitch patch is in place
 (function(){ if(typeof load==='function') load(); })();
 </script>
+<div class="overlay" id="m-users">
+  <div class="modal" style="max-width:580px">
+    <button class="cx" onclick="closeM('m-users')">&#215;</button>
+    <div class="m-title">Manage users</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">People you've shared clients with.</div>
+    <div id="users-body"></div>
+  </div>
+</div>
 <div class="overlay" id="m-profile">
   <div class="modal" style="max-width:420px">
     <button class="cx" onclick="closeM('m-profile')">&#215;</button>
