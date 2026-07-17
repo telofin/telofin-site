@@ -100,6 +100,7 @@ function signOut(){
   sb.auth.signOut().then(function(){
     _user=null;
     _dwOrgId=null;
+    _myProfile=null;
     clearLocalData();
     updateAuthUI();
     if(typeof renderAll==='function')renderAll();
@@ -121,7 +122,6 @@ function downloadAllData(){
 
 function updateAuthUI(){
   var signinBtn=document.getElementById('sb-signin-btn');
-  var signoutBtn=document.getElementById('sb-signout-btn');
   var syncMsg=document.getElementById('sb-sync-msg');
   var mobSignin=document.getElementById('mob-signin-btn');
   var mobSignout=document.getElementById('mob-signout-btn');
@@ -129,25 +129,90 @@ function updateAuthUI(){
   var sbDisclaim=document.getElementById('sb-disclaim');
   var mobDisclaim=document.getElementById('mob-disclaim-txt');
   var welcomeMsg=document.getElementById('welcome-data-msg');
-  var accountChip=document.getElementById('sb-account-chip');
+  var acctWrap=document.getElementById('acct-wrap');
   var accountEmail=document.getElementById('sb-account-email');
+  var menuEmail=document.getElementById('acct-menu-email');
+  var menuName=document.getElementById('acct-menu-name');
   if(_user){
     if(signinBtn)signinBtn.style.display='none';
-    if(signoutBtn)signoutBtn.style.display='block';
     if(syncMsg)syncMsg.style.display='block';
     if(mobSignin)mobSignin.style.display='none';
     if(mobSignout)mobSignout.style.display='inline-block';
-    if(accountChip)accountChip.style.display='inline-flex';
+    if(acctWrap)acctWrap.style.display='inline-block';
     if(accountEmail)accountEmail.textContent=_user.email||'';
+    if(menuEmail)menuEmail.textContent=_user.email||'';
+    if(menuName)menuName.textContent=(_myProfile&&_myProfile.name)?_myProfile.name:'Your account';
 
   }else{
     if(signinBtn)signinBtn.style.display='block';
-    if(signoutBtn)signoutBtn.style.display='none';
     if(syncMsg)syncMsg.style.display='none';
     if(mobSignin)mobSignin.style.display='inline-block';
     if(mobSignout)mobSignout.style.display='none';
-    if(accountChip)accountChip.style.display='none';
+    if(acctWrap)acctWrap.style.display='none';
+    var am=document.getElementById('acct-menu');if(am)am.style.display='none';
 
+  }
+}
+
+// ── Account menu + profile (Teams) ──────────────────────────────
+// The toolbar chip opens a small account menu. Items appear only once
+// their feature is built (owner's rule): today = Your profile + Sign out;
+// Billing / Manage users / Settings get added as their phases ship.
+var _myProfile=null;
+
+function toggleAcctMenu(e){
+  if(e){e.stopPropagation();}
+  var m=document.getElementById('acct-menu');if(!m)return;
+  var willOpen=(m.style.display!=='block');
+  m.style.display=willOpen?'block':'none';
+  if(willOpen){setTimeout(function(){document.addEventListener('click',_acctMenuOutside);},0);}
+  else{document.removeEventListener('click',_acctMenuOutside);}
+}
+function _acctMenuOutside(e){
+  var wrap=document.getElementById('acct-wrap');
+  if(wrap&&wrap.contains(e.target))return;// clicks inside the menu/chip stay open
+  var m=document.getElementById('acct-menu');if(m)m.style.display='none';
+  document.removeEventListener('click',_acctMenuOutside);
+}
+
+// Reads this user's own profile row (name/firm/phone) → caches + refreshes the menu label.
+async function loadMyProfile(){
+  var sb=sbClient();if(!sb||!_user)return;
+  try{
+    var res=await sb.from('profiles').select('name,firm,phone,role').eq('user_id',_user.id).maybeSingle();
+    _myProfile=(res&&res.data)?res.data:null;
+  }catch(e){console.warn('[profile] load failed:',e);_myProfile=null;}
+  if(typeof updateAuthUI==='function')updateAuthUI();
+}
+
+function openProfile(){
+  var m=document.getElementById('acct-menu');if(m)m.style.display='none';
+  var em=g('prof-email');if(em)em.textContent=_user?(_user.email||''):'';
+  g('prof-name').value=(_myProfile&&_myProfile.name)||'';
+  g('prof-firm').value=(_myProfile&&_myProfile.firm)||'';
+  g('prof-phone').value=(_myProfile&&_myProfile.phone)||'';
+  var msg=g('prof-msg');if(msg)msg.textContent='';
+  openM('m-profile');
+}
+
+async function saveMyProfile(){
+  var sb=sbClient();if(!sb||!_user){alert('Please sign in first.');return;}
+  var name=(g('prof-name').value||'').trim();
+  var firm=(g('prof-firm').value||'').trim();
+  var phone=(g('prof-phone').value||'').trim();
+  if(!name){alert('Please enter your name.');return;}
+  var msg=g('prof-msg');if(msg)msg.textContent='Saving…';
+  try{
+    var res=await sb.from('profiles').upsert({user_id:_user.id,name:name,firm:firm||null,phone:phone||null},{onConflict:'user_id'});
+    if(res.error)throw res.error;
+    _myProfile=Object.assign({},_myProfile||{},{name:name,firm:firm||null,phone:phone||null});
+    if(typeof updateAuthUI==='function')updateAuthUI();
+    if(msg)msg.textContent='Saved';
+    setTimeout(function(){closeM('m-profile');},650);
+  }catch(e){
+    console.warn('[profile] save failed:',e);
+    if(msg)msg.textContent='';
+    alert('Could not save profile: '+((e&&e.message)||e));
   }
 }
 
@@ -202,6 +267,7 @@ var _loadedServerTime=null;
 async function loadFromSupabase(){
   var sb=sbClient();if(!sb||!_user)return false;
   await claimInvites();// Teams: accept invites addressed to my email → active shares, before loading boxes
+  loadMyProfile();// Teams: fetch my name/firm/phone for the account menu (non-blocking)
   try{
     var res=await sb.from('User_Data').select('data,updated_at').eq('user_id',_user.id).maybeSingle();
     if(res.error){
