@@ -253,7 +253,7 @@ async function loadRoster(){
       var key=r.user_id||('email:'+(r.invited_email||'').toLowerCase());
       if(!people[key])people[key]={email:r.invited_email||'',accepted:!!r.user_id,shares:[]};
       if(r.user_id)people[key].accepted=true;
-      people[key].shares.push({client:boxName[r.client_data_id]||'—',canEdit:!!r.can_edit});
+      people[key].shares.push({id:r.id,client:boxName[r.client_data_id]||'—',canEdit:!!r.can_edit});
     });
     var html='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
       +'<thead><tr style="text-align:left;color:var(--muted);font-size:11px">'
@@ -263,11 +263,15 @@ async function loadRoster(){
     Object.keys(people).forEach(function(k){
       var p=people[k];
       var clients=p.shares.map(function(s){
-        var badge=s.canEdit
-          ?'<span class="badge" style="font-size:9px;background:var(--np-bg);color:var(--np)">Edit</span>'
-          :'<span class="badge" style="font-size:9px;background:var(--border);color:var(--muted)">View</span>';
-        return escHtml(s.client)+' '+badge;
-      }).join('<br>');
+        return '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;flex-wrap:wrap">'
+          +'<span style="min-width:110px">'+escHtml(s.client)+'</span>'
+          +'<select onchange="setShareEdit(\''+s.id+'\',this.value===\'edit\')" style="font-size:11px;padding:3px 6px;width:auto">'
+            +'<option value="view"'+(s.canEdit?'':' selected')+'>View only</option>'
+            +'<option value="edit"'+(s.canEdit?' selected':'')+'>Can edit</option>'
+          +'</select>'
+          +'<button class="add-btn" style="font-size:10px;padding:2px 8px;color:var(--red);border-color:var(--red-bg)" onclick="removeShare(\''+s.id+'\')">Remove</button>'
+          +'</div>';
+      }).join('');
       var status=p.accepted
         ?'<span class="badge b-green" style="font-size:9px">Accepted</span>'
         :'<span class="badge b-amber" style="font-size:9px">Pending</span>';
@@ -282,6 +286,33 @@ async function loadRoster(){
     console.warn('[users] roster load failed:',e);
     host.innerHTML='<div style="color:var(--red);font-size:13px">Could not load users: '+escHtml((e&&e.message)||String(e))+'</div>';
   }
+}
+
+// A2.2: change a share's access (view↔edit). RLS client_access_owner_write gates it.
+async function setShareEdit(accessId,canEdit){
+  var sb=sbClient();if(!sb||!_user)return;
+  try{
+    var res=await sb.from('client_access').update({can_edit:!!canEdit}).eq('id',accessId);
+    if(res.error)throw res.error;
+  }catch(e){
+    console.warn('[users] setShareEdit failed:',e);
+    alert('Could not update access: '+((e&&e.message)||e));
+  }
+  loadRoster();
+}
+
+// A2.2: revoke a share. Deletes the client_access row only — the client's books are untouched.
+async function removeShare(accessId){
+  if(!confirm('Remove this person’s access to this client?\n\nTheir access is revoked; the client’s books are not affected.'))return;
+  var sb=sbClient();if(!sb||!_user)return;
+  try{
+    var res=await sb.from('client_access').delete().eq('id',accessId);
+    if(res.error)throw res.error;
+  }catch(e){
+    console.warn('[users] removeShare failed:',e);
+    alert('Could not remove access: '+((e&&e.message)||e));
+  }
+  loadRoster();
 }
 
 var _lastSynced=null;
