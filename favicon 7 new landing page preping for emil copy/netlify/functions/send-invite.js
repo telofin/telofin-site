@@ -51,7 +51,8 @@ exports.handler = async function(event) {
         noteHtml +
         '<p style="font-size:15px;line-height:1.6">To accept, sign in with <strong>this email address</strong> (' +
           esc(to) + ') and you’ll have access:</p>' +
-        '<p style="margin:24px 0"><a href="' + esc(appUrl) +
+        // #signin makes the app auto-open the login modal on load (handled in features.js)
+        '<p style="margin:24px 0"><a href="' + esc(appUrl) + '#signin' +
           '" style="background:#0f6e56;color:#fff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;font-weight:600">Sign in to Clarity</a></p>' +
         '<p style="font-size:12px;color:#888;line-height:1.6">If you weren’t expecting this, you can ignore this email.</p>' +
       '</div>';
