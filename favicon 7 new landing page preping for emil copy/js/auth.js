@@ -224,6 +224,71 @@ function openManageUsers(){
   var m=document.getElementById('acct-menu');if(m)m.style.display='none';
   openM('m-users');
   loadRoster();
+  buildInviteClients();
+  var ie=g('inv-email');if(ie)ie.value='';
+  var im=g('inv-msg');if(im)im.textContent='';
+}
+
+// A2.3: the invite form's client checklist — the owner's OWN clients (skip shared-in).
+function buildInviteClients(){
+  var host=g('inv-clients');if(!host)return;
+  var owned=(D.clients||[]).filter(function(c){return c&&!c._shared;});
+  if(!owned.length){host.innerHTML='<div style="font-size:12px;color:var(--muted)">No clients to share yet.</div>';return;}
+  host.innerHTML=owned.map(function(c){
+    var cid=escHtml(c.id);
+    return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0">'
+      +'<label style="display:flex;align-items:center;gap:6px;flex:1;font-size:12.5px"><input type="checkbox" class="inv-cb" data-cid="'+cid+'"> '+escHtml(c.name||c.id)+'</label>'
+      +'<select class="inv-acc" data-cid="'+cid+'" style="width:auto;font-size:11px;padding:3px 6px"><option value="view">View only</option><option value="edit">Can edit</option></select>'
+      +'</div>';
+  }).join('');
+}
+
+// A2.3: create the share(s). One client_access row per picked client (pending invite,
+// user_id null — claimInvites stamps it when they sign in). RLS client_access_owner_write
+// gates the insert; a matching email already on a client is skipped to avoid duplicates.
+async function sendInvite(){
+  var sb=sbClient();if(!sb||!_user){alert('Please sign in first.');return;}
+  var email=(g('inv-email').value||'').trim();
+  if(!email||email.indexOf('@')<1){alert('Please enter a valid email.');return;}
+  var picks=[];
+  Array.prototype.forEach.call(document.querySelectorAll('#inv-clients .inv-cb'),function(cb){
+    if(cb.checked){
+      var cid=cb.getAttribute('data-cid');
+      var sel=document.querySelector('#inv-clients .inv-acc[data-cid="'+cid+'"]');
+      picks.push({cid:cid,canEdit:!!(sel&&sel.value==='edit')});
+    }
+  });
+  if(!picks.length){alert('Pick at least one client to share.');return;}
+  var msg=g('inv-msg');if(msg)msg.textContent='Sending…';
+  try{
+    var boxRes=await sb.from('client_data').select('id,app_client_id').eq('owner_id',_user.id);
+    if(boxRes.error)throw boxRes.error;
+    var boxByCid={};(boxRes.data||[]).forEach(function(b){boxByCid[b.app_client_id]=b.id;});
+    var boxIds=picks.map(function(p){return boxByCid[p.cid];}).filter(Boolean);
+    // Skip any client already shared with this email (pending or accepted)
+    var exist=await sb.from('client_access').select('client_data_id,invited_email').in('client_data_id',boxIds);
+    if(exist.error)throw exist.error;
+    var have={};(exist.data||[]).forEach(function(r){if(r.invited_email&&r.invited_email.toLowerCase()===email.toLowerCase())have[r.client_data_id]=true;});
+    var toInsert=[];
+    picks.forEach(function(p){var box=boxByCid[p.cid];if(box&&!have[box])toInsert.push({client_data_id:box,invited_email:email,can_edit:p.canEdit});});
+    var added=0;
+    if(toInsert.length){
+      var ins=await sb.from('client_access').insert(toInsert);
+      if(ins.error)throw ins.error;
+      added=toInsert.length;
+    }
+    var skipped=picks.length-added;
+    if(msg)msg.textContent=added
+      ?('Invited '+email+' — '+added+' client'+(added>1?'s':'')+' shared'+(skipped?' ('+skipped+' already shared)':''))
+      :'Already shared with '+email;
+    g('inv-email').value='';
+    Array.prototype.forEach.call(document.querySelectorAll('#inv-clients .inv-cb'),function(cb){cb.checked=false;});
+    loadRoster();
+  }catch(e){
+    console.warn('[users] sendInvite failed:',e);
+    if(msg)msg.textContent='';
+    alert('Could not send invite: '+((e&&e.message)||e));
+  }
 }
 
 async function loadRoster(){
