@@ -461,6 +461,7 @@ tr:hover td{background:var(--bg)}
             <button class="add-btn" onclick="(function(){var c=gc();if(c){var k='fye-checked-'+c.id+'-'+new Date().getFullYear();try{localStorage.removeItem(k);}catch(e){}checkFYEExpiry(c);}})()" title="Review unreconciled transactions at fiscal year end">FYE review</button>
             <button class="add-btn" onclick="clearSampleData()" style="color:var(--red);border-color:var(--red-bg)">Clear data</button>
             <button class="add-btn" onclick="removeClient()" style="color:var(--red);border-color:var(--red-bg)">Remove</button>
+            <span id="sb-account-chip" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:0 4px" title="Signed-in account"><i class="fas fa-user-circle"></i><span id="sb-account-email"></span></span>
             <button id="sb-signout-btn" class="add-btn" onclick="signOut()" style="display:none">Sign out</button>
           </div>
         </div>
