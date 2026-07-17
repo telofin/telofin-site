@@ -129,12 +129,16 @@ function updateAuthUI(){
   var sbDisclaim=document.getElementById('sb-disclaim');
   var mobDisclaim=document.getElementById('mob-disclaim-txt');
   var welcomeMsg=document.getElementById('welcome-data-msg');
+  var accountChip=document.getElementById('sb-account-chip');
+  var accountEmail=document.getElementById('sb-account-email');
   if(_user){
     if(signinBtn)signinBtn.style.display='none';
     if(signoutBtn)signoutBtn.style.display='block';
     if(syncMsg)syncMsg.style.display='block';
     if(mobSignin)mobSignin.style.display='none';
     if(mobSignout)mobSignout.style.display='inline-block';
+    if(accountChip)accountChip.style.display='inline-flex';
+    if(accountEmail)accountEmail.textContent=_user.email||'';
 
   }else{
     if(signinBtn)signinBtn.style.display='block';
@@ -142,6 +146,7 @@ function updateAuthUI(){
     if(syncMsg)syncMsg.style.display='none';
     if(mobSignin)mobSignin.style.display='inline-block';
     if(mobSignout)mobSignout.style.display='none';
+    if(accountChip)accountChip.style.display='none';
 
   }
 }
