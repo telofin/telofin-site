@@ -699,6 +699,18 @@ async function _migrateBlobToTables(sb, userId, oldBlob) {
 // logic as the automatic path (backup-first, only-if-needed, scoped to
 // this user's own session) — this is not a separate, riskier code path.
 async function forceMigrationCheck() {
+  // Local data repair (runs whether signed in or not): collapse any duplicate ledger entries
+  // on all loaded clients, so a user can fix an already-inflated General Ledger on demand
+  // instead of waiting for the next fresh load. Idempotent + safe.
+  var _ledgerCleaned = 0;
+  try {
+    (D.clients || []).forEach(function(cl){ _ledgerCleaned += (typeof healDuplicateLedger === 'function' ? (healDuplicateLedger(cl) || 0) : 0); });
+    if (_ledgerCleaned) { if (typeof sv === 'function') sv(); if (typeof renderAll === 'function') renderAll(); }
+  } catch(e) { console.warn('[migration] ledger dedup failed:', e); }
+  if (_ledgerCleaned) {
+    alert('Cleaned up ' + _ledgerCleaned + ' duplicate ledger entr' + (_ledgerCleaned === 1 ? 'y' : 'ies') + '.\n\nYour General Ledger and balance sheet will now match your transactions.');
+  }
+
   var sb = sbClient();
   if (!sb || !_user) {
     alert('Not signed in — nothing to migrate.');

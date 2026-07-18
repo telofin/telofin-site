@@ -318,6 +318,9 @@ function migrateD(){
       if(donorLinkHealSummary)_ACCT_HEAL_SUMMARIES.push(donorLinkHealSummary);
       // ── MIGRATION: backfill missing donation ids (needed for Supabase dual-write, silent)
       healMissingDonationIds(c);
+      // ── MIGRATION: de-duplicate ledger entries (a re-post bug could stack identical lines,
+      //    inflating the GL/balance sheet while income & donor records stayed correct)
+      healDuplicateLedger(c);
     });
   // Deduplicate: remove empty default clients if a data-filled one of same type exists
   var seen={};D.clients=D.clients.filter(function(cl){var k=cl.type;if(seen[k]){var hasD=(cl.income&&cl.income.length)||(cl.expenses&&cl.expenses.length)||(cl.revenue&&cl.revenue.length)||(cl.grants&&cl.grants.length)||(cl.donors&&cl.donors.length);return hasD;}seen[k]=true;return true;});
@@ -327,6 +330,22 @@ function migrateD(){
 // renderApp(): routes to the right screen based on D state.
 // Safe to call multiple times — always shows the correct view.
 // migrateToLedger(c): walk all existing transactions and build ledgerEntries[].
+// De-duplicates ledgerEntries: if the same source posted identical ACTIVE lines more than
+// once (the re-post bug that inflated the GL while income/donor records stayed correct),
+// keep the first and supersede the rest. Idempotent — safe on every load. Splits and
+// multi-line postings differ in their lines signature, so they're never collapsed.
+function healDuplicateLedger(c){
+  if(!c||!c.ledgerEntries||!c.ledgerEntries.length)return 0;
+  var seen={},removed=0;
+  c.ledgerEntries.forEach(function(e){
+    if(e.superseded||e.sourceType==='void'||!e.sourceId||!e.lines||!e.lines.length)return;
+    var sig=e.sourceId+'|'+e.lines.map(function(l){return (l.accountCode||'')+':'+(l.dr||0)+':'+(l.cr||0);}).join(',');
+    if(seen[sig]){e.superseded=true;removed++;if(typeof dwUpsertLedgerEntry==='function')dwUpsertLedgerEntry(c,e);}
+    else{seen[sig]=true;}
+  });
+  return removed;
+}
+
 // Idempotent — skips any transaction whose id already has a ledger entry.
 // Called manually via "Rebuild ledger" button, or automatically in migrateD
 // for clients whose ledgerEntries[] is empty.

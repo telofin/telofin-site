@@ -244,6 +244,17 @@ function postToLedger(c,debitCode,creditCode,amt,memo,sourceType,sourceId){
       console.warn('[COA guard] Crediting a debit-normal account:',creditCode,_crAcct.name,'type:',_crAcct.type,'memo:',memo);
     }
   }
+  // Idempotency: never post a second identical ACTIVE entry for the same source (prevents
+  // duplicate ledger lines from a re-post). Split/multi-line postings differ in accounts or
+  // amounts, so they're never blocked. Edits supersede the old entry first, so they still post.
+  if(sourceId){
+    var _abs=Math.abs(n);
+    var _dupLE=c.ledgerEntries.find(function(e){
+      return !e.superseded&&e.sourceType!=='void'&&e.sourceId===sourceId&&e.lines&&e.lines.length===2
+        &&e.lines[0].accountCode===debitCode&&e.lines[1].accountCode===creditCode&&Math.abs(e.lines[0].dr||0)===_abs;
+    });
+    if(_dupLE)return _dupLE;
+  }
   var entry={
     id:uid(),
     date:todayNum(),
