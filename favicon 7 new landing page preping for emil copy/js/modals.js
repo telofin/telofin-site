@@ -6,6 +6,7 @@
 // EI/DONOR_EI must only be set immediately before openM(), never held across renders.
 function openM(id){
   var el=g(id);if(el)el.classList.add('open');
+  if(id==='m-upgrade'&&typeof renderUpgradeCTAs==='function')renderUpgradeCTAs();
   if(id==='m-import'){updateTpl(g('imp-type')?g('imp-type').value:'expenses');_importPending=null;if(g('imp-preview')){g('imp-preview').style.display='none';g('imp-preview').innerHTML='';}if(g('imp-preview-actions'))g('imp-preview-actions').style.display='none';if(g('imp-go-btn'))g('imp-go-btn').style.display='';if(g('imp-file'))g('imp-file').value='';if(g('imp-pdf-file'))g('imp-pdf-file').value='';}
   if(id==='m-proc'){
     var c=gc();var sel=g('proc-grant');if(sel&&c){
@@ -944,7 +945,15 @@ function confirmImport(){
       var dfund=String(row[fk(['fund','campaign','restriction'])]||'').trim();
       var donor=c.donors.find(function(d){return d.name.toLowerCase()===dname.toLowerCase();});
       if(!donor){donor={id:uid(),name:dname,email:demail,phone:'',address:'',notes:'',donations:[]};c.donors.push(donor);}
-      if(damt>0)donor.donations.push({amt:damt,date:ddate,fund:dfund,rec:'No',ty:'No',rst:'Unrestricted',audit:[]});
+      if(damt>0){
+        // Post the imported gift the same way the manual donation form does, so it
+        // reaches income / the ledger / 990 totals instead of only living on the donor
+        // record (the bug that left imported gifts off the books — see healUnpostedDonations).
+        var _dRec={id:uid(),amt:damt,date:fmtDate(ddate),fund:dfund,proj:'',rec:'No',ty:'No',rst:'unrestricted',inkind:'No',fmv:0,itemDescription:'',qpq:0,auctioned:false,audit:[]};
+        donor.donations.push(_dRec);
+        if(typeof dwUpsertDonation==='function')dwUpsertDonation(c,donor,_dRec);
+        if(typeof _postDonationLedger==='function')_postDonationLedger(c,c.donors.indexOf(donor),_dRec);
+      }
     }
     else if(type==='budget'){
       if(!c.budgetItems)c.budgetItems=[];

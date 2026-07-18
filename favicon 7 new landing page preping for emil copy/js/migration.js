@@ -704,7 +704,12 @@ async function forceMigrationCheck() {
   // instead of waiting for the next fresh load. Idempotent + safe.
   var _ledgerCleaned = 0;
   try {
-    (D.clients || []).forEach(function(cl){ _ledgerCleaned += (typeof healDuplicateLedger === 'function' ? (healDuplicateLedger(cl) || 0) : 0); });
+    (D.clients || []).forEach(function(cl){
+      _ledgerCleaned += (typeof healDuplicateLedger === 'function' ? (healDuplicateLedger(cl) || 0) : 0);
+      // Also retire orphaned entries whose source row is gone (different-sourceId
+      // duplicates that healDuplicateLedger can't see) — see healOrphanLedger
+      _ledgerCleaned += (typeof healOrphanLedger === 'function' ? (healOrphanLedger(cl) || 0) : 0);
+    });
     if (_ledgerCleaned) { if (typeof sv === 'function') sv(); if (typeof renderAll === 'function') renderAll(); }
   } catch(e) { console.warn('[migration] ledger dedup failed:', e); }
   if (_ledgerCleaned) {

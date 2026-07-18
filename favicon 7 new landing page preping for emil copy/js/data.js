@@ -318,9 +318,18 @@ function migrateD(){
       if(donorLinkHealSummary)_ACCT_HEAL_SUMMARIES.push(donorLinkHealSummary);
       // ── MIGRATION: backfill missing donation ids (needed for Supabase dual-write, silent)
       healMissingDonationIds(c);
+      // ── ONGOING: post any Donors-tab donation that still isn't on the ledger. Unlike
+      //    healMissingDonationIncome (one-time), this runs every load so donations entered
+      //    AFTER that migration — or via any path that skipped _postDonationLedger — still post.
+      var unpostedHealSummary=healUnpostedDonations(c);
+      if(unpostedHealSummary)_ACCT_HEAL_SUMMARIES.push(unpostedHealSummary);
       // ── MIGRATION: de-duplicate ledger entries (a re-post bug could stack identical lines,
       //    inflating the GL/balance sheet while income & donor records stayed correct)
       healDuplicateLedger(c);
+      // ── MIGRATION: retire orphaned ledger entries whose source row is gone
+      //    (import/migration/void leftovers that healDuplicateLedger can't collapse
+      //    because their sourceIds all differ — see healOrphanLedger)
+      healOrphanLedger(c);
     });
   // Deduplicate: remove empty default clients if a data-filled one of same type exists
   var seen={};D.clients=D.clients.filter(function(cl){var k=cl.type;if(seen[k]){var hasD=(cl.income&&cl.income.length)||(cl.expenses&&cl.expenses.length)||(cl.revenue&&cl.revenue.length)||(cl.grants&&cl.grants.length)||(cl.donors&&cl.donors.length);return hasD;}seen[k]=true;return true;});
@@ -342,6 +351,39 @@ function healDuplicateLedger(c){
     var sig=e.sourceId+'|'+e.lines.map(function(l){return (l.accountCode||'')+':'+(l.dr||0)+':'+(l.cr||0);}).join(',');
     if(seen[sig]){e.superseded=true;removed++;if(typeof dwUpsertLedgerEntry==='function')dwUpsertLedgerEntry(c,e);}
     else{seen[sig]=true;}
+  });
+  return removed;
+}
+
+// healOrphanLedger(c): a second, distinct class of ledger inflation from
+// healDuplicateLedger's same-sourceId re-posts. Import/migration/void paths could
+// leave ACTIVE ledger entries whose sourceId no longer resolves to any live source
+// row (e.g. the same gift posted once by a bank import, once by the first cloud
+// sync, and once by the real donation, each under its own id). Because their
+// sourceIds all differ, healDuplicateLedger can't collapse them, and deleting the
+// real income row only voids the line matching THAT row's id — the orphans survive
+// and keep inflating the GL / balance sheet. This supersedes any active, non-void
+// entry whose (base) sourceId points at no live, non-deleted source record.
+// Manual journal lines (sourceId '') and synthetic opening-equity postings are
+// intentionally source-less and left untouched. Suffixed postings (payroll
+// grossId:net, revenue id:stax, loan id:pmt:N:principal) resolve via their base id,
+// so they're never mistaken for orphans. Idempotent — safe on every load.
+function healOrphanLedger(c){
+  if(!c||!c.ledgerEntries||!c.ledgerEntries.length)return 0;
+  var live={};
+  function add(arr){if(arr&&arr.length)arr.forEach(function(x){if(x&&x.id&&!x.deleted)live[x.id]=true;});}
+  add(c.income);add(c.expenses);add(c.revenue);add(c.invoices);add(c.bills);
+  add(c.loans);add(c.fixedAssets);add(c.journalEntries);add(c.pettyCash);
+  add(c.reimbursements);add(c.payroll);
+  (c.donors||[]).forEach(function(d){add(d.donations);});
+  var removed=0;
+  c.ledgerEntries.forEach(function(e){
+    if(e.superseded||e.sourceType==='void'||e.sourceType==='opening-equity')return;
+    if(!e.sourceId)return;// manual journal line — leave alone
+    var baseId=String(e.sourceId).split(':')[0];// strip :net / :stax / :pmt:* suffixes
+    if(live[baseId])return;// backed by a live source row — keep
+    e.superseded=true;removed++;
+    if(typeof dwUpsertLedgerEntry==='function')dwUpsertLedgerEntry(c,e);
   });
   return removed;
 }
@@ -764,6 +806,57 @@ function healMissingDonationIncome(c){
     inkindFundraisingCount:inkindFundraising.length,
     inkindFundraisingTotal:inkindFundraisingTotal
   };
+}
+
+// healUnpostedDonations(c): posts any Donors-tab donation that never reached the
+// ledger. Same dup-checked backfill as healMissingDonationIncome, but WITHOUT the
+// one-time _donationIncomeHealed guard, so donations entered AFTER that one-time
+// migration ran — or through any path that skipped _postDonationLedger (e.g. a
+// bulk/import entry that created the donor+donation but no income row) — still get
+// an income entry and ledger posting. Idempotent per donation: skips anything
+// already linked (incomeRef) or that fuzzy-matches an existing non-donation income
+// row, so it never double-posts. On a client's first load it's a no-op, because
+// healMissingDonationIncome (which runs just before it) has already linked every
+// donation. Returns a summary when it posts something (for the healing notice).
+function healUnpostedDonations(c){
+  if(!c||!c.donors||!c.donors.length)return null;
+  if(!c.income)c.income=[];
+  var backfilled=[];
+  c.donors.forEach(function(d){
+    (d.donations||[]).forEach(function(dn){
+      if(dn.incomeRef)return;      // already posted / linked
+      if(dn.inkind==='Yes')return; // in-kind handled by healMissingDonationIncome
+      var donorName=d.name||'Unknown donor';
+      var amt=Number(dn.amt||0);
+      if(!amt)return;
+      var donorNameLc=donorName.toLowerCase();
+      // Don't create a duplicate if this gift also arrived as a plain (non-donation)
+      // income row — same heuristic as healMissingDonationIncome / saveDonation().
+      var match=(c.income||[]).find(function(r){
+        if(r.donationRef||r.inkindRef)return false;
+        var amtMatch=Math.abs(Number(r.recv||r.amt||0)-amt)<0.01;
+        var dateDiff=r.date&&dn.date?Math.abs(new Date(r.date)-new Date(dn.date))/(1000*60*60*24):999;
+        var rName=(r.vendor1099||r.name||'').toLowerCase();
+        var nameMatch=!donorNameLc||rName.indexOf(donorNameLc)>=0||donorNameLc.indexOf(rName)>=0;
+        return amtMatch&&dateDiff<=5&&nameMatch;
+      });
+      if(!dn.id)dn.id=uid();
+      if(match){dn.incomeRef=match.id;return;}
+      var _n=(typeof normalizeRst==='function')?normalizeRst(dn.rst):(dn.rst||'unrestricted');
+      var netClass=_n==='permanently_restricted'?'with_restriction_perm':_n==='temporarily_restricted'?'with_restriction':'without_restriction';
+      var incItem={id:uid(),name:donorName,cat:'Individual donation',status:'Received',proj:amt,recv:amt,date:dn.date||'',fund:dn.fund||'',acctCode:'4010',donationRef:true,netClass:netClass,donorId:d.id,audit:[]};
+      c.income.push(incItem);
+      if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,incItem);
+      dn.incomeRef=incItem.id;
+      backfilled.push({amt:amt,donor:donorName});
+    });
+  });
+  if(backfilled.length)migrateToLedger(c);
+  if(!backfilled.length)return null;
+  return{clientId:c.id,clientName:c.name,recoded:[],
+    donationsBackfilled:backfilled.length,
+    donationsBackfilledTotal:backfilled.reduce(function(s,b){return s+b.amt;},0),
+    donationsLinked:0,inkindFundraisingCount:0,inkindFundraisingTotal:0};
 }
 
 // ── MISSING DONOR-LINK HEALING ───────────────────────────────────────────────
