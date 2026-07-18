@@ -224,6 +224,20 @@ tr:hover td{background:var(--bg)}
 .overlay.open{display:flex}
 .acct-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;background:none;border:none;border-radius:7px;font-size:12.5px;color:var(--text);cursor:pointer;font-family:inherit;text-align:left}
 .acct-item:hover{background:var(--np-bg)}
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:1rem 0}
+.plan-card{border:1px solid var(--border);border-radius:12px;padding:1rem;display:flex;flex-direction:column}
+.plan-card.featured{border-color:var(--np);box-shadow:0 0 0 1px var(--np) inset}
+.plan-card.current{background:var(--np-bg)}
+.plan-name{font-weight:600;font-size:14px;margin-bottom:.1rem}
+.plan-price{font-size:22px;font-weight:700;margin-bottom:.1rem}
+.plan-price small{font-size:11px;font-weight:400;color:var(--muted)}
+.plan-badge{display:inline-block;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;background:var(--np);color:#fff;border-radius:5px;padding:2px 6px;margin-bottom:.4rem}
+.plan-feat{font-size:11.5px;line-height:1.85;color:var(--text);margin:.5rem 0;flex:1}
+.plan-feat .no{color:var(--muted)}
+.plan-cta{margin-top:.5rem;padding:9px;border-radius:8px;border:none;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;background:var(--np);color:#fff}
+.plan-cta.sec{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.plan-cta:disabled{opacity:.65;cursor:default}
+@media(max-width:600px){.plan-grid{grid-template-columns:1fr}}
 .modal{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:1.5rem;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
 .modal::-webkit-scrollbar{width:8px}
 .modal::-webkit-scrollbar-track{background:transparent}
@@ -344,8 +358,8 @@ tr:hover td{background:var(--bg)}
       <button class="lnk green" onclick="openFB()"><i class="fas fa-comment"></i> What do you wish we had?</button>
       <button class="lnk" onclick="clearSampleData()">Clear sample data</button>
       <div style="margin:.75rem 0;padding:.875rem;background:var(--text);border-radius:8px;cursor:pointer" onclick="openM('m-upgrade')">
-        <div style="font-size:11px;font-weight:500;color:#fff">Clarity Teams coming soon</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:3px;line-height:1.5">Sign in to sync your data across devices.</div>
+        <div style="font-size:11px;font-weight:500;color:#fff">Compare plans</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:3px;line-height:1.5">Cloud sync, bank connect &amp; teammates — from $9/mo.</div>
       </div>
       <div id="sb-sync-msg" style="display:none;font-size:12px;color:var(--np);margin-top:4px"></div>
       <button id="sb-signin-btn" class="lnk green" onclick="showAuthScreen()" style="margin-top:4px;font-size:12px">Sign in to sync devices</button>
@@ -369,6 +383,16 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <div id="mob-disclaim-txt" style="display:none;background:var(--bg);border-bottom:1px solid var(--border);padding:.5rem 1rem;font-size:11px;color:var(--muted);line-height:1.5;text-align:center">Data is saved locally in your browser and, when signed in, securely synced to the cloud for access across devices.</div>
+    <div id="dataterms-strip" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--border);padding:7px 14px;font-size:11.5px;color:var(--text)">
+      <span style="color:var(--amber,#b45309)"><i class="fas fa-triangle-exclamation"></i> <strong>Local-only</strong></span>
+      <span style="color:var(--muted)">Your data is saved on this device — back up regularly or you could lose it.</span>
+      <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="add-btn" style="font-size:10px;padding:2px 8px" onclick="exportAllData()"><i class="fas fa-file-excel"></i> Export to Excel</button>
+        <button class="add-btn" style="font-size:10px;padding:2px 8px" onclick="downloadAllData()">Full backup</button>
+        <button class="add-btn" style="font-size:10px;padding:2px 8px;background:var(--np);color:#fff;border-color:var(--np)" onclick="showAuthScreen()">Sign in to sync</button>
+        <button class="add-btn" style="font-size:10px;padding:2px 7px;color:var(--muted)" onclick="dismissDataStrip()" title="Dismiss for now">&#215;</button>
+      </span>
+    </div>
     <!-- WELCOME -->
     <div id="home" class="welcome" style="display:none">
       <div class="w-inner">
@@ -455,7 +479,7 @@ tr:hover td{background:var(--bg)}
           <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
             <button class="add-btn" onclick="refreshData()">↻ Refresh</button>
             <button class="add-btn" onclick="manualSync()" style="background:var(--np);color:#fff;border-color:var(--np)"><i class="fas fa-cloud"></i> Save to cloud</button>
-            <button id="migration-check-btn" class="add-btn" onclick="if(typeof forceMigrationCheck==='function')forceMigrationCheck();" title="Check or retry the one-time move to the new data storage">Check data migration</button>
+            <button id="migration-check-btn" class="add-btn" onclick="if(typeof forceMigrationCheck==='function')forceMigrationCheck();" title="Check the data migration and repair data issues (e.g. duplicate ledger entries)">Check data migration</button>
             <button id="mob-pin-btn" class="add-btn" onclick="pinCurrentClient()" style="display:none"></button>
             <button id="wc-bookmark-btn" class="add-btn" onclick="if(typeof wcBookmark==='function')wcBookmark()" title="Bookmark current position"><i class="fas fa-bookmark"></i></button>
             <button class="add-btn" onclick="showAddClient()">+ New client</button>
@@ -469,8 +493,10 @@ tr:hover td{background:var(--bg)}
                 <div style="padding:8px 10px;border-bottom:1px solid var(--border);margin-bottom:4px">
                   <div id="acct-menu-name" style="font-size:13px;font-weight:600;color:var(--text)"></div>
                   <div id="acct-menu-email" style="font-size:11px;color:var(--muted);word-break:break-all"></div>
+                  <div id="acct-menu-plan" style="font-size:10px;color:var(--np);font-weight:600;margin-top:3px"></div>
                 </div>
                 <button class="acct-item" onclick="openProfile()"><i class="fas fa-user fa-fw"></i> Your profile</button>
+                <button class="acct-item" onclick="openBilling()"><i class="fas fa-credit-card fa-fw"></i> Billing &amp; subscription</button>
                 <button class="acct-item" onclick="openManageUsers()"><i class="fas fa-users fa-fw"></i> Manage users</button>
                 <button class="acct-item" onclick="signOut()"><i class="fas fa-right-from-bracket fa-fw"></i> Sign out</button>
               </div>
@@ -845,46 +871,57 @@ tr:hover td{background:var(--bg)}
 </div>
 
 <div class="overlay" id="m-upgrade">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:720px">
     <button class="cx" onclick="closeM('m-upgrade')">&#215;</button>
-    <div style="text-align:center;margin-bottom:1.25rem">
-      <div style="font-size:28px;margin-bottom:.5rem"><i class="fas fa-bolt"></i></div>
-      <div class="m-title" style="text-align:center;margin-bottom:.25rem">Clarity Pro — coming soon</div>
-      <div id="upgrade-reason" style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:.25rem"></div>
-      <div style="font-size:13px;color:var(--muted);line-height:1.6">Clarity is <strong>free while we grow</strong>. When Pro launches, here's how it breaks down.</div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
-      <div style="background:var(--bg);border-radius:10px;padding:1rem">
-        <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Free forever</div>
-        <div style="font-size:12px;line-height:2;color:var(--text)">
-          <i class="fas fa-check"></i> 2 clients<br>
-          <i class="fas fa-check"></i> Income &amp; expenses<br>
-          <i class="fas fa-check"></i> Budget tracking<br>
-          <i class="fas fa-check"></i> Reports &amp; P&amp;L<br>
-          <i class="fas fa-check"></i> Cloud sync<br>
-          <i class="fas fa-check"></i> Journal &amp; actions
-        </div>
-      </div>
-      <div style="background:var(--np-bg);border:1px solid rgba(15,110,86,.2);border-radius:10px;padding:1rem">
-        <div style="font-size:11px;font-weight:500;color:var(--np);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem">Pro <i class="fas fa-bolt"></i></div>
-        <div style="font-size:12px;line-height:2;color:var(--text)">
+    <div class="m-title" style="text-align:center;margin-bottom:.25rem">Choose your plan</div>
+    <div id="upgrade-reason" style="font-size:13px;color:var(--muted);line-height:1.6;text-align:center;margin-bottom:.25rem"></div>
+    <div style="font-size:12px;color:var(--muted);text-align:center;line-height:1.6">Every plan includes all bookkeeping features. Paid plans add cloud sync, bank connect, the document vault, chat, and teammate seats.</div>
+    <div class="plan-grid">
+      <div class="plan-card" id="plan-free">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">$0</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:.35rem">All features, on this device</div>
+        <div class="plan-feat">
+          <i class="fas fa-check"></i> Every bookkeeping tool<br>
           <i class="fas fa-check"></i> Unlimited clients<br>
-          <i class="fas fa-check"></i> A/R &amp; invoicing<br>
-          <i class="fas fa-check"></i> Balance sheet<br>
-          <i class="fas fa-check"></i> Journal entries<br>
-          <i class="fas fa-check"></i> Reconciliation<br>
-          <i class="fas fa-check"></i> Grant compliance<br>
-          <i class="fas fa-check"></i> Multi-year budgets<br>
-          <i class="fas fa-check"></i> Import / export all
+          <i class="fas fa-check"></i> Reports, grants, reconciliation<br>
+          <i class="fas fa-check"></i> Clarity Score<br>
+          <span class="no"><i class="fas fa-xmark"></i> This device only</span><br>
+          <span class="no"><i class="fas fa-xmark"></i> No cloud sync</span><br>
+          <span class="no"><i class="fas fa-xmark"></i> No bank connect / vault / chat</span><br>
+          <span class="no"><i class="fas fa-xmark"></i> No additional users</span>
         </div>
+        <button class="plan-cta sec" id="cta-free" onclick="choosePlan('free')">Stay on Free</button>
+      </div>
+      <div class="plan-card featured" id="plan-table">
+        <div class="plan-badge">30-day free trial</div>
+        <div class="plan-name">Table</div>
+        <div class="plan-price">$9 <small>/mo · $79/yr</small></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:.35rem">You + 2 (bookkeeper &amp; CPA) — 3 people</div>
+        <div class="plan-feat">
+          <i class="fas fa-check"></i> Everything in Free<br>
+          <i class="fas fa-check"></i> Cloud sync across devices<br>
+          <i class="fas fa-check"></i> Connect your bank — live<br>
+          <i class="fas fa-check"></i> Document vault<br>
+          <i class="fas fa-check"></i> Team chat<br>
+          <i class="fas fa-check"></i> 2 additional seats
+        </div>
+        <button class="plan-cta" id="cta-table" onclick="choosePlan('table')">Start free trial</button>
+      </div>
+      <div class="plan-card" id="plan-teams">
+        <div class="plan-badge" style="background:var(--text)">30-day free trial</div>
+        <div class="plan-name">Teams</div>
+        <div class="plan-price">$20 <small>/mo · $179/yr</small></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:.35rem">Up to 5 people</div>
+        <div class="plan-feat">
+          <i class="fas fa-check"></i> Everything in Table<br>
+          <i class="fas fa-check"></i> Up to 4 additional seats<br>
+          <i class="fas fa-check"></i> Room for your whole finance team
+        </div>
+        <button class="plan-cta" id="cta-teams" onclick="choosePlan('teams')">Start free trial</button>
       </div>
     </div>
-    <div style="background:var(--np-bg);border:1px solid rgba(15,110,86,.2);border-radius:10px;padding:1rem;margin-bottom:1.25rem;text-align:center">
-      <div style="font-size:13px;font-weight:500;color:var(--np);margin-bottom:.25rem">Want a walkthrough?</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:.75rem">Request a demo and we'll walk through Clarity with your actual use case.</div>
-    </div>
-    <a href="https://www.telofin.com/#demo" target="_blank" class="go-btn" style="display:block;text-align:center;text-decoration:none">Request a demo →</a>
-    <button class="lnk" style="margin-top:.75rem;display:block;text-align:center" onclick="closeM('m-upgrade')">Maybe later</button>
+    <button class="lnk" style="margin-top:.25rem;display:block;text-align:center" onclick="closeM('m-upgrade')">Maybe later</button>
   </div>
 </div>
 
@@ -978,6 +1015,23 @@ tr:hover td{background:var(--bg)}
 // Load after all scripts so every getTabs/afterSwitch patch is in place
 (function(){ if(typeof load==='function') load(); })();
 </script>
+<div id="dataterms-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:center;justify-content:center;padding:1rem">
+  <div class="modal" style="max-width:470px">
+    <div class="m-title" style="margin-bottom:.5rem">Before you start — how your data is stored</div>
+    <div style="font-size:12.5px;color:var(--text);line-height:1.65">Clarity by Telofin keeps your books <strong>on this device, in this browser.</strong> Please understand:</div>
+    <ul style="font-size:12.5px;color:var(--text);line-height:1.7;margin:.6rem 0 1rem;padding-left:1.15rem">
+      <li>Your data is stored <strong>locally only</strong> — not on our servers unless you sign in and sync.</li>
+      <li>It can be <strong>permanently lost</strong> if you clear your browser data or cache, use private/incognito mode, or switch devices or browsers. <strong>Telofin cannot recover locally-stored data.</strong></li>
+      <li><strong>Backups are your responsibility</strong> — export regularly, or sign in to sync securely to the cloud.</li>
+      <li>Clarity is a bookkeeping and planning tool — <strong>not tax, legal, or certified financial advice.</strong> Verify with a licensed professional before any filing or decision.</li>
+    </ul>
+    <label style="display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.5;cursor:pointer;margin-bottom:1rem">
+      <input type="checkbox" id="dataterms-cb" onchange="_datatermsToggle()" style="margin-top:2px;width:auto;flex:none">
+      <span>I understand my data is stored locally and can be permanently lost, and I agree to the <a href="/terms.html" target="_blank" style="color:var(--np)">Terms of Service</a> and <a href="/privacy.html" target="_blank" style="color:var(--np)">Privacy Policy</a>.</span>
+    </label>
+    <button id="dataterms-btn" class="sv-btn" style="width:100%;opacity:.55;cursor:default" disabled onclick="acceptDataTerms()">I understand — continue</button>
+  </div>
+</div>
 <div class="overlay" id="m-users">
   <div class="modal" style="max-width:580px">
     <button class="cx" onclick="closeM('m-users')">&#215;</button>
