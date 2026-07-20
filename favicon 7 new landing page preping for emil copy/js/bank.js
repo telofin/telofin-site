@@ -129,7 +129,13 @@ function renderBank(c) {
         ? '<button onclick="bankMatchOne(\'' + t.id + '\')" title="' + (_matchCandidates.length === 1 ? 'Link to: ' + escHtml(_matchCandidates[0].item.desc || _matchCandidates[0].item.name || '') : _matchCandidates.length + ' entries with this amount — choose which one') + '" style="font-size:11px;padding:4px 9px;border:1px solid var(--np);border-radius:5px;background:var(--np-bg);color:var(--np);cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-right:4px"><i class="fas fa-link"></i> Match' + (_matchCandidates.length > 1 ? ' (' + _matchCandidates.length + ')' : '') + '</button>'
         : '';
 
-      return '<tr id="btr-' + t.id + '">'        + '<td style="width:26px"><input type="checkbox" class="bank-chk" data-id="' + t.id + '" style="width:14px;height:14px;cursor:pointer"></td>'        + '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + escHtml(t.date || '—') + '</td>'        + '<td style="max-width:160px"><input type="text" value="' + escHtml(t.description) + '" onchange="bankSetDesc(\'' + t.id + '\',this.value)" onfocus="this.style.outline=\'2px solid var(--np)\';this.style.borderRadius=\'4px\'" onblur="this.style.outline=\'none\'" style="font-size:12px;width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:\'DM Sans\',sans-serif;padding:2px 4px;border-radius:4px;cursor:text;"></td>'        + '<td><select onchange="bankSetType(\'' + t.id + '\',this.value)" ' + sel + '>'        + '<option value="debit"' + (t.type === 'debit' ? ' selected' : '') + '>Expense</option>'        + '<option value="credit"' + (t.type === 'credit' ? ' selected' : '') + '>Income</option>'        + '</select></td>'        + '<td><select onchange="bankSetCat(\'' + t.id + '\',this.value)" ' + sel + '>' + catOpts + '</select></td>'        + grantCol        + '<td><select onchange="bankSetParty(\'' + t.id + '\',this.value,\'' + (isInc ? 'customer' : 'vendor') + '\')" ' + sel + '>' + partyOpts + '</select></td>'        + '<td><select onchange="bankSetAcct(\'' + t.id + '\',this.value,\'' + (isInc ? 'income' : 'expense') + '\')" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);' + acctStyle + '">' + acctOpts + '</select></td>'        + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap" class="' + (isInc ? 'vg' : 'vr') + '">'        + (isInc ? '+' : '−') + fmt(t.amount) + '</td>'        + '<td style="text-align:right;white-space:nowrap">'        + matchBtn        + '<button onclick="bankApproveOne(\'' + t.id + '\')" style="font-size:11px;padding:4px 9px;border:none;border-radius:5px;background:var(--green);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="fas fa-check"></i> Post</button>'        + ' <button onclick="bankDeletePending(\'' + t.id + '\')" style="font-size:11px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer"><i class="fas fa-xmark"></i></button>'        + '</td>'        + '</tr>';
+      // Money-in lump line → let the user itemize it into a Bank Deposit (splits it
+      // into the gifts/sales inside; the deposit total then matches this line).
+      var itemizeBtn = isInc
+        ? '<button onclick="depOpen({date:\'' + (t.date || '') + '\',amount:' + Number(t.amount || 0) + ',bankTxnId:\'' + t.id + '\'})" title="Break this deposit into the gifts / sales inside it" style="font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-right:4px"><i class="fas fa-layer-group"></i> Itemize</button>'
+        : '';
+
+      return '<tr id="btr-' + t.id + '">'        + '<td style="width:26px"><input type="checkbox" class="bank-chk" data-id="' + t.id + '" style="width:14px;height:14px;cursor:pointer"></td>'        + '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + escHtml(t.date || '—') + '</td>'        + '<td style="max-width:160px"><input type="text" value="' + escHtml(t.description) + '" onchange="bankSetDesc(\'' + t.id + '\',this.value)" onfocus="this.style.outline=\'2px solid var(--np)\';this.style.borderRadius=\'4px\'" onblur="this.style.outline=\'none\'" style="font-size:12px;width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);font-family:\'DM Sans\',sans-serif;padding:2px 4px;border-radius:4px;cursor:text;"></td>'        + '<td><select onchange="bankSetType(\'' + t.id + '\',this.value)" ' + sel + '>'        + '<option value="debit"' + (t.type === 'debit' ? ' selected' : '') + '>Expense</option>'        + '<option value="credit"' + (t.type === 'credit' ? ' selected' : '') + '>Income</option>'        + '</select></td>'        + '<td><select onchange="bankSetCat(\'' + t.id + '\',this.value)" ' + sel + '>' + catOpts + '</select></td>'        + grantCol        + '<td><select onchange="bankSetParty(\'' + t.id + '\',this.value,\'' + (isInc ? 'customer' : 'vendor') + '\')" ' + sel + '>' + partyOpts + '</select></td>'        + '<td><select onchange="bankSetAcct(\'' + t.id + '\',this.value,\'' + (isInc ? 'income' : 'expense') + '\')" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--soft);color:var(--text);' + acctStyle + '">' + acctOpts + '</select></td>'        + '<td style="font-size:12px;font-weight:500;text-align:right;white-space:nowrap" class="' + (isInc ? 'vg' : 'vr') + '">'        + (isInc ? '+' : '−') + fmt(t.amount) + '</td>'        + '<td style="text-align:right;white-space:nowrap">'        + itemizeBtn        + matchBtn        + '<button onclick="bankApproveOne(\'' + t.id + '\')" style="font-size:11px;padding:4px 9px;border:none;border-radius:5px;background:var(--green);color:#fff;cursor:pointer;font-family:\'DM Sans\',sans-serif"><i class="fas fa-check"></i> Post</button>'        + ' <button onclick="bankDeletePending(\'' + t.id + '\')" style="font-size:11px;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:none;color:var(--muted);cursor:pointer"><i class="fas fa-xmark"></i></button>'        + '</td>'        + '</tr>';
     }).join('');
   }
 
@@ -617,12 +623,23 @@ function _bankFindMatchCandidates(t) {
     var listKey = c.type === 'sb' ? 'revenue' : 'income';
     list.forEach(function(r, i) {
       if (r.deleted || r.matchId || r.reconciled) return;
+      if (r.depositId) return; // component of a deposit — its cash side is Undeposited Funds, not the bank
       var amt = Number(r.act != null ? r.act : (r.recv != null ? r.recv : 0));
       if (Math.abs(amt - target) > 0.01) return;
       var rDate = parseDate(r.date); if (!rDate) return;
       var daysDiff = (txnDate - rDate) / 86400000;
       if (daysDiff <= DAYS_BEFORE && daysDiff >= -DAYS_AFTER) {
         candidates.push({ listKey: listKey, index: i, item: r, daysDiff: Math.abs(daysDiff) });
+      }
+    });
+    // A batched deposit's TOTAL is the matchable unit for a lump bank line.
+    (c.deposits || []).forEach(function(d, di) {
+      if (d.bankTxnId || d.reconciled) return;
+      if (Math.abs(Number(d.total || 0) - target) > 0.01) return;
+      var dDate = parseDate(d.date); if (!dDate) return;
+      var daysDiff = (txnDate - dDate) / 86400000;
+      if (daysDiff <= DAYS_BEFORE && daysDiff >= -DAYS_AFTER) {
+        candidates.push({ listKey: 'deposits', index: di, item: d, daysDiff: Math.abs(daysDiff) });
       }
     });
   }
@@ -660,7 +677,7 @@ function _bankApplyMatch(t, match) {
 
   sv(); renderAll();
   setTimeout(function(){ renderBank(gc()); _bankRefreshActivePanel(gc()); }, 50);
-  _bankToast('Matched to: ' + (item.desc || item.name || 'existing entry'));
+  _bankToast('Matched to: ' + (item.desc || item.name || (match.listKey === 'deposits' && item.total != null ? ('deposit ' + fmt(item.total)) : 'existing entry')));
 }
 
 function bankMatchOne(id) {

@@ -82,8 +82,8 @@ function renderMobSel(){
 // TABS
 // ══════════════════════════════════════════
 function getTabs(t){
-  if(t==='np')return[['grants','Grants'],['procurement','Procurement'],['donors','Donors'],['funding','Income'],['npexp','Expenses'],['cc','Credit Cards'],['reimbursements','Reimbursements'],['vendors','Vendors'],['budget','Budget'],['recon','Reconciliation'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['funds','Funds'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['f990','Form 990'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
-  if(t==='sb')return[['revenue','Revenue'],['cashflow','Cash Flow'],['sbexp','Expenses'],['cc','Credit Cards'],['reimbursements','Reimbursements'],['ar','A/R & Invoicing'],['vendors','Vendors'],['customers','Customers'],['jentries','Journal Entries'],['bsheet','Balance Sheet'],['recon','Reconciliation'],['budget','Budget'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['salestax','Sales Tax'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
+  if(t==='np')return[['grants','Grants'],['procurement','Procurement'],['donors','Donors'],['funding','Income'],['npexp','Expenses'],['cc','Credit Cards'],['reimbursements','Reimbursements'],['vendors','Vendors'],['budget','Budget'],['deposits','Bank Deposits'],['recon','Reconciliation'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['funds','Funds'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['f990','Form 990'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
+  if(t==='sb')return[['revenue','Revenue'],['cashflow','Cash Flow'],['sbexp','Expenses'],['cc','Credit Cards'],['reimbursements','Reimbursements'],['ar','A/R & Invoicing'],['vendors','Vendors'],['customers','Customers'],['jentries','Journal Entries'],['bsheet','Balance Sheet'],['deposits','Bank Deposits'],['recon','Reconciliation'],['budget','Budget'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['salestax','Sales Tax'],['pettycash','Petty Cash'],['openingbal','Opening Balances'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
   return[['peinc','Income'],['peexp','Expenses'],['vendors','Vendors'],['budget','Budget'],['coa','Accounts'],['gl','General Ledger'],['trialbal','Trial Balance'],['pettycash','Petty Cash'],['importrules','Import Rules'],['flagged','Flagged'],['closedperiods','Closed Periods'],['vault','Vault'],['reports','Reports'],['trash','Deleted']];
 }
 
@@ -155,6 +155,7 @@ function afterSwitch(p){
   else if(p==='ar')renderAR(gc());
   else if(p==='jentries')renderJournalEntries(gc());
   else if(p==='bsheet')renderBalanceSheet(gc());
+  else if(p==='deposits')renderDeposits(gc());
   else if(p==='recon')renderReconciliation(gc());
   else if(p==='trialbal')renderTrialBalance(gc());
   else if(p==='closedperiods')renderClosedPeriods(gc());

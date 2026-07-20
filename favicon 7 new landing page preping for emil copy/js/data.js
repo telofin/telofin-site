@@ -257,6 +257,8 @@ function migrateD(){
       if(!c.restrictionReleases)c.restrictionReleases=[];
       // ── MIGRATION: Seed fundTransfers array
       if(!c.fundTransfers)c.fundTransfers=[];
+      // ── MIGRATION: Seed deposits array (Bank Deposit / Undeposited Funds feature)
+      if(!c.deposits)c.deposits=[];
       // ── MIGRATION: Seed in-kind auction fields on existing donations
       (c.donors||[]).forEach(function(d){(d.donations||[]).forEach(function(dn){
         if(dn.itemDescription===undefined)dn.itemDescription='';
