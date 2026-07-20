@@ -534,6 +534,14 @@ tr:hover td{background:var(--bg)}
 </div>
 
 <!-- STATIC MODALS -->
+<div class="overlay" id="m-deposit">
+  <div class="modal" style="max-width:640px">
+    <button class="cx" onclick="closeM('m-deposit')">&#215;</button>
+    <div class="m-title">New Bank Deposit</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem;line-height:1.5">Bundle several gifts, income, or sales into one deposit. Each item flows to its own tab; the total is what matches your bank.</div>
+    <div id="dep-builder"></div>
+  </div>
+</div>
 <div class="overlay" id="m-contact">
   <div class="modal">
     <button class="cx" onclick="closeM('m-contact')">&#215;</button>
@@ -1011,6 +1019,7 @@ tr:hover td{background:var(--bg)}
 <script src="js/switcher.js"></script>
 <script src="js/bank.js"></script>
 <script src="js/checks.js"></script>
+<script src="js/deposits.js"></script>
 <script>
 // Load after all scripts so every getTabs/afterSwitch patch is in place
 (function(){ if(typeof load==='function') load(); })();
