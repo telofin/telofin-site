@@ -24,6 +24,27 @@ function _depCashOpts(c, sel){
     return '<option value="'+escHtml(a.code)+'"'+(a.code===sel?' selected':'')+'>'+escHtml(a.name)+' ('+escHtml(a.code)+')</option>';
   }).join('');
 }
+// Full Chart-of-Accounts options for a new deposit line, plus an inline
+// "add a new one" choice. Lists ALL active accounts (any type) so a deposit
+// line can post to whatever the user needs, not just the default income codes.
+function _depAcctOptsInner(c, sel){
+  var opts=(c.accounts||[]).filter(function(a){return a.active!==false;})
+    .slice().sort(function(a,b){return String(a.code).localeCompare(String(b.code));})
+    .map(function(a){return '<option value="'+escHtml(a.code)+'"'+(a.code===sel?' selected':'')+'>'+escHtml(a.code)+' — '+escHtml(a.name)+' ('+escHtml(a.type)+')</option>';}).join('');
+  return opts+'<option value="__new__">+ New account…</option>';
+}
+// Inline create-a-new-account from the deposit builder's account picker.
+function depNewAcct(sel){
+  if(!sel||sel.value!=='__new__')return;
+  var c=gc(); if(!c)return;
+  var name=(window.prompt('New account name (e.g. "Membership dues")')||'').trim();
+  if(!name){sel.value='';return;}
+  var t=(window.prompt('Account type — Income, Asset, Liability, Expense, or Equity:','Income')||'Income').trim().toLowerCase();
+  var type=({income:'Income',asset:'Asset',liability:'Liability',expense:'Expense',equity:'Equity'})[t]||'Income';
+  var code=_ensureDedicatedCOA(c,name,type,name);
+  sel.innerHTML=_depAcctOptsInner(c,code); // reselect the just-created account, keep the rest of the form intact
+}
+
 // Money-in rows eligible to be pulled into a deposit: not deleted/voided, not
 // reconciled, not already in a deposit. Donations show up here because they
 // create an income row — so a gift entered on the Donors tab appears automatically.
@@ -106,7 +127,7 @@ function depRender(){
     }).join('') : '<div style="font-size:12px;color:var(--muted);padding:4px 0">No undeposited '+(c.type==='sb'?'revenue':'income')+' entries to pull in.</div>';
 
   var donorOpts='<option value="">— pick a donor —</option>'+(c.donors||[]).map(function(d){return '<option value="'+escHtml(d.id)+'">'+escHtml(d.name)+'</option>';}).join('');
-  var incAcctOpts=(c.accounts||[]).filter(function(a){return a.type==='Income'&&a.active!==false;}).map(function(a){return '<option value="'+escHtml(a.code)+'">'+escHtml(a.name)+'</option>';}).join('');
+  var incAcctOpts=_depAcctOptsInner(c,'');
   var kindOpts = c.type==='sb'
     ? '<option value="revenue">Revenue / merch</option>'
     : '<option value="donation">Donation (from a donor)</option><option value="income">Other income / merch</option>';
@@ -130,7 +151,7 @@ function depRender(){
         +'<div class="fl" style="margin:0;flex:1;min-width:140px"><label>Type</label><select id="dep-new-kind" onchange="depNewKindChange()">'+kindOpts+'</select></div>'
         +'<div class="fl" id="dep-donor-wrap" style="margin:0;flex:1;min-width:140px;'+(c.type==='sb'?'display:none':'')+'"><label>Donor</label><select id="dep-new-donor">'+donorOpts+'</select></div>'
         +'<div class="fl" id="dep-newdonor-wrap" style="margin:0;flex:1;min-width:140px;'+(c.type==='sb'?'display:none':'')+'"><label>or new donor</label><input type="text" id="dep-new-newdonor" placeholder="New donor name"></div>'
-        +'<div class="fl" id="dep-acct-wrap" style="margin:0;flex:1;min-width:140px;display:none"><label>Account</label><select id="dep-new-acct">'+incAcctOpts+'</select></div>'
+        +'<div class="fl" id="dep-acct-wrap" style="margin:0;flex:1;min-width:140px;display:none"><label>Account</label><select id="dep-new-acct" onchange="depNewAcct(this)">'+incAcctOpts+'</select></div>'
         +'<div class="fl" id="dep-label-wrap" style="margin:0;flex:1;min-width:120px;display:none"><label>Label</label><input type="text" id="dep-new-label" placeholder="e.g. T-shirt sales"></div>'
         +'<div class="fl" style="margin:0;width:100px"><label>Amount</label><input type="number" id="dep-new-amt" step="0.01" placeholder="0.00"></div>'
         +'<button class="add-btn" onclick="depAddNewLine()" style="height:34px">+ Add</button>'
@@ -172,6 +193,7 @@ function depAddNewLine(){
     _dep.lines.push({mode:'new', kind:'donation', donorId:donorId, newDonor:newDonor, name:name, label:name, amt:amt, rst:'unrestricted'});
   } else {
     var acctCode=(g('dep-new-acct')||{}).value||'4010';
+    if(acctCode==='__new__'||!acctCode){alert('Pick an account (or add a new one) for this line.');return;}
     var label=((g('dep-new-label')||{}).value||'').trim()||'Other income';
     _dep.lines.push({mode:'new', kind:(c.type==='sb'?'revenue':'income'), acctCode:acctCode, name:label, label:label, amt:amt});
   }
