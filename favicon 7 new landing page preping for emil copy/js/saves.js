@@ -413,7 +413,7 @@ function doPDF(tabOverride){
   var _pdfBasis=typeof RPT_BASIS!=='undefined'?(RPT_BASIS||(c.basisType||'cash')):'cash';
   function _pdfAmt(r){return c.type==='sb'?(_pdfBasis==='accrual'?Number(r.proj||0):Number(r.act||0)):c.type==='pe'?Number(r.amt||0):(_pdfBasis==='accrual'?Number(r.proj||0):Number(r.recv||0));}
   var iT=inc.reduce(function(s,r){return s+_pdfAmt(r);},0);
-  if(c.type==='np')iT+=(c.grants||[]).reduce(function(s,gr){return s+Number(gr.awarded||0);},0);
+  if(c.type==='np')iT+=(c.grants||[]).reduce(function(s,gr){return s+_grantPnlAward(c,inc,gr);},0);
   var eT=exp.reduce(function(s,e){return s+Number(e.amt||0);},0);
   var net=iT-eT;
 
@@ -422,7 +422,7 @@ function doPDF(tabOverride){
 
   if(type==='pl'){
     var iR=inc.map(function(r){return tRow([escHtml(r.name||'—'),escHtml(r.cat||'—'),fmtN(_pdfAmt(r))]);}).join('');
-    if(c.type==='np')(c.grants||[]).forEach(function(gr){iR+=tRow(['Grant: '+escHtml(gr.name),'Grants',fmtN(gr.awarded)]);});
+    if(c.type==='np')(c.grants||[]).forEach(function(gr){if(_grantPnlAward(c,inc,gr)===0)return;iR+=tRow(['Grant: '+escHtml(gr.name),'Grants',fmtN(gr.awarded)]);});
     var eR=exp.map(function(e){return tRow([escHtml(e.desc||'—'),escHtml(e.cat||'—'),fmtN(e.amt)]);}).join('');
     var body='<h2>'+il(c.type)+'</h2><table><tr><th>Source</th><th>Category</th><th class="right">Amount</th></tr>'+(iR||'<tr><td colspan="3" style="color:#8a8880">No data</td></tr>')+'<tr class="total"><td colspan="2">Total</td><td class="right">'+fmtN(iT)+'</td></tr></table>';
     body+='<h2>Expenses</h2><table><tr><th>Description</th><th>Category</th><th class="right">Amount</th></tr>'+(eR||'<tr><td colspan="3" style="color:#8a8880">No data</td></tr>')+'<tr class="total"><td colspan="2">Total</td><td class="right">'+fmtN(eT)+'</td></tr></table>';
@@ -709,6 +709,13 @@ function doPDF(tabOverride){
   }
 }
 
+// _grantPnlAward(c, incomeList, gr): a grant's awarded amount for P&L INCOME — but 0 if the
+// grant already has a linked income entry (grantId, e.g. the auto-created "Awarded" income
+// line). Without this, awarded grants that auto-created an income row are counted twice in
+// the P&L. Grant-specific reports (status, close-out) still show the raw awarded amount.
+function _grantPnlAward(c, incomeList, gr){
+  return (incomeList||[]).some(function(r){return r.grantId===gr.id;}) ? 0 : Number(gr.awarded||0);
+}
 function doXL(){
   var c=gc();if(!c)return;var wb=XLSX.utils.book_new();var type=getActiveRpt();
   var exp=c.expenses||[];
@@ -718,9 +725,9 @@ function doXL(){
   if(type==='pl'||type==='category'){
     var rows=header.concat([[il(c.type),'Category','Amount','Fund','Date','Reconciled']]);
     inc.forEach(function(r){var a=c.type==='sb'?r.act:c.type==='pe'?r.amt:r.recv;rows.push([r.name||'',r.cat||'',Number(a||0),r.fund||'',r.date||'',r.reconciled?'Yes':'No']);});
-    if(c.type==='np')(c.grants||[]).forEach(function(gr){rows.push(['Grant: '+gr.name,'Grants',Number(gr.awarded||0)]);});
+    if(c.type==='np')(c.grants||[]).forEach(function(gr){if(_grantPnlAward(c,inc,gr)===0)return;rows.push(['Grant: '+gr.name,'Grants',Number(gr.awarded||0)]);});
     var iT=inc.reduce(function(s,r){var a=c.type==='sb'?r.act:c.type==='pe'?r.amt:r.recv;return s+Number(a||0);},0);
-    if(c.type==='np')iT+=(c.grants||[]).reduce(function(s,gr){return s+Number(gr.awarded||0);},0);
+    if(c.type==='np')iT+=(c.grants||[]).reduce(function(s,gr){return s+_grantPnlAward(c,inc,gr);},0);
     rows.push(['Total '+il(c.type),'',iT],['']);
     rows.push(['Expenses','Category','Amount','Fund','Date','Check #','Reconciled']);
     exp.forEach(function(e){rows.push([e.desc||'',e.cat||'',Number(e.amt||0),e.fund||'',e.date||'',e.checkNum||'',e.reconciled?'Yes':'No']);});
@@ -983,7 +990,7 @@ function renderBudgetMultiYear(){
   var fInc=typeof BUDGET_FY!=='undefined'&&BUDGET_FY&&BUDGET_FY.indexOf('fy:')=== 0?allInc:allInc.filter(inFY);
   var fExp=typeof BUDGET_FY!=='undefined'&&BUDGET_FY&&BUDGET_FY.indexOf('fy:')=== 0?allExp:allExp.filter(inFY);
   // Use basisInc() so income actuals respect client's cash/accrual setting
-  if(c.type==='np'){fInc.forEach(function(r){var k=r.cat||'Other';if(!iD[k])iD[k]=0;iD[k]+=basisInc(c,r);});(c.grants||[]).forEach(function(gr){if(!iD['Grants'])iD['Grants']=0;iD['Grants']+=Number(gr.awarded||0);});fExp.forEach(function(r){var k=r.cat||'Other';if(!eD[k])eD[k]=0;eD[k]+=Number(r.amt||0);});}
+  if(c.type==='np'){fInc.forEach(function(r){var k=r.cat||'Other';if(!iD[k])iD[k]=0;iD[k]+=basisInc(c,r);});(c.grants||[]).forEach(function(gr){var _ga=_grantPnlAward(c,fInc,gr);if(!_ga)return;if(!iD['Grants'])iD['Grants']=0;iD['Grants']+=_ga;});fExp.forEach(function(r){var k=r.cat||'Other';if(!eD[k])eD[k]=0;eD[k]+=Number(r.amt||0);});}
   else if(c.type==='sb'){fInc.forEach(function(r){var k=r.cat||'Other';if(!iD[k])iD[k]=0;iD[k]+=basisInc(c,r);});fExp.forEach(function(r){var k=r.cat||'Other';if(!eD[k])eD[k]=0;eD[k]+=Number(r.amt||0);});}
   else{fInc.forEach(function(r){var k=r.cat||'Other';if(!iD[k])iD[k]=0;iD[k]+=basisInc(c,r);});fExp.forEach(function(r){var k=r.cat||'Other';if(!eD[k])eD[k]=0;eD[k]+=Number(r.amt||0);});}
   var hb=buds.length>0;
@@ -1205,6 +1212,16 @@ function saveInv(){
     var memo='Invoice '+(item.num||item.id)+(item.client?' — '+item.client:'');
     if(item.status==='Draft')voidLedgerEntry(c,item.id);
     else updateLedgerEntry(c,item.id,arCode,revCode,item.amt,memo,'invoice');
+  } else if(item.status==='Paid' && !(_oldInv&&_oldInv.status==='Paid') && !item.paidDate){
+    // Form set the invoice straight to Paid (not via the Mark-paid button). Recognize the
+    // receivable if it isn't already, then clear it with a cash receipt, so AR doesn't sit
+    // open forever. postToLedger is idempotent, so re-recognizing is safe.
+    var arCodeP=_defaultARCode(c);
+    var revCodeP=lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+    var memoP='Invoice '+(item.num||item.id)+(item.client?' — '+item.client:'');
+    postToLedger(c,arCodeP,revCodeP,item.amt,memoP,'invoice',item.id);
+    postToLedger(c,_defaultCashCode(c),arCodeP,item.amt,'Received payment: Invoice '+(item.num||item.id)+(item.client?' — '+item.client:''),'invoice',item.id+':pay');
+    item.paidDate=todayNum();
   }
   sv();renderAR(c);renderBalanceSheet(c);closeM('m-inv');['inv-num','inv-client','inv-desc','inv-amt','inv-date','inv-due','inv-notes'].forEach(function(id){g(id).value='';});
 }
@@ -1370,7 +1387,7 @@ function delJE(i){var c=gc();if(!confirm('Delete this entry?'))return;var je=c.j
 // ══════════════════════════════════════════
 // #16 — BALANCE SHEET (SB)
 // ══════════════════════════════════════════
-var BS_VIEW='hybrid'; // 'hybrid' = existing manual+auto view | 'ledger' = derived from double-entry ledger
+var BS_VIEW=''; // '' = auto (ledger when the client has a ledger, else hybrid) | 'hybrid' = manual+auto view | 'ledger' = derived from double-entry ledger. Auto-resolved in renderBalanceSheet so the DEFAULT ties to the trial balance instead of the hybrid view's partial cash figure.
 function renderBalanceSheet(c){
   var p=g('p-bsheet');if(!p)return;if(!c)return;
   var bs=c.balanceSheet||{assets:[],liabilities:[],equity:[]};
@@ -1436,6 +1453,11 @@ function renderBalanceSheet(c){
   var apRow=apAmt>0?autoRow('Accounts Payable',apAmt,(c.bills||[]).filter(function(b){return b.status!=='Paid';}).length+' unpaid bill(s)'):'';
   // ── VIEW TOGGLE ──────────────────────────────────────────────────────────
   var hasLedger=c.ledgerEntries&&c.ledgerEntries.length>0;
+  // Default view: the ledger view ties to the trial balance, so prefer it whenever a ledger
+  // exists (the hybrid view's cash is only reconciled + JE deltas and can badly understate
+  // real cash). Falls back to hybrid for brand-new clients with nothing posted yet. An explicit
+  // toggle click sets BS_VIEW, which then persists.
+  if(!BS_VIEW)BS_VIEW=hasLedger?'ledger':'hybrid';
   var viewToggle='<div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">'
     +'<button class="'+(BS_VIEW==='hybrid'?'sv-btn':'add-btn')+'" style="font-size:11px;padding:5px 12px" onclick="BS_VIEW=\'hybrid\';renderBalanceSheet(gc())">Working view</button>'
     +'<button class="'+(BS_VIEW==='ledger'?'sv-btn':'add-btn')+'" style="font-size:11px;padding:5px 12px" onclick="BS_VIEW=\'ledger\';renderBalanceSheet(gc())"'+(hasLedger?'':' disabled title="No ledger entries yet — save transactions to populate"')+'>Ledger view '+(hasLedger?'':'(no data yet)')+'</button>'

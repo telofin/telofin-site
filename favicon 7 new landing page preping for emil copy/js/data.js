@@ -442,6 +442,10 @@ function migrateToLedger(c){
   (c.revenue||[]).forEach(function(r){
     if(!r.id||posted[r.id])return;
     if(r.deleted||r.voided||r.isReversal)return;
+    // Invoice-linked revenue rows (created by markInvPaid) are display/1099-tracking only —
+    // the invoice already recognized revenue (Dr AR / Cr Revenue) at Sent time and the
+    // payment posts Dr Cash / Cr AR. Posting this row too would double-count revenue AND cash.
+    if(r.invoiceId)return;
     var credit=r.acctCode||'4010';
     postToLedger(c,cashCode,credit,Number(r.act||0),(r.name||'Revenue'),'revenue',r.id);
     posted[r.id]=true;

@@ -4419,9 +4419,9 @@ function saveGrant(){
       id:uid(),name:item.name,
       cat:'Grant',status:'Awarded',
       proj:item.awarded,recv:0,
-      date:new Date().toISOString().split('T')[0],
+      date:todayNum(),
       fund:item.restrict||'',
-      acctCode:'4020',
+      acctCode:(lookupAcctByCAT(c,'Grant revenue','Income')||'4030'),
       fromGrantId:item.id,
       grantId:item.id
     };
