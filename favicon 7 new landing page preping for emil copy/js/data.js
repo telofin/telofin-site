@@ -454,7 +454,7 @@ function migrateToLedger(c){
   // ── Invoices (AR) ─────────────────────────────────────────────────────────
   (c.invoices||[]).forEach(function(inv){
     if(!inv.id||posted[inv.id])return;
-    postToLedger(c,arCode,'4010',Number(inv.amt||0),(inv.desc||inv.client||'Invoice'),'invoice',inv.id);
+    postToLedger(c,arCode,inv.acctCode||'4010',Number(inv.amt||0),(inv.desc||inv.client||'Invoice'),'invoice',inv.id);
     posted[inv.id]=true;
   });
 

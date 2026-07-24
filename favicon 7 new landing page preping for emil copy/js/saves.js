@@ -1193,7 +1193,7 @@ function saveInv(){
   var amt=Number(g('inv-amt').value||0);if(!amt){alert('Please enter an amount.');return;}
   var _rINV=typeof resolveEI==='function'?resolveEI(c.invoices):(EI<c.invoices.length?EI:-1);
   var _oldInv=_rINV>=0?c.invoices[_rINV]:null;
-  var item={id:_rINV>=0?(c.invoices[_rINV].id||uid()):uid(),num:g('inv-num').value||'INV-'+Date.now().toString(36).toUpperCase(),client:g('inv-client').value,desc:g('inv-desc').value,amt:amt,date:g('inv-date').value,due:g('inv-due').value,status:g('inv-status').value||'Draft',notes:g('inv-notes').value};
+  var item={id:_rINV>=0?(c.invoices[_rINV].id||uid()):uid(),num:g('inv-num').value||'INV-'+Date.now().toString(36).toUpperCase(),client:g('inv-client').value,desc:g('inv-desc').value,amt:amt,date:g('inv-date').value,due:g('inv-due').value,status:g('inv-status').value||'Draft',notes:g('inv-notes').value,acctCode:(g('inv-acct')&&g('inv-acct').value)||(_oldInv&&_oldInv.acctCode)||''};
   // Carry forward payment/write-off tracking fields the form doesn't expose — otherwise
   // editing a Paid or Written-Off invoice (e.g. just fixing a typo) would silently wipe them.
   if(_oldInv){if(_oldInv.paidDate)item.paidDate=_oldInv.paidDate;if(_oldInv.badDebt){item.badDebt=_oldInv.badDebt;item.badDebtDate=_oldInv.badDebtDate;}if(_oldInv.status==='Paid'||_oldInv.status==='Written Off')item.status=_oldInv.status;}
@@ -1208,7 +1208,7 @@ function saveInv(){
   // routine edit would incorrectly reopen a receivable that's already settled.
   if(item.status!=='Paid'&&item.status!=='Written Off'){
     var arCode=_defaultARCode(c);
-    var revCode=lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+    var revCode=item.acctCode||lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
     var memo='Invoice '+(item.num||item.id)+(item.client?' — '+item.client:'');
     if(item.status==='Draft')voidLedgerEntry(c,item.id);
     else updateLedgerEntry(c,item.id,arCode,revCode,item.amt,memo,'invoice');
@@ -1217,7 +1217,7 @@ function saveInv(){
     // receivable if it isn't already, then clear it with a cash receipt, so AR doesn't sit
     // open forever. postToLedger is idempotent, so re-recognizing is safe.
     var arCodeP=_defaultARCode(c);
-    var revCodeP=lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+    var revCodeP=item.acctCode||lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
     var memoP='Invoice '+(item.num||item.id)+(item.client?' — '+item.client:'');
     postToLedger(c,arCodeP,revCodeP,item.amt,memoP,'invoice',item.id);
     postToLedger(c,_defaultCashCode(c),arCodeP,item.amt,'Received payment: Invoice '+(item.num||item.id)+(item.client?' — '+item.client:''),'invoice',item.id+':pay');
@@ -1225,7 +1225,7 @@ function saveInv(){
   }
   sv();renderAR(c);renderBalanceSheet(c);closeM('m-inv');['inv-num','inv-client','inv-desc','inv-amt','inv-date','inv-due','inv-notes'].forEach(function(id){g(id).value='';});
 }
-function editInv(i){var c=gc();if(!c.invoices[i])return;EI=i;if(typeof _editItemId!=='undefined')_editItemId=c.invoices[i].id||null;var inv=c.invoices[i];g('inv-num').value=inv.num||'';g('inv-client').value=inv.client||'';g('inv-desc').value=inv.desc||'';g('inv-amt').value=inv.amt||'';g('inv-date').value=inv.date||'';g('inv-due').value=inv.due||'';g('inv-status').value=inv.status||'Draft';g('inv-notes').value=inv.notes||'';openM('m-inv');}
+function editInv(i){var c=gc();if(!c.invoices[i])return;EI=i;if(typeof _editItemId!=='undefined')_editItemId=c.invoices[i].id||null;var inv=c.invoices[i];g('inv-num').value=inv.num||'';g('inv-client').value=inv.client||'';g('inv-desc').value=inv.desc||'';g('inv-amt').value=inv.amt||'';g('inv-date').value=inv.date||'';g('inv-due').value=inv.due||'';g('inv-status').value=inv.status||'Draft';g('inv-notes').value=inv.notes||'';openM('m-inv');var _iacc=g('inv-acct');if(_iacc)_iacc.value=inv.acctCode||'';}
 function delInv(i){var c=gc();if(!confirm('Delete this invoice?'))return;var inv=c.invoices[i];c.invoices.splice(i,1);if(inv&&typeof dwDeleteInvoice==='function')dwDeleteInvoice(c,inv);sv();renderAR(c);}
 function copyPayReminder(i){var c=gc();if(!c||!c.invoices[i])return;var inv=c.invoices[i];var txt='Subject: Invoice '+(inv.num||'')+(inv.due?' — Due '+inv.due:'')+'\n\nHi '+(inv.client||'there')+',\n\nThis is a friendly reminder that invoice '+(inv.num||'')+(inv.due?' was due on '+inv.due:'')+' for '+fmt(inv.amt)+(inv.desc?' ('+inv.desc+')':'')+'.\n\nPlease remit payment at your earliest convenience. If you have any questions, don\'t hesitate to reach out.\n\nThank you,\n'+c.name;if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){alert('Payment reminder copied to clipboard.');});}else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('Payment reminder copied to clipboard.');}}
 
@@ -1257,7 +1257,7 @@ function markInvPaid(i){
   // expenses[] row) — revenue was already recognized on the ledger in saveInv() when the
   // invoice was Sent; this does not post it again.
   var cashCode=_defaultCashCode(c);
-  var revItem={id:uid(),name:'Invoice: '+(inv.client||inv.num),cat:'Invoiced Revenue',proj:inv.amt,act:inv.amt,date:c.invoices[i].paidDate,conf:'Confirmed',recurring:'None',invoiceId:inv.id,acctCode:lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010'};
+  var revItem={id:uid(),name:'Invoice: '+(inv.client||inv.num),cat:'Invoiced Revenue',proj:inv.amt,act:inv.amt,date:c.invoices[i].paidDate,conf:'Confirmed',recurring:'None',invoiceId:inv.id,acctCode:inv.acctCode||lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010'};
   if(depositBankId)revItem.bankId=depositBankId;
   if(depositBsAssetId){revItem.bsAssetId=depositBsAssetId;cashCode=ensureBSAssetCOA(c,depositBsAssetId)||cashCode;revItem.acctCode=cashCode;applyBSAssetDelta(c,depositBsAssetId,Number(inv.amt||0));}
   c.revenue.push(revItem);

@@ -20,6 +20,7 @@ function openM(id){
     'm-exp':{'sel':'e-acct','cat':'e-c','filter':null},
     'm-inc':{'sel':'i-acct','cat':'i-c','filter':'Income'},
     'm-rev':{'sel':'r-acct','cat':'r-c','filter':'Income'},
+    'm-inv':{'sel':'inv-acct','cat':null,'filter':'Income'},
     'm-peinc':{'sel':'pi-acct','cat':'pi-c','filter':'Income'},
     'm-grant':{'sel':'g-acct','cat':null,'filter':null},
     // je-debit-acct/je-credit-acct: the manual Journal Entry modal's two account-code
