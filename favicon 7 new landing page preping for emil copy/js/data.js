@@ -453,9 +453,21 @@ function migrateToLedger(c){
 
   // ── Invoices (AR) ─────────────────────────────────────────────────────────
   (c.invoices||[]).forEach(function(inv){
-    if(!inv.id||posted[inv.id])return;
-    postToLedger(c,arCode,inv.acctCode||'4010',Number(inv.amt||0),(inv.desc||inv.client||'Invoice'),'invoice',inv.id);
-    posted[inv.id]=true;
+    if(!inv.id)return;
+    // Draft invoices aren't issued yet — not receivables — so the backfill must NOT recognize
+    // revenue for them (matches saveInv, which skips Draft). Otherwise a Draft inflates revenue
+    // and AR the moment any render triggers migrateToLedger, before it's ever sent.
+    if(inv.status==='Draft')return;
+    if(!posted[inv.id]){
+      postToLedger(c,arCode,inv.acctCode||'4010',Number(inv.amt||0),(inv.desc||inv.client||'Invoice'),'invoice',inv.id);
+      posted[inv.id]=true;
+    }
+    // A Paid invoice must also clear its receivable, or a backfilled/imported Paid invoice leaves
+    // AR open. markInvPaid already posts this on the happy path; the dedup guard prevents a double.
+    if(inv.status==='Paid'&&!posted[inv.id+':pay']){
+      postToLedger(c,cashCode,arCode,Number(inv.amt||0),'Received payment: Invoice '+(inv.num||inv.id),'invoice',inv.id+':pay');
+      posted[inv.id+':pay']=true;
+    }
   });
 
   // ── Journal Entries ───────────────────────────────────────────────────────

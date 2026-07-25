@@ -1267,7 +1267,11 @@ function openAnnualLetter(di){
 }
 function toggleTY(di,dni){var c=gc();if(!c||!c.donors[di]||!c.donors[di].donations[dni])return;var dn=c.donors[di].donations[dni];dn.ty=dn.ty==='Yes'?'No':'Yes';sv();renderDonors(c);}
 function delDonation(di,dni){var c=gc();if(!confirm('Delete this donation?'))return;var _rec=c.donors[di].donations[dni];var _donor=c.donors[di];_voidDonationLedger(c,_rec);c.donors[di].donations.splice(dni,1);if(typeof dwDeleteDonation==='function')dwDeleteDonation(c,_donor,_rec);sv();renderDonors(c);renderBalanceSheet(c);}
-function delDonor(di){var c=gc();if(!confirm('Remove this donor and all their donation history? Cannot be undone.'))return;var d=c.donors[di];c.donors.splice(di,1);if(d&&typeof dwDeleteDonor==='function')dwDeleteDonor(c,d);sv();renderDonors(c);}
+function delDonor(di){var c=gc();if(!confirm('Remove this donor and all their donation history? Cannot be undone.'))return;var d=c.donors[di];
+  // Void each gift's ledger entries before removing the donor — otherwise every donation's
+  // revenue + cash (and in-kind/auction legs) linger on the ledger after the donor is gone.
+  if(d&&d.donations)d.donations.forEach(function(dn){if(typeof _voidDonationLedger==='function')_voidDonationLedger(c,dn);});
+  c.donors.splice(di,1);if(d&&typeof dwDeleteDonor==='function')dwDeleteDonor(c,d);sv();renderDonors(c);renderBalanceSheet(c);}
 function editDonor(di){
   var c=gc();if(!c||!c.donors[di])return;DONOR_EI=di;var d=c.donors[di];
   g('m-donor-title').textContent='Edit donor';
@@ -1426,6 +1430,7 @@ function _postDonationLedger(c,di,record,cashOverride){
       c.income.push(saleItem);
       if(typeof dwUpsertIncome==='function')dwUpsertIncome(c,saleItem);
       if(typeof postToLedger==='function')postToLedger(c,cashCode,'4040',record.auctionSalePrice,saleDesc,'income',saleItem.id);
+      record.auctionRef=saleItem.id; // link the auction sale so delete/type-change can void + remove it
     }
   }else{
     var amt=Number(record.amt||0);
@@ -1462,7 +1467,12 @@ function _syncDonationLedger(c,di,record,old){
     var expRow=record.expenseRef&&(c.expenses||[]).filter(function(e){return e.id===record.expenseRef;})[0];
     if(expRow){
       expRow.desc=inkindDesc;expRow.amt=inkindAmt;expRow.date=record.date;expRow.fund=record.fund||'';expRow.functional=record.inkindFunctional||expRow.functional||'fundraising';
-      if(typeof updateLedgerEntry==='function')updateLedgerEntry(c,expRow.id,'5400',cashCode,inkindAmt,'In-kind expense: '+inkindDesc,'expense');
+      // Use the SAME dedicated In-kind expense account the create path (_postDonationLedger)
+      // posted to — never hardcoded '5400', which is "Marketing & outreach" in the NP default COA
+      // and silently re-coded in-kind expense into Marketing on every edit (corrupting functional
+      // expense / Form 990 Part IX). Prefer the account already on the row; resolve by name otherwise.
+      var _inkindExpCodeSync=expRow.acctCode||_ensureDedicatedCOA(c,'In-kind expense','Expense','In-Kind Expense');
+      if(typeof updateLedgerEntry==='function')updateLedgerEntry(c,expRow.id,_inkindExpCodeSync,cashCode,inkindAmt,'In-kind expense: '+inkindDesc,'expense');
     }
   }else{
     var amt=Number(record.amt||0);
@@ -1484,6 +1494,12 @@ function _voidDonationLedger(c,record){
   if(record.expenseRef){
     if(typeof voidLedgerEntry==='function')voidLedgerEntry(c,record.expenseRef);
     c.expenses=(c.expenses||[]).filter(function(e){return e.id!==record.expenseRef;});
+  }
+  // Auction-sale proceeds (4040) from an auctioned in-kind gift — void + remove like the others,
+  // otherwise deleting/type-changing the donation leaves the sale revenue + cash on the books.
+  if(record.auctionRef){
+    if(typeof voidLedgerEntry==='function')voidLedgerEntry(c,record.auctionRef);
+    c.income=(c.income||[]).filter(function(r){return r.id!==record.auctionRef;});
   }
 }
 

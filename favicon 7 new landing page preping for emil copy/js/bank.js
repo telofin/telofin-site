@@ -547,19 +547,22 @@ function bankUndoPost(bankTxnId) {
 
   if (!confirm('Undo this post?\n\n"' + (t.description||'Transaction') + '" — ' + fmt(t.amount) + '\n\nThis will remove it from your books and put it back in the pending queue to review again.')) return;
 
-  // Remove the posted item from whichever array it landed in
+  // Remove the posted item from whichever array it landed in — and void its backfilled ledger
+  // entry (keyed by the row id). Without the void the amount stays on the Trial Balance / Balance
+  // Sheet after the undo, and re-posting the now-pending line creates a SECOND ledger entry
+  // (double-count). Capture the id before splicing.
   var removed = false;
   if (c.income) {
     var iIdx = c.income.findIndex(function(r){ return r.bankTxnId === bankTxnId; });
-    if (iIdx >= 0) { c.income.splice(iIdx, 1); removed = true; }
+    if (iIdx >= 0) { var _incRow = c.income[iIdx]; if (_incRow && _incRow.id) voidLedgerEntry(c, _incRow.id); c.income.splice(iIdx, 1); removed = true; }
   }
   if (!removed && c.expenses) {
     var eIdx = c.expenses.findIndex(function(e){ return e.bankTxnId === bankTxnId; });
-    if (eIdx >= 0) { c.expenses.splice(eIdx, 1); removed = true; }
+    if (eIdx >= 0) { var _expRow = c.expenses[eIdx]; if (_expRow && _expRow.id) voidLedgerEntry(c, _expRow.id); c.expenses.splice(eIdx, 1); removed = true; }
   }
   if (!removed && c.revenue) {
     var rIdx = c.revenue.findIndex(function(r){ return r.bankTxnId === bankTxnId; });
-    if (rIdx >= 0) { c.revenue.splice(rIdx, 1); removed = true; }
+    if (rIdx >= 0) { var _revRow = c.revenue[rIdx]; if (_revRow && _revRow.id) voidLedgerEntry(c, _revRow.id); c.revenue.splice(rIdx, 1); removed = true; }
   }
 
   // Clean up any donation record auto-created from this bank transaction

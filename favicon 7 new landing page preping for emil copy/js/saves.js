@@ -59,6 +59,9 @@ function restoreItem(type,i){
     if(reversal!==0)applyBSAssetDelta(c,item.bsAssetId,reversal);
   }
   delete item.deleted;delete item.deletedAt;delete item.deletedType;
+  // delItem() voided this item's ledger entry on delete; bring it back so the restored row
+  // reappears on the General Ledger / Trial Balance / ledger Balance Sheet, not just in lists.
+  if(item.id&&typeof unvoidLedgerEntry==='function')unvoidLedgerEntry(c,item.id);
   sv();renderAll(true);
 }
 
@@ -97,6 +100,10 @@ function writeBadDebt(i){
   };
   c.expenses.push(badDebtExpItem);
   if(typeof dwUpsertExpense==='function')dwUpsertExpense(c,badDebtExpItem);
+  // Recognize the receivable first if it was never posted (invoice was Draft) — idempotent, so a
+  // no-op once recognized. Otherwise writing it off credits an AR that was never debited.
+  var _revCodeWBD=inv.acctCode||lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+  postToLedger(c,arCode,_revCodeWBD,Number(inv.amt||0),'Invoice '+(inv.num||inv.id)+(inv.client?' — '+inv.client:''),'invoice',inv.id);
   // Double-entry: Dr Bad Debt Expense / Cr AR
   postToLedger(c,badDebtCode,arCode,Number(inv.amt||0),memo,'expense',expId);
   // Mark invoice
@@ -1226,7 +1233,12 @@ function saveInv(){
   sv();renderAR(c);renderBalanceSheet(c);closeM('m-inv');['inv-num','inv-client','inv-desc','inv-amt','inv-date','inv-due','inv-notes'].forEach(function(id){g(id).value='';});
 }
 function editInv(i){var c=gc();if(!c.invoices[i])return;EI=i;if(typeof _editItemId!=='undefined')_editItemId=c.invoices[i].id||null;var inv=c.invoices[i];g('inv-num').value=inv.num||'';g('inv-client').value=inv.client||'';g('inv-desc').value=inv.desc||'';g('inv-amt').value=inv.amt||'';g('inv-date').value=inv.date||'';g('inv-due').value=inv.due||'';g('inv-status').value=inv.status||'Draft';g('inv-notes').value=inv.notes||'';openM('m-inv');var _iacc=g('inv-acct');if(_iacc)_iacc.value=inv.acctCode||'';}
-function delInv(i){var c=gc();if(!confirm('Delete this invoice?'))return;var inv=c.invoices[i];c.invoices.splice(i,1);if(inv&&typeof dwDeleteInvoice==='function')dwDeleteInvoice(c,inv);sv();renderAR(c);}
+function delInv(i){var c=gc();if(!confirm('Delete this invoice?'))return;var inv=c.invoices[i];
+  // Reverse the invoice's ledger entries before removing it — otherwise the backfilled
+  // Dr AR / Cr Revenue (and the Dr Cash / Cr AR payment leg, if paid) linger on the Trial
+  // Balance and Balance Sheet after the invoice is gone. Mirrors delJE/delLoan.
+  if(inv&&inv.id){voidLedgerEntry(c,inv.id);voidLedgerEntry(c,inv.id+':pay');}
+  c.invoices.splice(i,1);if(inv&&typeof dwDeleteInvoice==='function')dwDeleteInvoice(c,inv);sv();renderAR(c);renderBalanceSheet(c);}
 function copyPayReminder(i){var c=gc();if(!c||!c.invoices[i])return;var inv=c.invoices[i];var txt='Subject: Invoice '+(inv.num||'')+(inv.due?' — Due '+inv.due:'')+'\n\nHi '+(inv.client||'there')+',\n\nThis is a friendly reminder that invoice '+(inv.num||'')+(inv.due?' was due on '+inv.due:'')+' for '+fmt(inv.amt)+(inv.desc?' ('+inv.desc+')':'')+'.\n\nPlease remit payment at your earliest convenience. If you have any questions, don\'t hesitate to reach out.\n\nThank you,\n'+c.name;if(navigator.clipboard){navigator.clipboard.writeText(txt).then(function(){alert('Payment reminder copied to clipboard.');});}else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('Payment reminder copied to clipboard.');}}
 
 function emailInv(i){
@@ -1264,6 +1276,12 @@ function markInvPaid(i){
   if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,revItem);
   // DOUBLE ENTRY: clear the receivable recognized at Sent time -- Dr Cash / Cr AR
   var arCode=_defaultARCode(c);
+  // Recognize the receivable first if it was never posted (invoice was Draft when marked paid).
+  // Idempotent (postToLedger dedups), so a no-op for invoices already recognized at Sent. Without
+  // it, marking a Draft paid credits an AR that was never debited -> negative AR + unrecognized
+  // revenue. Same recognize-then-clear pattern as saveInv's straight-to-Paid branch.
+  var _revCodeMIP=inv.acctCode||lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+  postToLedger(c,arCode,_revCodeMIP,Number(inv.amt||0),'Invoice '+(inv.num||inv.id)+(inv.client?' — '+inv.client:''),'invoice',inv.id);
   postToLedger(c,cashCode,arCode,Number(inv.amt||0),'Received payment: Invoice '+(inv.num||inv.id)+(inv.client?' — '+inv.client:''),'invoice',inv.id+':pay');
   sv();renderAR(c);renderRev(c);renderBalanceSheet(c);
 }
@@ -1307,6 +1325,11 @@ function recordPartialPayment(i){
   var revItem={id:uid(),name:'Partial payment — Inv #'+(inv.num||inv.id)+' ('+(inv.client||'')+')',cat:'Invoiced Revenue',proj:0,act:pmtAmt,conf:'Confirmed',recurring:'None',invoiceId:inv.id,date:todayNum(),acctCode:lookupAcctByCAT(c,'Revenue','Income')||'4010'};
   c.revenue.push(revItem);
   if(typeof dwUpsertRevenue==='function')dwUpsertRevenue(c,revItem);
+  // Recognize the full receivable first if it was never posted (invoice was Draft) — idempotent,
+  // so a no-op once recognized. Otherwise crediting AR for the partial payment drives AR negative
+  // and leaves revenue unbooked.
+  var _revCodeRPP=inv.acctCode||lookupAcctByCAT(c,'Invoiced Revenue','Income')||'4010';
+  postToLedger(c,_defaultARCode(c),_revCodeRPP,Number(inv.amt||0),'Invoice '+(inv.num||inv.id)+(inv.client?' — '+inv.client:''),'invoice',inv.id);
   postToLedger(c,_defaultCashCode(c),_defaultARCode(c),pmtAmt,'Partial payment — Inv #'+(inv.num||inv.id),'revenue',revItem.id);
   markDirty('ar','revenue','reports','bs');
   sv();renderAll(true);

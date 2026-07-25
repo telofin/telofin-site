@@ -28,7 +28,10 @@ function _depCashOpts(c, sel){
 // "add a new one" choice. Lists ALL active accounts (any type) so a deposit
 // line can post to whatever the user needs, not just the default income codes.
 function _depAcctOptsInner(c, sel){
-  var opts=(c.accounts||[]).filter(function(a){return a.active!==false;})
+  // A deposit line is money coming IN — it can only be credited to an Income account. Offering
+  // every account type here let a user credit an Expense account (a negative expense — the
+  // "negative ghost rider") or misclassify the money into an Asset/Liability/Equity account.
+  var opts=(c.accounts||[]).filter(function(a){return a.active!==false&&a.type==='Income';})
     .slice().sort(function(a,b){return String(a.code).localeCompare(String(b.code));})
     .map(function(a){return '<option value="'+escHtml(a.code)+'"'+(a.code===sel?' selected':'')+'>'+escHtml(a.code)+' — '+escHtml(a.name)+' ('+escHtml(a.type)+')</option>';}).join('');
   return opts+'<option value="__new__">+ New account…</option>';
@@ -194,6 +197,9 @@ function depAddNewLine(){
   } else {
     var acctCode=(g('dep-new-acct')||{}).value||'4010';
     if(acctCode==='__new__'||!acctCode){alert('Pick an account (or add a new one) for this line.');return;}
+    // Guard: a deposit line must credit an Income account (see _depAcctOptsInner).
+    var _depNewAcct=(c.accounts||[]).find(function(a){return a.code===acctCode;});
+    if(_depNewAcct&&_depNewAcct.type!=='Income'){alert('A deposit line must go to an Income account. "'+acctCode+' — '+(_depNewAcct.name||'')+'" is a '+_depNewAcct.type+' account.');return;}
     var label=((g('dep-new-label')||{}).value||'').trim()||'Other income';
     _dep.lines.push({mode:'new', kind:(c.type==='sb'?'revenue':'income'), acctCode:acctCode, name:label, label:label, amt:amt});
   }

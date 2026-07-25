@@ -1027,7 +1027,19 @@ function confirmPayBillsBatch(){
   if(checksToPrint.length&&typeof printChecksBatch==='function')printChecksBatch(c,bank,checksToPrint);
 }
 function editBill(i){var c=gc();if(!c.bills[i])return;BILL_EI=i;var b=c.bills[i];g('bill-vendor').value=b.vendor||'';g('bill-desc').value=b.desc||'';g('bill-amt').value=b.amt||'';g('bill-recv').value=b.received||'';g('bill-due').value=b.due||'';g('bill-cat').value=b.cat||'';g('bill-notes').value=b.notes||'';if(g('bill-1099'))g('bill-1099').value=b.is1099?'yes':'';if(g('bill-tin'))g('bill-tin').value=b.tin1099||'';_billPopulateAcctOptions(b.acctCode||'');openM('m-bill');}
-function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;var b=c.bills[i];c.bills.splice(i,1);if(b&&typeof dwDeleteBill==='function')dwDeleteBill(c,b);sv();renderAll(true);}
+function delBill(i){var c=gc();if(!confirm('Delete this bill?'))return;var b=c.bills[i];
+  // Reverse the bill's ledger entries before removing it. The accrual (Dr Expense / Cr AP) is
+  // keyed by the bill id; if the bill was paid, _payOneBill also created a payment expense row
+  // (e.billId===b.id) posting Dr AP / Cr Cash under its own id — void that leg and drop the row
+  // too, so neither the expense/AP accrual nor the cash payment lingers on the ledger.
+  if(b&&b.id){
+    voidLedgerEntry(c,b.id);
+    for(var _pei=(c.expenses||[]).length-1;_pei>=0;_pei--){
+      var _pe=c.expenses[_pei];
+      if(_pe&&_pe.billId===b.id){if(_pe.id)voidLedgerEntry(c,_pe.id);c.expenses.splice(_pei,1);}
+    }
+  }
+  c.bills.splice(i,1);if(b&&typeof dwDeleteBill==='function')dwDeleteBill(c,b);sv();renderAll(true);}
 function resetBillForm(){['bill-vendor','bill-desc','bill-amt','bill-recv','bill-due','bill-cat','bill-notes','bill-1099','bill-tin'].forEach(function(id){var el=g(id);if(el)el.value='';});}
 
 

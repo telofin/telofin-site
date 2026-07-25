@@ -306,6 +306,22 @@ function voidLedgerEntry(c,sourceId){
   });
 }
 
+// unvoidLedgerEntry: reverses exactly what a delete's voidLedgerEntry() did, for restore.
+// voidLedgerEntry marks the active original superseded:true and pushes a mirrored reversal
+// (sourceType:'void', reversalOf:originalId). To undo that WITHOUT resurrecting older pre-edit
+// versions, we only un-supersede the specific originals a void reversal points to, then drop
+// the void reversals. Edit supersessions (from updateLedgerEntry) are never sourceType:'void',
+// so they're left untouched — the restored item reappears at exactly its last active state.
+function unvoidLedgerEntry(c,sourceId){
+  if(!c||!sourceId||!c.ledgerEntries)return;
+  var voids=c.ledgerEntries.filter(function(e){return e.sourceId===sourceId&&e.sourceType==='void';});
+  voids.forEach(function(v){
+    var orig=c.ledgerEntries.find(function(e){return e.id===v.reversalOf;});
+    if(orig){orig.superseded=false;if(typeof dwUpsertLedgerEntry==='function')dwUpsertLedgerEntry(c,orig);}
+  });
+  c.ledgerEntries=c.ledgerEntries.filter(function(e){return!(e.sourceId===sourceId&&e.sourceType==='void');});
+}
+
 // Convenience helpers for common account codes
 function _defaultCashCode(c){
   var cash=(c.accounts||[]).find(function(a){return a.type==='Asset'&&(a.code==='1010'||a.cat==='Cash');});
